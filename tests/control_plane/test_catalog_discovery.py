@@ -9,13 +9,7 @@ from dal_obscura.control_plane.infrastructure.catalog_discovery import (
     discover_iceberg_tables,
     discover_public_catalog_tables,
 )
-
-
-def _unchecked_discovery_page(entries: object, continuation: object) -> DiscoveryPage:
-    page = object.__new__(DiscoveryPage)
-    object.__setattr__(page, "entries", entries)
-    object.__setattr__(page, "continuation", continuation)
-    return page
+from tests.support.discovery import _unchecked_discovery_page
 
 
 class FakeIcebergCatalog:

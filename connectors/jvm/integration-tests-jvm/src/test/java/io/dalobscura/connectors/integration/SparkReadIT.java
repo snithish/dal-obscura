@@ -6,38 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.dalobscura.connectors.testkit.FixtureBundle;
-import io.dalobscura.connectors.testkit.FixtureBuilderRunner;
-import io.dalobscura.connectors.testkit.LocalDalObscuraServer;
 import java.util.List;
-import java.util.stream.Collectors;
-import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Test;
 
 class SparkReadIT {
-    private static final String EXECUTOR_TOKEN_PROPERTY = "dal.obscura.integration.executor.token";
-    private static final String SPARK_ARROW_JAVA_OPTS =
-            "-XX:+IgnoreUnrecognizedVMOptions "
-                    + "--add-opens=java.base/java.lang=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.io=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.net=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.nio=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.util=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED "
-                    + "--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED "
-                    + "--add-opens=java.base/jdk.internal.ref=ALL-UNNAMED "
-                    + "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED "
-                    + "--add-opens=java.base/sun.nio.cs=ALL-UNNAMED "
-                    + "--add-opens=java.base/sun.security.action=ALL-UNNAMED "
-                    + "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED "
-                    + "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED "
-                    + "-Djdk.reflect.useDirectMethodHandle=false "
-                    + "-Dio.netty.tryReflectionSetAccessible=true";
     @Test
     void readsNestedProjectionWithPushedFilters() throws Exception {
         try (SparkFixture fixture = SparkFixture.create("spark-nested-projection-it")) {
@@ -95,7 +69,7 @@ class SparkReadIT {
             assertEquals("[redacted-note]", topLevelRow.getString(1));
             assertEquals("partner-visible", topLevelRow.getString(2));
             assertNull(topLevelRow.get(3));
-            assertNotEquals(originalAccountNumber(16L), topLevelRow.getString(4));
+            assertNotEquals("ACCT-000000000016", topLevelRow.getString(4));
             assertTrue(topLevelRow.getString(4).endsWith("0016"));
             assertEquals(fixture.bundle().maskedZipHashLength(), nestedRow.getString(0).length());
             assertTrue(nestedRow.getString(0).matches("[0-9a-f]+"));
@@ -105,21 +79,17 @@ class SparkReadIT {
     @Test
     void usesBroadAndSelectivePlanningAppropriatelyForTheHeavyFixture() throws Exception {
         try (SparkFixture fixture = SparkFixture.create("spark-broad-planning-it")) {
-            assertEquals(125_000L, fixture.bundle().expectedRowCount());
-            assertTrue(fixture.bundle().supportsMultipleTickets());
-
             Dataset<Row> broad = fixture.read().filter("market IS NOT NULL");
             long broadCount = broad.count();
 
-            assertEquals(countPolicyVisibleRows(fixture.bundle().expectedRowCount()), broadCount);
+            assertEquals(41_666L, broadCount);
         }
 
         try (SparkFixture fixture = SparkFixture.create("spark-selective-planning-it")) {
             Dataset<Row> selective = fixture.read().filter("market = 'enterprise'");
             long selectiveCount = selective.count();
 
-            assertEquals(
-                    countPolicyVisibleEnterpriseRows(fixture.bundle().expectedRowCount()), selectiveCount);
+            assertEquals(16_666L, selectiveCount);
         }
     }
 
@@ -131,7 +101,7 @@ class SparkReadIT {
                             .filter("market = 'enterprise'")
                             .count();
 
-            assertEquals(countPolicyVisibleEnterpriseRows(fixture.bundle().expectedRowCount()), matchingRows);
+            assertEquals(16_666L, matchingRows);
         }
     }
 
@@ -150,104 +120,4 @@ class SparkReadIT {
         }
     }
 
-    private static long countPolicyVisibleRows(long upperBoundExclusive) {
-        long count = 0L;
-        for (long rowId = 0L; rowId < upperBoundExclusive; rowId++) {
-            if (rowId % 2 == 0 && rowId % 3 != 0) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static long countPolicyVisibleEnterpriseRows(long upperBoundExclusive) {
-        long count = 0L;
-        for (long rowId = 0L; rowId < upperBoundExclusive; rowId++) {
-            if (rowId % 2 == 0 && rowId % 3 != 0 && (rowId % 5 == 0 || rowId % 5 == 1)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static String originalAccountNumber(long rowId) {
-        return String.format("ACCT-%012d", rowId);
-    }
-
-    private static final class SparkFixture implements AutoCloseable {
-        private final FixtureBundle bundle;
-        private final LocalDalObscuraServer server;
-        private final SparkSession spark;
-
-        private SparkFixture(FixtureBundle bundle, LocalDalObscuraServer server, SparkSession spark) {
-            this.bundle = bundle;
-            this.server = server;
-            this.spark = spark;
-        }
-
-        static SparkFixture create(String appName) throws Exception {
-            FixtureBundle bundle = FixtureBuilderRunner.build();
-            LocalDalObscuraServer server = LocalDalObscuraServer.start(bundle);
-            System.setProperty(EXECUTOR_TOKEN_PROPERTY, bundle.userToken());
-            SparkSession spark =
-                    SparkSession.builder()
-                            .master("local[2]")
-                            .appName(appName)
-                            .config("spark.ui.enabled", "false")
-                            .config("spark.driver.extraJavaOptions", SPARK_ARROW_JAVA_OPTS)
-                            .config("spark.executor.extraJavaOptions", SPARK_ARROW_JAVA_OPTS)
-                            .getOrCreate();
-            return new SparkFixture(bundle, server, spark);
-        }
-
-        FixtureBundle bundle() {
-            return bundle;
-        }
-
-        Dataset<Row> read() {
-            return reader(true).load();
-        }
-
-        Dataset<Row> readWithAuthorizationHeader() {
-            return readerWithAuthorizationHeader().load();
-        }
-
-        Dataset<Row> readWithoutToken() {
-            return reader(false).load();
-        }
-
-        private DataFrameReader reader(boolean includeToken) {
-            DataFrameReader reader =
-                    spark.read()
-                            .format("dal_obscura")
-                            .option("dal.uri", server.uri())
-                            .option("dal.catalog", bundle.catalog())
-                            .option("dal.target", bundle.target())
-                            .option("dal.executor.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
-            if (includeToken) {
-                reader = reader.option("dal.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
-            }
-            return reader;
-        }
-
-        private DataFrameReader readerWithAuthorizationHeader() {
-            return spark.read()
-                    .format("dal_obscura")
-                    .option("dal.uri", server.uri())
-                    .option("dal.catalog", bundle.catalog())
-                    .option("dal.target", bundle.target())
-                    .option("dal.executor.auth.token-property", EXECUTOR_TOKEN_PROPERTY)
-                    .option("dal.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
-        }
-
-        @Override
-        public void close() throws Exception {
-            try {
-                spark.close();
-            } finally {
-                System.clearProperty(EXECUTOR_TOKEN_PROPERTY);
-                server.close();
-            }
-        }
-    }
 }

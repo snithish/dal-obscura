@@ -27,41 +27,6 @@ def _config(**options: object) -> CatalogConfig:
     )
 
 
-def test_rest_catalog_rejects_credential_bearing_uri():
-    with pytest.raises(ValueError, match="credentials"):
-        RestCatalog(_config(uri="https://user:pass@catalog.example/v1"), _context())
-
-
-def test_rest_catalog_rejects_unsupported_options():
-    with pytest.raises(ValueError, match="unsupported keys"):
-        RestCatalog(_config(script="import os"), _context())
-
-
-def test_rest_catalog_rejects_credentials_over_plain_http():
-    with pytest.raises(ValueError, match="HTTPS"):
-        RestCatalog(_config(uri="http://catalog.example/v1", token="resolved"), _context())
-
-
-def test_rest_catalog_rejects_credential_bearing_auxiliary_uris():
-    with pytest.raises(ValueError, match="warehouse"):
-        RestCatalog(_config(warehouse="s3://user:pass@bucket/warehouse"), _context())
-    with pytest.raises(ValueError, match="oauth2-server-uri"):
-        RestCatalog(_config(**{"oauth2-server-uri": "http://issuer.example/token"}), _context())
-
-
-def test_rest_catalog_rejects_unresolved_secret_objects():
-    with pytest.raises(ValueError, match="must be strings"):
-        RestCatalog(_config(token={"secret": "REST_TOKEN"}), _context())
-
-
-@pytest.mark.parametrize("option", ["connect-timeout-ms", "read-timeout-ms"])
-def test_rest_catalog_rejects_invalid_timeouts(option: str) -> None:
-    with pytest.raises(ValueError, match="timeout"):
-        RestCatalog(_config(**{option: "0"}), _context())
-    with pytest.raises(ValueError, match="timeout"):
-        RestCatalog(_config(**{option: "not-a-number"}), _context())
-
-
 def test_rest_catalog_context_cancellation_is_fail_closed():
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
@@ -329,3 +294,39 @@ def test_rest_catalog_close_attempts_session_when_provider_close_fails() -> None
     assert closed == ["catalog", "session"]
     with pytest.raises(ValueError, match="closed"):
         plugin.validate_config(_context())
+
+
+@pytest.mark.parametrize(
+    "options,message",
+    [
+        pytest.param(
+            {"uri": "https://user:pass@catalog.example/v1"}, "credentials", id="uri-credentials"
+        ),
+        pytest.param({"script": "import os"}, "unsupported keys", id="unknown-option"),
+        pytest.param(
+            {"uri": "http://catalog.example/v1", "token": "resolved"}, "HTTPS", id="insecure-token"
+        ),
+        pytest.param(
+            {"warehouse": "s3://user:pass@bucket/warehouse"},
+            "warehouse",
+            id="warehouse-credentials",
+        ),
+        pytest.param(
+            {"oauth2-server-uri": "http://issuer.example/token"},
+            "oauth2-server-uri",
+            id="insecure-oauth",
+        ),
+        pytest.param(
+            {"token": {"secret": "REST_TOKEN"}}, "must be strings", id="unresolved-secret"
+        ),
+        pytest.param({"connect-timeout-ms": "0"}, "timeout", id="zero-connect-timeout"),
+        pytest.param(
+            {"connect-timeout-ms": "not-a-number"}, "timeout", id="invalid-connect-timeout"
+        ),
+        pytest.param({"read-timeout-ms": "0"}, "timeout", id="zero-read-timeout"),
+        pytest.param({"read-timeout-ms": "not-a-number"}, "timeout", id="invalid-read-timeout"),
+    ],
+)
+def test_rest_catalog_rejects_invalid_configuration(options, message):
+    with pytest.raises(ValueError, match=message):
+        RestCatalog(_config(**options), _context())

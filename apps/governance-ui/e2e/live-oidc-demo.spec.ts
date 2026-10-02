@@ -11,7 +11,9 @@ if (process.env.DAL_OBSCURA_DEMO_TLS_SPKI) {
   } });
 }
 
-const enabled = process.env.DAL_OBSCURA_E2E_LIVE_OIDC === "1";
+test.beforeAll(() => {
+  expect(process.env.DAL_OBSCURA_E2E_LIVE_OIDC, "Run through ./demo check with a live SSO provider").toBe("1");
+});
 
 function demoAdminPassword(): string {
   const runtimeEnv = resolve(
@@ -33,7 +35,6 @@ function demoAdminPassword(): string {
 }
 
 test("live local Keycloak sign-in, governed inventory, and sign-out", async ({ page }) => {
-  test.skip(!enabled, "set DAL_OBSCURA_E2E_LIVE_OIDC=1 to run against the local demo");
   const baseURL = process.env.DAL_OBSCURA_E2E_BASE_URL ?? "http://localhost:28821";
   const origin = new URL(baseURL).origin;
 

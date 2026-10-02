@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from dal_obscura.control_plane.application import schema_service
-from tests.interfaces.control_plane.test_schema_api import _EvaluationCatalog
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     DEFAULT_AUTH_MODULE,
-    _client,
     _provision_asset,
 )
+from tests.support.schema_catalog import EvaluationCatalog
 
 
 def _args():
@@ -25,8 +24,8 @@ def _args():
     }
 
 
-def test_discovery_exposes_only_enabled_attribute_metadata():
-    client = _client()
+def test_discovery_exposes_only_enabled_attribute_metadata(client_factory):
+    client = client_factory()
     asset = _provision_asset(client)
     saved = client.put(
         "/v1/settings/auth-providers",
@@ -58,8 +57,8 @@ def test_discovery_exposes_only_enabled_attribute_metadata():
     assert set(providers[0]) == {"ordinal", "issuer", "revision", "attributes"}
 
 
-def test_unsaved_mapping_preview_is_source_free_and_does_not_persist():
-    client = _client()
+def test_unsaved_mapping_preview_is_source_free_and_does_not_persist(client_factory):
+    client = client_factory()
     url = "/v1/settings/auth-providers/1/attribute-preview"
     payload = {"claims": {"employee": {"department": "Finance"}}, "provider_args": _args()}
     assert client.post(url, json=payload).status_code == 401
@@ -73,8 +72,10 @@ def test_unsaved_mapping_preview_is_source_free_and_does_not_persist():
     assert "outside its allowed values" in rejected.text
 
 
-def test_policy_test_maps_subject_groups_attributes_and_reports_missing_conditions(monkeypatch):
-    client = _client()
+def test_policy_test_maps_subject_groups_attributes_and_reports_missing_conditions(
+    client_factory, monkeypatch
+):
+    client = client_factory()
     asset = _provision_asset(client)
     client.put(
         "/v1/settings/auth-providers",
@@ -86,9 +87,7 @@ def test_policy_test_maps_subject_groups_attributes_and_reports_missing_conditio
             "providers": [{"ordinal": 1, "module": DEFAULT_AUTH_MODULE, "args": _args()}],
         },
     )
-    monkeypatch.setattr(
-        schema_service, "load_catalog", lambda *args, **kwargs: _EvaluationCatalog()
-    )
+    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: EvaluationCatalog())
     url = f"/v1/assets/{asset['id']}/policy-evaluate"
     payload = {
         "principal": "ignored-synthetic-id",
@@ -117,12 +116,10 @@ def test_policy_test_maps_subject_groups_attributes_and_reports_missing_conditio
     assert client.post(url, json=payload, headers=ADMIN_HEADERS).status_code == 400
 
 
-def test_internal_attribute_preview_rejects_nested_values(monkeypatch):
-    client = _client()
+def test_internal_attribute_preview_rejects_nested_values(client_factory, monkeypatch):
+    client = client_factory()
     asset = _provision_asset(client)
-    monkeypatch.setattr(
-        schema_service, "load_catalog", lambda *args, **kwargs: _EvaluationCatalog()
-    )
+    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: EvaluationCatalog())
     response = client.post(
         f"/v1/assets/{asset['id']}/policy-evaluate",
         headers=ADMIN_HEADERS,

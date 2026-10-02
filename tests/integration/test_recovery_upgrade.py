@@ -26,8 +26,6 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy impo
 )
 from tests.support.postgres import isolated_postgres_sessions
 
-pytestmark = pytest.mark.integration
-
 _FIXTURE = Path(__file__).parents[1] / "acceptance" / "fixtures" / "ticket_payload_v2.json"
 
 
@@ -285,6 +283,7 @@ def postgres_sessions() -> Iterator[sessionmaker[Session]]:
         yield factory
 
 
+@pytest.mark.integration
 def test_postgres_restore_invalidation_removes_replayable_access(
     postgres_sessions: sessionmaker[Session],
 ) -> None:

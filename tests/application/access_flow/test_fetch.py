@@ -6,7 +6,6 @@ import pytest
 from dal_obscura.common.access_control.filters import deserialize_row_filter
 from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.common.ticket_delivery.models import TicketPayload
 from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
@@ -22,6 +21,7 @@ from tests.application.access_flow.helpers import (
     _ticket_store_with,
 )
 from tests.support.flight import InMemoryPolicyAuthorizer
+from tests.support.tickets import ticket_payload
 from tests.support.use_cases import (
     FakeCatalogRegistry,
     FakeIdentity,
@@ -194,11 +194,8 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
 
 def test_fetch_stream_principal_mismatch():
     schema, _decision, table_format = _build_use_case_dependencies()
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="catalog1",
-        target="users",
         columns=["id", "region"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -206,10 +203,6 @@ def test_fetch_stream_principal_mismatch():
             "full_row_filter": None,
             "masks": {},
         },
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
-        nonce="abc",
     )
     ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
@@ -286,11 +279,8 @@ def test_fetch_stream_rejects_ticket_when_identity_context_changes(before, after
 
 def test_fetch_stream_rejects_matching_subject_from_another_issuer():
     schema, _decision, table_format = _build_use_case_dependencies()
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="catalog1",
-        target="users",
         columns=["id", "region"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -298,11 +288,7 @@ def test_fetch_stream_rejects_matching_subject_from_another_issuer():
             "full_row_filter": None,
             "masks": {},
         },
-        policy_version=100,
-        principal_id="user1",
         issuer="https://issuer-a.example",
-        expires_at=9999999999,
-        nonce="abc",
     )
     ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
@@ -335,11 +321,8 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
             pa.record_batch([pa.array([2])], schema=schema),
         ),
     )
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="catalog1",
-        target="users",
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -347,8 +330,6 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
             "full_row_filter": None,
             "masks": {},
         },
-        policy_version=100,
-        principal_id="user1",
         expires_at=1001,
         nonce="nonce",
     )
@@ -384,11 +365,8 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
             pa.record_batch([pa.array([2])], schema=schema),
         ),
     )
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000002",
-        catalog="catalog1",
-        target="users",
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -396,9 +374,6 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
             "full_row_filter": None,
             "masks": {},
         },
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
         nonce="nonce",
     )
     ticket_store = _ticket_store_with(payload)

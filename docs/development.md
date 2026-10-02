@@ -92,6 +92,9 @@ Keep benchmarks separate from functional tests. See
 and their executable evidence. Avoid setup-script tests unless they cover
 non-trivial behavior that would be costly to debug manually.
 
+See [the testing guide](testing.md) for suite ownership, fixture rules, and
+separate local, service, browser, and performance lanes.
+
 ## Common Checks
 
 ```bash
@@ -105,8 +108,10 @@ Focused policy and streaming checks:
 
 ```bash
 uv run pytest tests/domain/access_control/test_row_filters.py \
-  tests/interfaces/flight/test_service_streaming.py::test_parse_descriptor_rejects_unsafe_row_filter_sql \
-  tests/infrastructure/adapters/test_duckdb_transform.py -q
+  tests/interfaces/flight/test_descriptors.py::test_parse_descriptor_rejects_unsafe_row_filter_sql \
+  tests/infrastructure/adapters/test_duckdb_masks.py \
+  tests/infrastructure/adapters/test_duckdb_filters.py \
+  tests/infrastructure/adapters/test_duckdb_streaming.py -q
 ```
 
 JVM connectors:

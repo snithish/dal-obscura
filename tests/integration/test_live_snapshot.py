@@ -12,7 +12,7 @@ from dal_obscura.common.config_store.orm import (
     PolicyRuleRecord,
 )
 from dal_obscura.data_plane.infrastructure.adapters.live_config import LiveConfigStore
-from tests.infrastructure.adapters.test_live_config_store import _seed_live_config
+from tests.support.live_config import seed_live_config
 from tests.support.postgres import isolated_postgres_sessions
 
 
@@ -20,7 +20,7 @@ from tests.support.postgres import isolated_postgres_sessions
 def test_postgres_snapshot_survives_writer_commit_between_configuration_reads():
     with isolated_postgres_sessions() as factory:
         with factory() as session:
-            _seed_live_config(session)
+            seed_live_config(session)
         with factory() as session:
             engine = session.get_bind().engine
         store = LiveConfigStore(factory)
@@ -86,7 +86,7 @@ def test_resource_cas_rejects_stale_session_after_another_writer_commits(resourc
 
     with isolated_postgres_sessions() as factory:
         with factory() as session:
-            (asset_id,) = _seed_live_config(session)
+            (asset_id,) = seed_live_config(session)
 
         def mutate(store):
             if resource == "policy":

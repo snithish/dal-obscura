@@ -1,10 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { assetId, identityApi } from "./identity-fixture";
+import { assetId, identityApi } from "../e2e/identity-fixture";
 
 test("capture previous and current attribute authoring screens", async ({ browser }) => {
-  test.skip(process.env.DAL_OBSCURA_CAPTURE_IDENTITY !== "1", "Opt-in visual review with a previous-version server on port 4174");
   const output = resolve("../../docs/ui-review/identity");
   await mkdir(output, { recursive: true });
   for (const [state, origin] of [["before", "http://127.0.0.1:4174"], ["after", "http://127.0.0.1:4173"]] as const) {

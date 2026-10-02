@@ -1,7 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import { uxApi, uxAssetId } from "./ux-fixture";
 import { authenticatedApi } from "./fixtures";
 
@@ -84,14 +82,7 @@ test("expanding nested schema fields reveals children without losing scroll or f
     await expect(sidebar.getByRole("button", { name: "Expand profile.contact", exact: true })).toBeFocused();
     expect(await viewport.evaluate((element) => ({ list: element.scrollTop, page: window.scrollY }))).toEqual(before);
   }
-  if (process.env.UX_CAPTURE_PHASE === "after") {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await viewport.scrollIntoViewIfNeeded();
-    await viewport.evaluate((element) => { element.scrollTop = 20 * 56; });
-    await sidebar.getByRole("button", { name: "Expand profile.contact", exact: true }).click();
-    await expect(sidebar.getByText("profile.contact.email", { exact: true })).toBeInViewport();
-    await sidebar.screenshot({ path: "../../docs/ui-review/images/after-schema-expansion.png" });
-  }
+
 });
 
 test("sign-out follows the provider logout URL after revoking the local session", async ({ page }) => {
@@ -191,51 +182,4 @@ test("picker is accessible in both themes and fits mobile", async ({ page }) => 
   await page.getByRole("button", { name: /Allowed columns:/ }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByRole("button", { name: "Done", exact: true })).toBeInViewport();
-});
-
-test("capture review images", async ({ page }) => {
-  const phase = process.env.UX_CAPTURE_PHASE;
-  test.skip(!phase, "Run with UX_CAPTURE_PHASE=before or after to refresh review images.");
-  const directory = process.env.UX_CAPTURE_DIR ?? resolve("../../docs/ui-review/images");
-  await mkdir(directory, { recursive: true });
-  await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await page.goto("/#assets");
-  await expect(page.getByRole("button", { name: "retail.customer_revenue", exact: true })).toBeVisible();
-  await page.locator(".asset-inventory").screenshot({ path: `${directory}/${phase}-inventory.png` });
-  await page.getByRole("button", { name: "retail.customer_revenue", exact: true }).click();
-  await expect(page.getByLabel("Rule name")).toBeVisible();
-  await page.getByRole("button", { name: /Allowed columns:/ }).click();
-  await page.getByRole("combobox", { name: "Search allowed columns" }).fill("customer");
-  await page.screenshot({ path: `${directory}/${phase}-picker.png` });
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  if (phase === "after") await page.getByRole("button", { name: "Show schema", exact: true }).click();
-  await page.setViewportSize({ width: 1440, height: 1640 });
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: `${directory}/${phase}-workspace.png`, fullPage: true });
-  if (phase === "after") {
-    await page.getByRole("complementary", { name: "Asset schema" }).getByRole("button", { name: "Hide schema", exact: true }).click();
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.locator(".rule-footer").scrollIntoViewIfNeeded();
-    await expect(page.getByRole("button", { name: "New rule", exact: true })).toBeInViewport();
-    await page.screenshot({ path: `${directory}/after-rule-toolbar.png` });
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await page.getByRole("button", { name: /Allowed columns:/ }).click();
-    await page.getByRole("button", { name: "Select all except…", exact: true }).click();
-    await page.getByRole("combobox", { name: "Search allowed columns" }).fill("internal_notes");
-    await page.getByRole("option", { name: /internal_notes/ }).click();
-    await page.screenshot({ path: `${directory}/after-exclusions.png` });
-    await page.getByRole("button", { name: "Close column picker", exact: true }).click();
-    await page.getByRole("button", { name: /Allowed columns:/ }).click();
-    await page.getByRole("button", { name: "Add by prefix", exact: true }).click();
-    await page.getByLabel("Column path prefix").fill("customer.");
-    await page.screenshot({ path: `${directory}/after-prefix.png` });
-    await page.getByRole("button", { name: "Close column picker", exact: true }).click();
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({ path: `${directory}/after-mobile-workspace.png` });
-    await page.getByRole("button", { name: /Allowed columns:/ }).click();
-    await expect(page.getByRole("dialog", { name: "Choose allowed columns" })).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "Choose allowed columns" })).toHaveCSS("opacity", "1");
-    await page.screenshot({ path: `${directory}/after-mobile.png` });
-  }
 });

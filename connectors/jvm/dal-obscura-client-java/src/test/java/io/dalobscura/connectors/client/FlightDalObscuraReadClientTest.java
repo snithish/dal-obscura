@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Optional;
 import org.apache.arrow.flight.FlightCallHeaders;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class FlightDalObscuraReadClientTest {
     @Test
@@ -55,10 +57,10 @@ class FlightDalObscuraReadClientTest {
                 decoded.getColumnPaths(2).getSegments(1).getKind());
     }
 
-    @Test
-    void rejectsAmbiguousOrInvalidCanonicalPaths() {
-        assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse("profile..name"));
-        assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse("profile.$unknown"));
+    @ParameterizedTest(name = "rejects canonical path {0}")
+    @ValueSource(strings = {"profile..name", "profile.$unknown"})
+    void rejectsAmbiguousOrInvalidCanonicalPaths(String path) {
+        assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse(path));
     }
 
     @Test

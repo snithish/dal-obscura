@@ -122,7 +122,7 @@ def test_benchmark_row_filter_and_nested_masks(benchmark):
     batch_count = 8
     rows_per_batch = 2_048
     batches = nested_masking_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
-    expected_rows = sum(value % 3 != 0 for value in range(batch_count * rows_per_batch))
+    expected_rows = 10_922
     row_filter = parse_row_filter("active = true", batches[0].schema)
 
     def run() -> pa.Table:

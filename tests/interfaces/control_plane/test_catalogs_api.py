@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from dal_obscura.common.config_store.db import (
-    create_engine_from_url,
-    migrate_config_store,
     session_factory,
 )
 from dal_obscura.control_plane.interfaces.api import create_app
@@ -12,13 +8,12 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvS
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
-    _client,
     _keys_recursive,
 )
 
 
-def test_workspace_catalog_upsert_bootstraps_default_workspace():
-    client = _client()
+def test_workspace_catalog_upsert_bootstraps_default_workspace(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -59,8 +54,8 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
     }
 
 
-def test_workspace_catalog_upsert_accepts_plugin_defaults_without_backend_fields():
-    client = _client()
+def test_workspace_catalog_upsert_accepts_plugin_defaults_without_backend_fields(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -74,8 +69,8 @@ def test_workspace_catalog_upsert_accepts_plugin_defaults_without_backend_fields
     assert catalog["options"] == {"uri": "sqlite:///catalog.db"}
 
 
-def test_workspace_catalog_rejects_python_module_identity():
-    client = _client()
+def test_workspace_catalog_rejects_python_module_identity(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -91,8 +86,8 @@ def test_workspace_catalog_rejects_python_module_identity():
     assert response.status_code == 422
 
 
-def test_workspace_catalog_rejects_retired_module_field():
-    client = _client()
+def test_workspace_catalog_rejects_retired_module_field(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -103,8 +98,8 @@ def test_workspace_catalog_rejects_retired_module_field():
     assert response.status_code == 422
 
 
-def test_workspace_catalog_upsert_rejects_a_stale_revision():
-    client = _client()
+def test_workspace_catalog_upsert_rejects_a_stale_revision(client_factory):
+    client = client_factory()
     first = client.put(
         "/v1/catalogs/analytics",
         json={
@@ -138,8 +133,8 @@ def test_workspace_catalog_upsert_rejects_a_stale_revision():
     assert stale.json()["error"]["current_revision"] == 1
 
 
-def test_workspace_catalog_update_requires_revision_precondition():
-    client = _client()
+def test_workspace_catalog_update_requires_revision_precondition(client_factory):
+    client = client_factory()
     created = client.put(
         "/v1/catalogs/analytics",
         json={
@@ -163,8 +158,8 @@ def test_workspace_catalog_update_requires_revision_precondition():
     assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()[0]["revision"] == 0
 
 
-def test_workspace_catalog_rejects_non_admitted_plugin_id():
-    client = _client()
+def test_workspace_catalog_rejects_non_admitted_plugin_id(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -176,8 +171,8 @@ def test_workspace_catalog_rejects_non_admitted_plugin_id():
     assert response.json()["error"]["field_errors"][0]["field"] == "plugin_id"
 
 
-def test_workspace_catalog_rejects_credentials_embedded_in_uri():
-    client = _client()
+def test_workspace_catalog_rejects_credentials_embedded_in_uri(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -192,8 +187,8 @@ def test_workspace_catalog_rejects_credentials_embedded_in_uri():
     assert "secret reference" in response.json()["detail"]
 
 
-def test_workspace_catalog_rejects_malformed_uri_with_structured_error():
-    client = _client()
+def test_workspace_catalog_rejects_malformed_uri_with_structured_error(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -208,8 +203,8 @@ def test_workspace_catalog_rejects_malformed_uri_with_structured_error():
     assert payload["error"]["request_id"]
 
 
-def test_workspace_catalog_rejects_nested_dynamic_loader_options():
-    client = _client()
+def test_workspace_catalog_rejects_nested_dynamic_loader_options(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/catalogs/analytics",
@@ -224,8 +219,8 @@ def test_workspace_catalog_rejects_nested_dynamic_loader_options():
     assert "cannot select an implementation class" in response.json()["detail"]
 
 
-def test_workspace_catalog_rejects_unbounded_option_shape():
-    client = _client()
+def test_workspace_catalog_rejects_unbounded_option_shape(client_factory):
+    client = client_factory()
 
     deeply_nested: object = "value"
     for _ in range(18):
@@ -240,8 +235,8 @@ def test_workspace_catalog_rejects_unbounded_option_shape():
     assert "too deeply nested" in response.json()["detail"]
 
 
-def test_workspace_catalog_rejects_oversized_option_list():
-    client = _client()
+def test_workspace_catalog_rejects_oversized_option_list(client_factory):
+    client = client_factory()
     response = client.put(
         "/v1/catalogs/analytics",
         json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"properties": ["x"] * 257}},
@@ -252,8 +247,8 @@ def test_workspace_catalog_rejects_oversized_option_list():
     assert "list is too large" in response.json()["detail"]
 
 
-def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_refs():
-    client = _client()
+def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_refs(client_factory):
+    client = client_factory()
 
     rejected = client.put(
         "/v1/catalogs/analytics",
@@ -274,10 +269,9 @@ def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_r
     assert accepted.status_code == 200, accepted.json()
 
 
-def test_workspace_catalog_enforces_configured_egress_allowlist():
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    client = TestClient(
+def test_workspace_catalog_enforces_configured_egress_allowlist(http_client, db_engine):
+    engine = db_engine
+    client = http_client(
         create_app(
             session_factory(engine),
             admin_token="test-admin",
@@ -301,8 +295,10 @@ def test_workspace_catalog_enforces_configured_egress_allowlist():
     assert accepted.status_code == 200, accepted.json()
 
 
-def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypatch):
-    client = _client()
+def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
+    client_factory, monkeypatch
+):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -356,8 +352,8 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypa
     assert "tenant" not in _keys_recursive(response.json())
 
 
-def test_workspace_catalog_discovery_resolves_secret_references(monkeypatch):
-    client = _client(
+def test_workspace_catalog_discovery_resolves_secret_references(client_factory, monkeypatch):
+    client = client_factory(
         secret_provider=EnvSecretProvider(
             config={"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}}
         )
@@ -391,8 +387,8 @@ def test_workspace_catalog_discovery_resolves_secret_references(monkeypatch):
     assert received["token"] == "sentinel-secret"
 
 
-def test_workspace_catalog_discovery_does_not_echo_provider_errors(monkeypatch):
-    client = _client()
+def test_workspace_catalog_discovery_does_not_echo_provider_errors(client_factory, monkeypatch):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"uri": "https://catalog.example/api"}},
@@ -420,8 +416,8 @@ def test_workspace_catalog_discovery_does_not_echo_provider_errors(monkeypatch):
     assert "cell" not in _keys_recursive(response.json())
 
 
-def test_workspace_catalog_diagnostics_are_bounded_and_redacted(monkeypatch):
-    client = _client()
+def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, monkeypatch):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={

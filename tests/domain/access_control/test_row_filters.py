@@ -73,11 +73,6 @@ def test_parse_row_filter_distinguishes_quoted_literal_dots_from_nested_fields()
     assert extract_row_filter_dependencies(nested) == ["a.b"]
 
 
-def test_parse_row_filter_rejects_query_statements():
-    with pytest.raises(ValueError, match="Row filter must be a DuckDB expression"):
-        parse_row_filter("SELECT * FROM users", _schema())
-
-
 def test_row_filter_serialization_round_trips_as_sql_string():
     row_filter = parse_row_filter("lower(region) = 'us' AND active", _schema())
 
@@ -90,33 +85,6 @@ def test_row_filter_serialization_round_trips_as_sql_string():
 def test_row_filter_deserialization_rejects_non_string_payload():
     with pytest.raises(ValueError, match="Invalid row filter payload"):
         deserialize_row_filter({"type": "comparison"})
-
-
-@pytest.mark.parametrize(
-    "payload",
-    PARSER_MULTIPLE_STATEMENT_ROW_FILTERS,
-)
-def test_parse_row_filter_rejects_multiple_statements(payload):
-    with pytest.raises(ValueError, match="single DuckDB expression"):
-        parse_row_filter(payload, _schema())
-
-
-@pytest.mark.parametrize(
-    "payload",
-    PARSER_NON_FILTER_STATEMENT_ROW_FILTERS,
-)
-def test_parse_row_filter_rejects_non_filter_statements(payload):
-    with pytest.raises(ValueError, match="Unsupported row filter expression"):
-        parse_row_filter(payload, _schema())
-
-
-@pytest.mark.parametrize(
-    "payload",
-    PARSER_UNSAFE_EXPRESSION_ROW_FILTERS,
-)
-def test_parse_row_filter_rejects_subqueries_and_table_functions(payload):
-    with pytest.raises(ValueError, match="Unsupported row filter expression"):
-        parse_row_filter(payload, _schema())
 
 
 @pytest.mark.parametrize(
@@ -136,3 +104,23 @@ def test_parse_row_filter_keeps_supported_filter_subset(payload, expected):
     row_filter = parse_row_filter(payload, _schema())
 
     assert row_filter_to_sql(row_filter) == expected
+
+
+@pytest.mark.parametrize(
+    "payload,message",
+    [
+        pytest.param("SELECT * FROM users", "Row filter must be a DuckDB expression", id="query"),
+        *[(sql, "single DuckDB expression") for sql in PARSER_MULTIPLE_STATEMENT_ROW_FILTERS],
+        *[
+            (sql, "Unsupported row filter expression")
+            for sql in PARSER_NON_FILTER_STATEMENT_ROW_FILTERS
+        ],
+        *[
+            (sql, "Unsupported row filter expression")
+            for sql in PARSER_UNSAFE_EXPRESSION_ROW_FILTERS
+        ],
+    ],
+)
+def test_parse_row_filter_rejects_unsafe_sql(payload, message):
+    with pytest.raises(ValueError, match=message):
+        parse_row_filter(payload, _schema())

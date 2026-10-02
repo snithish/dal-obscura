@@ -10,8 +10,6 @@ from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 
 from dal_obscura.common.config_store.db import (
-    create_engine_from_url,
-    migrate_config_store,
     session_factory,
 )
 from dal_obscura.control_plane.interfaces import api as api_module
@@ -25,10 +23,9 @@ from dal_obscura.control_plane.interfaces.routes.session import (
 from dal_obscura.control_plane.interfaces.session_api import exchange_authorization_code
 
 
-def _client(nonce_resolver) -> TestClient:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    return TestClient(
+def _client(http_client, db_engine, nonce_resolver) -> TestClient:
+    engine = db_engine
+    return http_client(
         create_app(
             session_factory(engine),
             admin_token="test-admin",
@@ -45,7 +42,9 @@ def _client(nonce_resolver) -> TestClient:
     )
 
 
-def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(monkeypatch) -> None:
+def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(
+    http_client, db_engine, monkeypatch
+) -> None:
     exchanges: list[tuple[str, str]] = []
 
     def exchange(config, code, verifier):
@@ -53,7 +52,11 @@ def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(monkeypatch) -> Non
         return {"access_token": "access-token", "id_token": "id-token"}
 
     monkeypatch.setattr(api_module, "_exchange_authorization_code", exchange)
-    client = _client(lambda token, nonce_hash: {"principal": "alice", "groups": ["analysts"]})
+    client = _client(
+        http_client,
+        db_engine,
+        lambda token, nonce_hash: {"principal": "alice", "groups": ["analysts"]},
+    )
 
     start = client.get("/auth/login", follow_redirects=False)
     location = start.headers["location"]
@@ -86,6 +89,8 @@ def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(monkeypatch) -> Non
 
 
 def test_logout_revokes_local_session_and_returns_provider_logout_without_tokens(
+    http_client,
+    db_engine,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -93,7 +98,9 @@ def test_logout_revokes_local_session_and_returns_provider_logout_without_tokens
         "_exchange_authorization_code",
         lambda config, code, verifier: {"id_token": "private-id-token"},
     )
-    client = _client(lambda token, nonce_hash: {"principal": "alice", "groups": []})
+    client = _client(
+        http_client, db_engine, lambda token, nonce_hash: {"principal": "alice", "groups": []}
+    )
     start = client.get("/auth/login", follow_redirects=False)
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
     client.get("/auth/callback", params={"code": "code", "state": state}, follow_redirects=False)
@@ -174,10 +181,9 @@ def test_provider_logout_rejects_unsafe_return_uri(target: str) -> None:
         )
 
 
-def test_bootstrap_only_logout_does_not_offer_provider_redirect() -> None:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    client = TestClient(
+def test_bootstrap_only_logout_does_not_offer_provider_redirect(http_client, db_engine) -> None:
+    engine = db_engine
+    client = http_client(
         create_app(session_factory(engine), admin_token="test-admin"), base_url="https://testserver"
     )
     login = client.post("/v1/session/bootstrap", headers={"authorization": "Bearer test-admin"})
@@ -188,13 +194,15 @@ def test_bootstrap_only_logout_does_not_offer_provider_redirect() -> None:
     assert client.get("/v1/session").status_code == 401
 
 
-def test_oidc_callback_rejects_state_replay_and_nonce_failure(monkeypatch) -> None:
+def test_oidc_callback_rejects_state_replay_and_nonce_failure(
+    http_client, db_engine, monkeypatch
+) -> None:
     monkeypatch.setattr(
         api_module,
         "_exchange_authorization_code",
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
-    client = _client(lambda token, nonce_hash: None)
+    client = _client(http_client, db_engine, lambda token, nonce_hash: None)
     start = client.get("/auth/login", follow_redirects=False)
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
 
@@ -213,10 +221,9 @@ def test_oidc_callback_rejects_state_replay_and_nonce_failure(monkeypatch) -> No
     assert replay.status_code == 400
 
 
-def test_oidc_login_is_bounded_per_client_and_returns_retry_after() -> None:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    client = TestClient(
+def test_oidc_login_is_bounded_per_client_and_returns_retry_after(http_client, db_engine) -> None:
+    engine = db_engine
+    client = http_client(
         create_app(
             session_factory(engine),
             admin_token="test-admin",
@@ -277,9 +284,10 @@ def test_forwarded_login_rate_identity_requires_configured_proxy_peer() -> None:
     )
 
 
-def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets() -> None:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
+def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets(
+    http_client, db_engine
+) -> None:
+    engine = db_engine
     app = create_app(
         session_factory(engine),
         admin_token="test-admin",
@@ -292,13 +300,13 @@ def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets() -> None:
         login_rate_limit_aggregate_attempts=1,
         trusted_proxy_peers=("10.0.0.8/32",),
     )
-    first_client = TestClient(
+    first_client = http_client(
         app,
         base_url="https://testserver",
         client=("10.0.0.8", 443),
         headers={"x-forwarded-for": "198.51.100.7"},
     )
-    second_client = TestClient(
+    second_client = http_client(
         app,
         client=("10.0.0.8", 443),
         headers={"x-forwarded-for": "198.51.100.8"},
@@ -311,9 +319,8 @@ def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets() -> None:
 
 
 @pytest.mark.parametrize("peer", ["gateway.internal", "10.0.0.8/not-a-mask", ""])
-def test_invalid_trusted_proxy_configuration_fails_closed(peer: str) -> None:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
+def test_invalid_trusted_proxy_configuration_fails_closed(db_engine, peer: str) -> None:
+    engine = db_engine
 
     with pytest.raises(ValueError, match="trusted proxy peer"):
         create_app(
@@ -323,13 +330,17 @@ def test_invalid_trusted_proxy_configuration_fails_closed(peer: str) -> None:
         )
 
 
-def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None:
+def test_successful_oidc_callback_clears_client_login_limit(
+    http_client, db_engine, monkeypatch
+) -> None:
     monkeypatch.setattr(
         api_module,
         "_exchange_authorization_code",
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
-    client = _client(lambda token, nonce_hash: {"principal": "alice", "groups": []})
+    client = _client(
+        http_client, db_engine, lambda token, nonce_hash: {"principal": "alice", "groups": []}
+    )
 
     start = client.get("/auth/login", follow_redirects=False)
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
@@ -345,14 +356,15 @@ def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None
     assert client.get("/auth/login", follow_redirects=False).status_code == 303
 
 
-def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(monkeypatch) -> None:
+def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(
+    http_client, db_engine, monkeypatch
+) -> None:
     monkeypatch.setattr(
         api_module,
         "_exchange_authorization_code",
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
+    engine = db_engine
     app = create_app(
         session_factory(engine),
         admin_token="test-admin",
@@ -369,13 +381,13 @@ def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(monkeypat
         login_rate_limit_aggregate_attempts=1,
         trusted_proxy_peers=("10.0.0.8/32",),
     )
-    first_client = TestClient(
+    first_client = http_client(
         app,
         base_url="https://testserver",
         client=("10.0.0.8", 443),
         headers={"x-forwarded-for": "198.51.100.7"},
     )
-    second_client = TestClient(
+    second_client = http_client(
         app,
         client=("10.0.0.8", 443),
         headers={"x-forwarded-for": "198.51.100.8"},

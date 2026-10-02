@@ -6,6 +6,7 @@ import pytest
 
 from dal_obscura.common.ticket_delivery.models import TicketPayload
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from tests.support.tickets import ticket_payload
 
 
 def _scan_payload():
@@ -18,15 +19,12 @@ def _scan_payload():
 
 
 def _ticket_payload() -> TicketPayload:
-    return TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    return ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="catalog1",
         target="catalog.db.table",
         columns=["id"],
         scan=_scan_payload(),
         policy_version=1,
-        principal_id="user1",
         expires_at=2**31,
         nonce="abc123",
     )
@@ -43,15 +41,12 @@ def test_ticket_verify_rejects_noncanonical_base64_even_with_valid_signature():
 
 
 def test_ticket_key_rotation_accepts_previous_keys_but_signs_with_current_key():
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="catalog1",
         target="catalog.db.table",
         columns=["id"],
         scan=_scan_payload(),
         policy_version=1,
-        principal_id="user1",
         expires_at=2**31,
         nonce="rotation",
     )
@@ -74,8 +69,7 @@ def test_ticket_key_rotation_rejects_duplicate_keys():
 
 def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
     codec = HmacTicketCodecAdapter("secret")
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
         target="default.users",
@@ -86,8 +80,6 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
             "full_row_filter": "region = 'us'",
             "masks": {"email": {"type": "email", "value": None}},
         },
-        policy_version=100,
-        principal_id="user1",
         expires_at=2**31,
         nonce="nonce",
     )
@@ -112,14 +104,12 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
 
 def test_ticket_rejects_expiry_at_current_second(monkeypatch):
     codec = HmacTicketCodecAdapter("secret")
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=[],
         scan=_scan_payload(),
         policy_version=1,
-        principal_id="user1",
         expires_at=100,
         nonce="expired",
     )
@@ -144,14 +134,12 @@ def test_ticket_rejects_boolean_expiry_even_with_valid_signature():
 
 def test_ticket_rejects_tampered_signature():
     codec = HmacTicketCodecAdapter("secret")
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=["id"],
         scan=_scan_payload(),
         policy_version=1,
-        principal_id="user1",
         expires_at=2**31,
         nonce="nonce",
     )

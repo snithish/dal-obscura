@@ -2,17 +2,6 @@ import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "./fixtures";
 const rule = { ordinal: 10, effect: "allow", principals: ["group:analysts"], columns: ["email"], masks: {}, row_filter: null, when: {} };
 
-test("column picker preserves keyboard search selection and focus", async ({ page }) => {
-  await authenticatedApi(page, { ruleEditor: true, initialPolicyRules: [rule] });
-  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
-  const trigger = page.getByRole("button", { name: /Allowed columns: \d+ selected/ });
-  await trigger.click();
-  const search = page.getByRole("combobox", { name: "Search allowed columns" });
-  await search.fill("phone"); await search.press("Enter");
-  await expect(trigger).toHaveText(/2 selected/);
-  await search.press("Escape"); await expect(trigger).toBeFocused();
-});
-
 test("read-only access disables all authoring", async ({ page }) => {
   await authenticatedApi(page, { ruleEditor: true, readOnly: true, initialPolicyRules: [rule] });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");

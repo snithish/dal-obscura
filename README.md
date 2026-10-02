@@ -206,7 +206,8 @@ mvn -f connectors/jvm/pom.xml verify
 
 ## Development
 
-See [development](docs/development.md) for test ownership and checks, and
+See [the testing guide](docs/testing.md) for suite ownership and verification lanes,
+[development](docs/development.md) for development checks, and
 [read execution invariants](docs/read-execution-invariants.md) for correctness boundaries.
 
 ```bash

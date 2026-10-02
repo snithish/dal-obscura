@@ -23,7 +23,8 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
 - **Authorize before reading.** Planning expands nested leaves, authorizes caller
   filter dependencies, and rejects unauthorized or masked caller predicates.
   Policy-only dependencies remain internal execution columns. Evidence:
-  `tests/application/access_flow/test_planning.py` and `test_fetch.py`.
+  `tests/application/access_flow/test_planning_admission.py`,
+  `test_planning_projection.py`, `test_planning_filters.py`, and `test_fetch.py`.
 - **Enforce the full restriction.** Combine policy and caller predicates with
   AND; retain every dependency; apply the full filter to original values before
   output masking, including when the backend claims complete pushdown. Evidence:

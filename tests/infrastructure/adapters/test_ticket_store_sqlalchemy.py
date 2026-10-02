@@ -5,11 +5,8 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.common.config_store.db import (
-    create_engine_from_url,
-    migrate_config_store,
     session_factory,
 )
 from dal_obscura.common.config_store.orm import DataPlaneTicketRecord
@@ -17,17 +14,11 @@ from dal_obscura.common.ticket_delivery.models import TicketPayload
 from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
     SqlAlchemyTicketStore,
 )
-
-
-def _session_maker() -> sessionmaker[Session]:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    return session_factory(engine)
+from tests.support.tickets import ticket_payload
 
 
 def _payload(ticket_id: str, *, expires_at: int = 2000) -> TicketPayload:
-    return TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
+    return ticket_payload(
         ticket_id=ticket_id,
         catalog="analytics",
         target="default.users",
@@ -38,15 +29,13 @@ def _payload(ticket_id: str, *, expires_at: int = 2000) -> TicketPayload:
             "full_row_filter": None,
             "masks": {},
         },
-        policy_version=100,
-        principal_id="user1",
         expires_at=expires_at,
         nonce="nonce-a",
     )
 
 
-def test_ticket_store_reserves_exchanges_until_limit():
-    session_maker = _session_maker()
+def test_ticket_store_reserves_exchanges_until_limit(db_engine):
+    session_maker = session_factory(db_engine)
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000001"
 
@@ -58,8 +47,8 @@ def test_ticket_store_reserves_exchanges_until_limit():
         store.reserve_exchange(ticket_id, now=1002)
 
 
-def test_ticket_store_persists_many_tickets_in_one_transaction():
-    session_maker = _session_maker()
+def test_ticket_store_persists_many_tickets_in_one_transaction(db_engine):
+    session_maker = session_factory(db_engine)
     store = SqlAlchemyTicketStore(session_maker)
 
     store.store_many(
@@ -74,8 +63,8 @@ def test_ticket_store_persists_many_tickets_in_one_transaction():
     assert store.load("00000000-0000-0000-0000-000000000002").exchange_count == 0
 
 
-def test_ticket_store_rejects_load_and_exchange_after_owner_revocation():
-    session_maker = _session_maker()
+def test_ticket_store_rejects_load_and_exchange_after_owner_revocation(db_engine):
+    session_maker = session_factory(db_engine)
     asset_id = uuid4()
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000003"
@@ -98,8 +87,8 @@ def test_ticket_store_rejects_load_and_exchange_after_owner_revocation():
         store.ensure_active(ticket_id)
 
 
-def test_ticket_cleanup_deletes_only_expired_rows_globally():
-    session_maker = _session_maker()
+def test_ticket_cleanup_deletes_only_expired_rows_globally(db_engine):
+    session_maker = session_factory(db_engine)
 
     store_a = SqlAlchemyTicketStore(session_maker)
     store_b = SqlAlchemyTicketStore(session_maker)
@@ -126,8 +115,8 @@ def test_ticket_cleanup_deletes_only_expired_rows_globally():
     }
 
 
-def test_cleanup_preserves_last_reserved_stream_until_expiry():
-    session_maker = _session_maker()
+def test_cleanup_preserves_last_reserved_stream_until_expiry(db_engine):
+    session_maker = session_factory(db_engine)
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000005"
     store.store(_payload(ticket_id, expires_at=2000), max_exchanges=1)
@@ -139,8 +128,8 @@ def test_cleanup_preserves_last_reserved_stream_until_expiry():
     assert store.cleanup_expired(now=2000) == 1
 
 
-def test_ticket_exchange_rejects_exact_expiry_boundary():
-    session_maker = _session_maker()
+def test_ticket_exchange_rejects_exact_expiry_boundary(db_engine):
+    session_maker = session_factory(db_engine)
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000006"
     store.store(_payload(ticket_id, expires_at=2000), max_exchanges=1)

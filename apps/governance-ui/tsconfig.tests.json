@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noUnusedLocals": true },
+  "include": ["e2e", "review", "playwright*.ts"]
+}

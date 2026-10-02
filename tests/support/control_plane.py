@@ -33,48 +33,48 @@ def provision_default_live_asset(
     if not isinstance(engine, Engine):
         raise TypeError("provision_default_live_asset requires an Engine-bound session")
     app = create_app(session_factory(engine), admin_token="test-admin")
-    client = TestClient(app)
-    headers = {"authorization": "Bearer test-admin"}
+    with TestClient(app) as client:
+        headers = {"authorization": "Bearer test-admin"}
 
-    _checked_json(
-        client.put(
-            "/v1/settings/runtime",
-            json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
-            headers=headers,
+        _checked_json(
+            client.put(
+                "/v1/settings/runtime",
+                json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
+                headers=headers,
+            )
         )
-    )
-    _checked_json(
-        client.put(
-            f"/v1/catalogs/{catalog_name}",
-            json={"plugin_id": ICEBERG_CATALOG_ID, "options": catalog_options},
-            headers=headers,
+        _checked_json(
+            client.put(
+                f"/v1/catalogs/{catalog_name}",
+                json={"plugin_id": ICEBERG_CATALOG_ID, "options": catalog_options},
+                headers=headers,
+            )
         )
-    )
-    asset = _checked_json(
-        client.put(
-            f"/v1/assets/{quote(catalog_name, safe='')}/{quote(target, safe='')}",
-            json={
-                "backend": "iceberg",
-                "table_identifier": table_identifier or target,
-                "options": {},
-            },
-            headers=headers,
+        asset = _checked_json(
+            client.put(
+                f"/v1/assets/{quote(catalog_name, safe='')}/{quote(target, safe='')}",
+                json={
+                    "backend": "iceberg",
+                    "table_identifier": table_identifier or target,
+                    "options": {},
+                },
+                headers=headers,
+            )
         )
-    )
-    _checked_json(
-        client.put(
-            f"/v1/assets/{asset['id']}/policy",
-            json={"expected_revision": 0, "rules": policy_rules},
-            headers=headers,
+        _checked_json(
+            client.put(
+                f"/v1/assets/{asset['id']}/policy",
+                json={"expected_revision": 0, "rules": policy_rules},
+                headers=headers,
+            )
         )
-    )
-    _checked_json(
-        client.put(
-            "/v1/settings/auth-providers", json={"providers": [auth_provider]}, headers=headers
+        _checked_json(
+            client.put(
+                "/v1/settings/auth-providers", json={"providers": [auth_provider]}, headers=headers
+            )
         )
-    )
 
-    return ProvisionedConfig()
+        return ProvisionedConfig()
 
 
 def _checked_json(response) -> dict[str, Any]:

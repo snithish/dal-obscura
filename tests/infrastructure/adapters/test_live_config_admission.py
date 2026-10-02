@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import replace
 from uuid import uuid4
 
@@ -12,8 +11,6 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from dal_obscura.common.access_control.models import Principal
 from dal_obscura.common.config_store.db import (
-    create_engine_from_url,
-    migrate_config_store,
     session_factory,
 )
 from dal_obscura.common.config_store.orm import (
@@ -35,15 +32,6 @@ from dal_obscura.data_plane.infrastructure.adapters.live_config import (
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
-
-
-@pytest.fixture
-def db_session() -> Iterator[Session]:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    session_maker = session_factory(engine)
-    with session_maker() as session:
-        yield session
 
 
 def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):

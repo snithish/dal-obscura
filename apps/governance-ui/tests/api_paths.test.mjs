@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { assetPath, controlPlane } from "../src/api.ts";
 
-test("asset API paths encode the complete identifier as one route segment", () => {
-  assert.equal(assetPath("asset-42"), "/v1/assets/asset-42");
-  assert.equal(assetPath("catalog/orders?redirect=https://evil.example"), "/v1/assets/catalog%2Forders%3Fredirect%3Dhttps%3A%2F%2Fevil.example");
-  assert.equal(assetPath("../private"), "/v1/assets/..%2Fprivate");
-});
+for (const [name, id, expected] of [
+  ['ordinary ID', 'asset-42', '/v1/assets/asset-42'],
+  ['query and URL delimiters', 'catalog/orders?redirect=https://evil.example', '/v1/assets/catalog%2Forders%3Fredirect%3Dhttps%3A%2F%2Fevil.example'],
+  ['parent path', '../private', '/v1/assets/..%2Fprivate'],
+]) {
+  test('asset path encodes ' + name + ' as one segment', () => assert.equal(assetPath(id), expected));
+}
 
 test("asset policy normalization preserves mask exemption metadata", async () => {
   const originalFetch = globalThis.fetch;

@@ -5,6 +5,7 @@ const useExternalServer = process.env.DAL_OBSCURA_E2E_BASE_URL !== undefined;
 
 export default defineConfig({
   testDir: "e2e",
+  testIgnore: "**/live-oidc-demo.spec.ts",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,

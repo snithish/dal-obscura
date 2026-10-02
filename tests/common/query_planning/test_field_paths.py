@@ -70,19 +70,17 @@ def test_field_path_resolves_nested_struct_list_and_map_nodes():
     assert resolve_schema_path(schema, parse_field_path("labels.$value.rank")).type == pa.int64()
 
 
-@pytest.mark.parametrize(
-    "path",
-    ["", "a.", ".a", "a..b", "a.$element", "[not-json]", '[""]'],
-)
-def test_field_path_rejects_malformed_or_incompatible_paths(path):
+@pytest.mark.parametrize("path", ["", "a.", ".a", "a..b", "[not-json]", '[""]'])
+def test_field_path_rejects_malformed_paths(path):
+    with pytest.raises(ValueError):
+        parse_field_path(path)
+
+
+def test_field_path_rejects_collection_traversal_through_a_scalar():
     schema = pa.schema([pa.field("a", pa.string())])
 
-    if path in {"", "a.", ".a", "a..b", "[not-json]", '[""]'}:
-        with pytest.raises(ValueError):
-            parse_field_path(path)
-    else:
-        with pytest.raises(ValueError, match="does not contain a list"):
-            resolve_schema_path(schema, parse_field_path(path))
+    with pytest.raises(ValueError, match="does not contain a list"):
+        resolve_schema_path(schema, parse_field_path("a.$element"))
 
 
 def test_field_path_validates_wire_model_invariants():

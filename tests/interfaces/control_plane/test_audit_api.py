@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from tests.interfaces.control_plane.test_actor_auth import _bearer, _client
 from tests.interfaces.control_plane.workspace_helpers import ADMIN_HEADERS, _provision_asset
+from tests.support.actors import _bearer, _client
 
 
-def test_audit_events_are_transactional_redacted_and_scoped() -> None:
-    client = _client()
+def test_audit_events_are_transactional_redacted_and_scoped(client_factory) -> None:
+    client = _client(client_factory)
     asset = _provision_asset(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
@@ -50,8 +50,8 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
     assert outsider_events.json()["items"] == []
 
 
-def test_audit_limit_is_bounded() -> None:
-    client = _client()
+def test_audit_limit_is_bounded(client_factory) -> None:
+    client = _client(client_factory)
     response = client.get("/v1/audit/events/page?limit=201", headers=ADMIN_HEADERS)
     assert response.status_code == 422
     payload = response.json()
@@ -60,8 +60,8 @@ def test_audit_limit_is_bounded() -> None:
     assert payload["error"]["field_errors"]
 
 
-def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
-    client = _client()
+def test_audit_page_uses_keyset_cursor_and_preserves_scope(client_factory) -> None:
+    client = _client(client_factory)
     asset = _provision_asset(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
@@ -99,8 +99,8 @@ def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
     assert invalid.status_code == 400
 
 
-def test_audit_page_filters_before_pagination() -> None:
-    client = _client()
+def test_audit_page_filters_before_pagination(client_factory) -> None:
+    client = _client(client_factory)
     _provision_asset(client)
     response = client.get(
         "/v1/audit/events/page?action=workspace.runtime.update&resource_type=workspace&limit=1",

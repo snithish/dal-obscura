@@ -89,7 +89,10 @@ def test_iceberg_sdk_checks_storage_allowlist_before_io():
         plugin.schema(handle("https://blocked.example/metadata.json"), cast(Any, None))
 
 
-def test_sdk_iceberg_reads_real_parallel_scan_tasks_after_ticket_round_trip(tmp_path):
+@pytest.mark.parametrize(
+    "columns", [["id"], ["id", "email", "region"]], ids=["integers", "strings"]
+)
+def test_sdk_iceberg_reads_real_parallel_scan_tasks_after_ticket_round_trip(tmp_path, columns):
     import pickle
 
     from pyiceberg.catalog import load_catalog
@@ -109,12 +112,70 @@ def test_sdk_iceberg_reads_real_parallel_scan_tasks_after_ticket_round_trip(tmp_
         handle=resolved,
         format_factory=module.IcebergFormatPlugin,
     )
-    plan = adapter.plan(PlanRequest(target="default.events", columns=["id"]), max_tickets=2)
+    plan = adapter.plan(PlanRequest(target="default.events", columns=columns), max_tickets=2)
     assert len(plan.tasks) == 2
     batches = []
     for task in plan.tasks:
         restored = pickle.loads(pickle.dumps(task))
         schema, stream = restored.table_format.execute(restored.partition)
-        assert schema.names == ["id"]
+        assert schema.names == columns
         batches.extend(stream)
     assert sorted(pa.Table.from_batches(batches).column("id").to_pylist()) == [1, 2, 3, 4]
+    assert all(batch.schema.equals(schema, check_metadata=True) for batch in batches)
+
+
+@pytest.fixture
+def native_plugin(monkeypatch):
+    def create(schema, batches):
+        class Engine:
+            def __init__(self, **kwargs):
+                pass
+
+            def execute(self, partition):
+                return schema, batches
+
+        monkeypatch.setattr(module, "IcebergTableFormat", Engine)
+        return module.IcebergFormatPlugin(handle(), cast(Any, None))
+
+    return create
+
+
+def test_native_iceberg_keeps_matching_arrow_buffers_and_closes_abandoned_reader(native_plugin):
+    batch = pa.record_batch([pa.array([1])], names=["id"])
+    closed = []
+
+    def source():
+        try:
+            yield batch
+            raise AssertionError("Early stop must not read the next batch")
+        finally:
+            closed.append(True)
+
+    plugin = native_plugin(batch.schema, source())
+    _, stream = plugin.execute(
+        {"columns": ["id"], "tasks": [], "row_filter": None}, cast(Any, None)
+    )
+    iterator = iter(stream)
+
+    assert next(iterator) is batch
+    iterator.close()
+    assert closed == [True]
+
+
+def test_native_iceberg_closes_reader_when_schema_normalization_fails(native_plugin):
+    closed = []
+
+    def source():
+        try:
+            yield pa.record_batch([pa.array([1])], names=["wrong-column"])
+        finally:
+            closed.append(True)
+
+    plugin = native_plugin(pa.schema([pa.field("id", pa.int64())]), source())
+    _, stream = plugin.execute(
+        {"columns": ["id"], "tasks": [], "row_filter": None}, cast(Any, None)
+    )
+
+    with pytest.raises(ValueError, match="names"):
+        next(iter(stream))
+    assert closed == [True]

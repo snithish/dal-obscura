@@ -3,13 +3,12 @@ from __future__ import annotations
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     DEFAULT_AUTH_MODULE,
-    _client,
     _keys_recursive,
 )
 
 
-def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids():
-    client = _client()
+def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids(client_factory):
+    client = client_factory()
 
     get_before_setup = client.get("/v1/settings/runtime", headers=ADMIN_HEADERS)
     stale_creation = client.put(
@@ -77,8 +76,8 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
     }
 
 
-def test_workspace_runtime_settings_accepts_path_rules_and_audits_roots():
-    client = _client()
+def test_workspace_runtime_settings_accepts_path_rules_and_audits_roots(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/settings/runtime",
@@ -98,8 +97,8 @@ def test_workspace_runtime_settings_accepts_path_rules_and_audits_roots():
     assert runtime_events[0]["details"]["path_rules"] == [{"root": "s3://warehouse"}]
 
 
-def test_workspace_runtime_settings_rejects_unsafe_path_rules():
-    client = _client()
+def test_workspace_runtime_settings_rejects_unsafe_path_rules(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/settings/runtime",
@@ -116,8 +115,8 @@ def test_workspace_runtime_settings_rejects_unsafe_path_rules():
     assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_workspace_runtime_settings_rejects_non_string_path_root():
-    client = _client()
+def test_workspace_runtime_settings_rejects_non_string_path_root(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/settings/runtime",
@@ -134,8 +133,8 @@ def test_workspace_runtime_settings_rejects_non_string_path_root():
     assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_workspace_auth_providers_can_be_configured_without_cell_ids():
-    client = _client()
+def test_workspace_auth_providers_can_be_configured_without_cell_ids(client_factory):
+    client = client_factory()
 
     before_setup = client.get("/v1/settings/auth-providers", headers=ADMIN_HEADERS)
     put_response = client.put(
@@ -233,8 +232,10 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
     assert recreated.json()[0]["revision"] == 3
 
 
-def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material():
-    client = _client()
+def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material(
+    client_factory,
+):
+    client = client_factory()
 
     unsupported = client.put(
         "/v1/settings/auth-providers",
@@ -269,8 +270,8 @@ def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_mate
     assert "static JWKS" in inline_secret.json()["detail"]
 
 
-def test_workspace_auth_providers_normalize_malformed_endpoint_errors():
-    client = _client()
+def test_workspace_auth_providers_normalize_malformed_endpoint_errors(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/settings/auth-providers",

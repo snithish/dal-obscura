@@ -11,8 +11,8 @@ from dal_obscura.control_plane.interfaces.routes.schemas import PolicyEvaluation
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
-    _client,
 )
+from tests.support.schema_catalog import EvaluationCatalog
 
 
 @pytest.mark.parametrize(
@@ -23,8 +23,8 @@ from tests.interfaces.control_plane.workspace_helpers import (
         ({"principal": "analyst", "groups": [" "]}, "groups.0"),
     ],
 )
-def test_policy_evaluation_rejects_ignored_or_blank_inputs(payload, field):
-    client = _client()
+def test_policy_evaluation_rejects_ignored_or_blank_inputs(client_factory, payload, field):
+    client = client_factory()
     response = client.post(
         "/v1/assets/00000000-0000-4000-8000-000000000001/policy-evaluate",
         json=payload,
@@ -55,21 +55,6 @@ class _FakeCatalog:
     def load_table(self, identifier: str) -> _FakeTable:
         assert identifier == "prod.users"
         return _FakeTable()
-
-
-class _EvaluationTable:
-    def schema(self) -> Schema:
-        return Schema(
-            NestedField(field_id=1, name="id", field_type=LongType()),
-            NestedField(field_id=2, name="email", field_type=StringType()),
-            NestedField(field_id=3, name="region", field_type=StringType()),
-        )
-
-
-class _EvaluationCatalog:
-    def load_table(self, identifier: str) -> _EvaluationTable:
-        assert identifier == "prod.users"
-        return _EvaluationTable()
 
 
 class _ChangedEvaluationTable:
@@ -127,8 +112,8 @@ def _provision_reviewable_asset(client: TestClient) -> dict[str, object]:
     return asset
 
 
-def test_asset_schema_route_reads_authoritative_iceberg_schema(monkeypatch) -> None:
-    client = _client()
+def test_asset_schema_route_reads_authoritative_iceberg_schema(client_factory, monkeypatch) -> None:
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -172,8 +157,10 @@ def test_policy_evaluation_response_rejects_internal_schema_field_name() -> None
     assert any(error["loc"] == ("schema",) for error in exc_info.value.errors())
 
 
-def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch) -> None:
-    client = _client()
+def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(
+    client_factory, monkeypatch
+) -> None:
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -228,7 +215,7 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
     monkeypatch.setattr(
         schema_service,
         "load_catalog",
-        lambda *args, **kwargs: _EvaluationCatalog(),
+        lambda *args, **kwargs: EvaluationCatalog(),
     )
 
     response = client.post(

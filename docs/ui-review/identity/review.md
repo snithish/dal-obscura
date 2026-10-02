@@ -73,5 +73,6 @@ comma-containing values; preserved unknown keys/removed values; stale results;
 mobile accessibility; and existing access-management and session isolation flows.
 
 To reproduce the screenshots, start a preview of the previous UI on port 4174,
-then run the opt-in `identity-review.spec.ts` test with
-`DAL_OBSCURA_CAPTURE_IDENTITY=1` against the current UI preview on port 4173.
+then run `pnpm --dir apps/governance-ui capture:review identity-review.spec.ts`
+against the current UI preview on port 4173. Screenshot capture has its own
+Playwright configuration and is excluded from the correctness suite.

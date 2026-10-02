@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
-    _client,
     _provision_asset,
 )
 
 
-def test_workspace_summary_and_observations_follow_configuration():
-    client = _client()
+def test_workspace_summary_and_observations_follow_configuration(client_factory):
+    client = client_factory()
     response = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
@@ -42,8 +41,8 @@ def test_workspace_summary_and_observations_follow_configuration():
     }
 
 
-def test_workspace_policy_rules_reject_deny_effect_before_save():
-    client = _client()
+def test_workspace_policy_rules_reject_deny_effect_before_save(client_factory):
+    client = client_factory()
     asset = _provision_asset(client)
     before = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 

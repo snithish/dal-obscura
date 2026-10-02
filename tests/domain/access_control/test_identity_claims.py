@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.identity_claims import PrincipalClaimMapper
+from dal_obscura.common.access_control.identity_claims import PrincipalClaimMapper
 
 
 def test_principal_claim_mapper_extracts_subject_groups_and_attributes():
@@ -42,23 +42,34 @@ def test_principal_claim_mapper_rejects_non_scalar_attributes():
         mapper.map_claims({"sub": "user-123", "department": ["acme"]})
 
 
-def test_attribute_domain_is_enforced_after_claim_mapping():
-    mapper = PrincipalClaimMapper(
+@pytest.fixture
+def department_mapper():
+    return PrincipalClaimMapper(
         attribute_claims={"department": "employee.dept"},
-        attribute_definitions={
-            "department": {
-                "label": "Department",
-                "description": "Business unit",
-                "allowed_values": ["Engineering", "Finance"],
-            }
-        },
+        attribute_definitions={"department": {"allowed_values": ["Engineering", "Finance"]}},
     )
-    assert mapper.map_claims({"sub": "alice", "employee": {"dept": " Finance "}}).attributes == {
-        "department": "Finance"
-    }
-    assert mapper.map_claims({"sub": "alice"}).attributes == {}
+
+
+@pytest.mark.parametrize(
+    "claims,expected",
+    [
+        pytest.param(
+            {"sub": "alice", "employee": {"dept": " Finance "}},
+            {"department": "Finance"},
+            id="trimmed-allowed-value",
+        ),
+        pytest.param({"sub": "alice"}, {}, id="missing-claim"),
+    ],
+)
+def test_attribute_mapping_normalizes_allowed_and_missing_claims(
+    department_mapper, claims, expected
+):
+    assert department_mapper.map_claims(claims).attributes == expected
+
+
+def test_attribute_mapping_rejects_values_outside_its_domain(department_mapper):
     with pytest.raises(PermissionError, match="outside its allowed values"):
-        mapper.map_claims({"sub": "alice", "employee": {"dept": "Admin"}})
+        department_mapper.map_claims({"sub": "alice", "employee": {"dept": "Admin"}})
 
 
 def test_attribute_mapping_preview_uses_runtime_mapper_without_subject():

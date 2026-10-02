@@ -24,7 +24,7 @@ from dal_obscura.data_plane.infrastructure.adapters.live_config import (
     LiveConfigCatalogRegistry,
     LiveConfigStore,
 )
-from tests.infrastructure.adapters.test_live_config_store import _seed_live_config
+from tests.support.live_config import seed_live_config
 from tests.support.use_cases import StubTableFormat
 
 
@@ -64,7 +64,7 @@ def setup(tmp_path):
     migrate_config_store(engine)
     factory = session_factory(engine)
     with factory() as session:
-        _seed_live_config(session)
+        seed_live_config(session)
     Provider.created = []
     with patch(
         "dal_obscura.data_plane.infrastructure.adapters.live_config.CatalogRegistry", Provider

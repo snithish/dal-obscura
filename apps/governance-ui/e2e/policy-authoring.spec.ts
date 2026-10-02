@@ -148,19 +148,3 @@ test("allow all is an explicit removable bypass and discard restores restriction
   await page.getByRole("button", { name: "Discard all changes" }).click();
   await expect(page.getByText("Allow all is enabled", { exact: true })).toBeVisible();
 });
-
-test("column shortcuts select all, exclude a field, and add a prefix", async ({ page }) => {
-  await page.getByRole("button", { name: /Allowed columns:/ }).click();
-  await page.getByRole("button", { name: "Select all", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Allowed columns: 3 selected" })).toHaveCount(1);
-  await page.getByRole("button", { name: "Select all except…", exact: true }).click();
-  await page.getByRole("combobox", { name: "Search allowed columns" }).fill("phone");
-  await page.getByRole("option", { name: /phone/ }).click();
-  await page.getByRole("button", { name: /Apply exclusions/ }).click();
-  await expect(page.getByRole("button", { name: "Allowed columns: 2 selected" })).toHaveCount(1);
-  await page.getByRole("button", { name: "Add by prefix", exact: true }).click();
-  await page.getByLabel("Column path prefix").fill("pho");
-  await page.getByRole("button", { name: "Add matching columns", exact: true }).click();
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Allowed columns: 3 selected" })).toBeVisible();
-});

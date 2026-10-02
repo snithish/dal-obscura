@@ -22,19 +22,7 @@ from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
     _check_io_options,
     _check_table_locations,
 )
-
-
-@dataclass(frozen=True, kw_only=True)
-class _FakeProjectedSchema:
-    schema: pa.Schema
-
-    def as_arrow(self) -> pa.Schema:
-        return self.schema
-
-    def select(self, *columns: str) -> _FakeProjectedSchema:
-        return _FakeProjectedSchema(
-            schema=pa.schema([self.schema.field(column) for column in columns])
-        )
+from tests.support.iceberg_schema import _FakeProjectedSchema
 
 
 @dataclass(frozen=True, kw_only=True)

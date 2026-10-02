@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from typing import cast
 
 import pyarrow as pa
@@ -116,7 +116,8 @@ class IcebergFormatPlugin:
             tasks=[base64.b64decode(value, validate=True) for value in cast(list[str], tasks)],
             backend_pushdown_row_filter=row_filter,
         )
-        return self._table.execute(partition)
+        schema, batches = self._table.execute(partition)
+        return schema, _batches_with_declared_schema(schema, batches)
 
     def close(self) -> None:
         pass
@@ -132,3 +133,18 @@ class IcebergFormatPlugin:
             "tasks": [base64.b64encode(task).decode("ascii") for task in partition.tasks],
             "row_filter": partition.backend_pushdown_row_filter,
         }
+
+
+def _batches_with_declared_schema(
+    schema: pa.Schema, batches: Iterable[pa.RecordBatch]
+) -> Iterator[pa.RecordBatch]:
+    """PyIceberg may emit small-offset arrays for its large-offset schema."""
+    iterator = iter(batches)
+    try:
+        for batch in iterator:
+            # Preserve existing buffers when the reader already honors the schema.
+            yield batch if batch.schema.equals(schema, check_metadata=True) else batch.cast(schema)
+    finally:
+        close = getattr(iterator, "close", None)
+        if callable(close):
+            close()

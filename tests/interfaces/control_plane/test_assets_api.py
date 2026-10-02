@@ -3,14 +3,13 @@ from __future__ import annotations
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
-    _client,
     _keys_recursive,
     _provision_asset,
 )
 
 
-def test_asset_access_reports_effective_capabilities_and_reasons():
-    client = _client()
+def test_asset_access_reports_effective_capabilities_and_reasons(client_factory):
+    client = client_factory()
     asset = _provision_asset(client)
     admin = client.get(f"/v1/assets/{asset['id']}/access", headers=ADMIN_HEADERS)
     assert admin.status_code == 200
@@ -22,8 +21,8 @@ def test_asset_access_reports_effective_capabilities_and_reasons():
     )
 
 
-def test_workspace_asset_upsert_uses_default_workspace_context():
-    client = _client()
+def test_workspace_asset_upsert_uses_default_workspace_context(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -66,8 +65,8 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
     assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
 
 
-def test_workspace_asset_requires_physical_iceberg_identifier():
-    client = _client()
+def test_workspace_asset_requires_physical_iceberg_identifier(client_factory):
+    client = client_factory()
 
     response = client.put(
         "/v1/assets/analytics/default.users",
@@ -78,8 +77,8 @@ def test_workspace_asset_requires_physical_iceberg_identifier():
     assert response.status_code == 422
 
 
-def test_asset_cannot_remove_its_last_owner_without_reassignment():
-    client = _client()
+def test_asset_cannot_remove_its_last_owner_without_reassignment(client_factory):
+    client = client_factory()
     asset = _provision_asset(client)
     assigned = client.put(
         f"/v1/assets/{asset['id']}/owners",
@@ -98,8 +97,8 @@ def test_asset_cannot_remove_its_last_owner_without_reassignment():
     assert "last owner" in removed.json()["detail"]
 
 
-def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
-    client = _client()
+def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -197,8 +196,8 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     ]
 
 
-def test_schema_fields_preserve_literal_dotted_and_nested_paths():
-    client = _client()
+def test_schema_fields_preserve_literal_dotted_and_nested_paths(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -244,8 +243,8 @@ def test_schema_fields_preserve_literal_dotted_and_nested_paths():
     ]
 
 
-def test_workspace_policy_can_be_replaced_directly_from_asset_detail():
-    client = _client()
+def test_workspace_policy_can_be_replaced_directly_from_asset_detail(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -301,8 +300,8 @@ def test_workspace_policy_can_be_replaced_directly_from_asset_detail():
     ]
 
 
-def test_retired_asset_policy_preview_route_does_not_dispatch():
-    client = _client()
+def test_retired_asset_policy_preview_route_does_not_dispatch(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -328,8 +327,8 @@ def test_retired_asset_policy_preview_route_does_not_dispatch():
     assert "cell" not in _keys_recursive(response.json())
 
 
-def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
-    client = _client()
+def test_workspace_asset_owners_can_be_replaced_from_asset_detail(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -373,8 +372,8 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
     assert summary["enabled_auth_provider_count"] == 0
 
 
-def test_existing_asset_metadata_update_requires_revision_precondition():
-    client = _client()
+def test_existing_asset_metadata_update_requires_revision_precondition(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -399,8 +398,8 @@ def test_existing_asset_metadata_update_requires_revision_precondition():
     assert client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["revision"] == 0
 
 
-def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
-    client = _client()
+def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids(client_factory):
+    client = client_factory()
     asset = _provision_asset(client)
 
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
@@ -469,8 +468,8 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
 
 
-def test_asset_metadata_precondition_rejects_stale_writer() -> None:
-    client = _client()
+def test_asset_metadata_precondition_rejects_stale_writer(client_factory) -> None:
+    client = client_factory()
     asset = _provision_asset(client)
     current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
@@ -490,8 +489,8 @@ def test_asset_metadata_precondition_rejects_stale_writer() -> None:
     assert "Asset revision changed" in stale.json()["detail"]
 
 
-def test_asset_binding_precondition_rejects_stale_update() -> None:
-    client = _client()
+def test_asset_binding_precondition_rejects_stale_update(client_factory) -> None:
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -534,8 +533,8 @@ def test_asset_binding_precondition_rejects_stale_update() -> None:
     assert detail["revision"] == 1
 
 
-def test_asset_binding_update_requires_revision_precondition() -> None:
-    client = _client()
+def test_asset_binding_update_requires_revision_precondition(client_factory) -> None:
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -563,8 +562,8 @@ def test_asset_binding_update_requires_revision_precondition() -> None:
     assert detail["revision"] == 0
 
 
-def test_asset_binding_precondition_rejects_nonzero_revision_on_create() -> None:
-    client = _client()
+def test_asset_binding_precondition_rejects_nonzero_revision_on_create(client_factory) -> None:
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={
@@ -590,8 +589,8 @@ def test_asset_binding_precondition_rejects_nonzero_revision_on_create() -> None
     assert client.get("/v1/assets", headers=ADMIN_HEADERS).json() == []
 
 
-def test_asset_grant_precondition_rejects_stale_writer() -> None:
-    client = _client()
+def test_asset_grant_precondition_rejects_stale_writer(client_factory) -> None:
+    client = client_factory()
     asset = _provision_asset(client)
     current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
@@ -613,8 +612,8 @@ def test_asset_grant_precondition_rejects_stale_writer() -> None:
     assert stale.status_code == 409
 
 
-def test_asset_grant_update_requires_revision_precondition() -> None:
-    client = _client()
+def test_asset_grant_update_requires_revision_precondition(client_factory) -> None:
+    client = client_factory()
     asset = _provision_asset(client)
     missing = client.put(
         f"/v1/assets/{asset['id']}/grants",
@@ -627,8 +626,8 @@ def test_asset_grant_update_requires_revision_precondition() -> None:
     assert client.get(f"/v1/assets/{asset['id']}/grants", headers=ADMIN_HEADERS).json() == []
 
 
-def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
-    client = _client()
+def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated(client_factory):
+    client = client_factory()
     client.put(
         "/v1/catalogs/analytics",
         json={

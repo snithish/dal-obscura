@@ -240,8 +240,9 @@ jobs:
         run: >-
           uv run python scripts/require_no_skips.py
           --junitxml "$RUNNER_TEMP/postgres.xml" --
-          uv run pytest tests/integration/control_plane/test_publication_races.py
-          tests/integration/test_recovery_upgrade.py -q
+          uv run pytest tests/integration/test_live_snapshot.py
+          tests/integration/test_recovery_upgrade.py
+          tests/common/config_store/test_schema_migrations.py -q
 
   python-package:
     name: Python package smoke
@@ -334,8 +335,8 @@ jobs:
             "$RUNNER_TEMP/plugin-api-dist"/*.whl \
             "$RUNNER_TEMP/plugin-conformance-dist"/*.whl \
             "$RUNNER_TEMP/independent-plugin-dist"/*.whl
-          "$RUNNER_TEMP/plugin-env/bin/python" -m pytest packages/plugin-conformance/tests -q
-          "$RUNNER_TEMP/plugin-env/bin/python" -m pytest packages/manifest-parquet-plugin/tests packages/iceberg-rest-plugin/tests -q
+          "$RUNNER_TEMP/plugin-env/bin/python" -m pytest -o pythonpath= packages/plugin-conformance/tests -q
+          "$RUNNER_TEMP/plugin-env/bin/python" -m pytest -o pythonpath= packages/manifest-parquet-plugin/tests packages/iceberg-rest-plugin/tests -q
 
       - name: Generate and validate lock from installed plugin wheels
         id: lock
@@ -389,8 +390,9 @@ jobs:
             "$RUNNER_TEMP/integration-dist"/dal_obscura_plugin_api-*.whl \
             "$RUNNER_TEMP/integration-dist"/dal_obscura_manifest_parquet-*.whl \
             "$RUNNER_TEMP/integration-dist"/dal_obscura_iceberg_rest-*.whl
-          PYTHONPATH= "$RUNNER_TEMP/integration-env/bin/python" -m pytest \
-            tests/plugin_platform/test_public_plugin_adapter.py \
+          PYTHONPATH= "$RUNNER_TEMP/integration-env/bin/python" -m pytest -o pythonpath= \
+            tests/plugin_platform/test_public_catalog_adapter.py \
+            tests/plugin_platform/test_public_format_adapter.py \
             tests/plugin_platform/test_iceberg_format_plugin.py -q
 
   python-native-iceberg:
@@ -522,6 +524,7 @@ jobs:
 
       - name: Type-check and build UI
         run: |
+          pnpm --dir apps/governance-ui check
           pnpm --dir apps/governance-ui test
           pnpm --dir apps/governance-ui check:api-types
           pnpm --dir apps/governance-ui build

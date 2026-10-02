@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { Page } from "@playwright/test";
 import { authenticatedApi } from "./fixtures";
 
 export const uxAssetId = "00000000-0000-4000-8000-000000000001";

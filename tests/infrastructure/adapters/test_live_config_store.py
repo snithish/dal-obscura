@@ -1,42 +1,27 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
-import pytest
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.access_control.models import Principal
 from dal_obscura.common.config_store.db import (
-    create_engine_from_url,
-    migrate_config_store,
     session_factory,
 )
 from dal_obscura.common.config_store.orm import (
     AssetRecord,
-    AuthProviderRecord,
     CatalogRecord,
     PolicyRuleRecord,
-    RuntimeSettingsRecord,
-    WorkspaceRecord,
 )
 from dal_obscura.data_plane.infrastructure.adapters.live_config import (
     LiveConfigAuthorizer,
     LiveConfigStore,
 )
+from tests.support.live_config import seed_live_config
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
-@pytest.fixture
-def db_session():
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    with session_factory(engine)() as session:
-        yield session
-
-
 def test_live_store_reads_current_policy_from_canonical_records(db_session: Session):
-    (asset_id,) = _seed_live_config(db_session)
+    (asset_id,) = seed_live_config(db_session)
     store = LiveConfigStore(session_factory(db_session.get_bind().engine))
     authorizer = LiveConfigAuthorizer(store)
     principal = Principal(id="user1", groups=[], attributes={})
@@ -58,7 +43,7 @@ def test_live_store_reads_current_policy_from_canonical_records(db_session: Sess
 
 
 def test_live_runtime_settings_and_catalogs_need_no_snapshot_table(db_session: Session):
-    (_,) = _seed_live_config(db_session)
+    (_,) = seed_live_config(db_session)
     store = LiveConfigStore(session_factory(db_session.get_bind().engine))
 
     runtime = store.get_runtime()
@@ -78,7 +63,7 @@ def test_live_runtime_settings_and_catalogs_need_no_snapshot_table(db_session: S
 
 
 def test_live_store_reads_catalog_edit_without_global_invalidation(db_session: Session):
-    (_,) = _seed_live_config(db_session)
+    (_,) = seed_live_config(db_session)
     store = LiveConfigStore(session_factory(db_session.get_bind().engine))
     store.get_asset(catalog="analytics", target="default.users")
 
@@ -89,61 +74,3 @@ def test_live_store_reads_catalog_edit_without_global_invalidation(db_session: S
 
     second = store.get_asset(catalog="analytics", target="default.users")
     assert second.compiled_config["catalog"]["options"]["uri"] == "sqlite:///changed.db"
-
-
-def _seed_live_config(session: Session):
-    catalog_id = uuid4()
-    asset_id = uuid4()
-    session.add_all(
-        [
-            WorkspaceRecord(id=1),
-            RuntimeSettingsRecord(
-                ticket_ttl_seconds=600,
-                max_tickets=12,
-                max_ticket_exchanges=2,
-                revision=1,
-                path_rules_json=[],
-                id=1,
-            ),
-            CatalogRecord(
-                id=catalog_id,
-                name="analytics",
-                plugin_id=ICEBERG_CATALOG_ID,
-                options_json={"type": "sql", "uri": "sqlite:///catalog.db"},
-                revision=3,
-            ),
-            AssetRecord(
-                id=asset_id,
-                catalog_id=catalog_id,
-                target="default.users",
-                backend="iceberg",
-                table_identifier="prod.users",
-                options_json={},
-                revision=2,
-                policy_revision=4,
-            ),
-            PolicyRuleRecord(
-                id=uuid4(),
-                asset_id=asset_id,
-                ordinal=10,
-                effect="allow",
-                principals_json=["user1"],
-                when_json={},
-                columns_json=["id"],
-                masks_json={},
-                row_filter_sql=None,
-            ),
-            AuthProviderRecord(
-                id=uuid4(),
-                ordinal=1,
-                module="example.IdentityProvider",
-                args_json={"issuer": "https://issuer.example"},
-                enabled=True,
-                revision=1,
-            ),
-        ]
-    )
-    session.flush([record for record in session.new if isinstance(record, CatalogRecord)])
-    session.flush([record for record in session.new if isinstance(record, AssetRecord)])
-    session.commit()
-    return (asset_id,)
