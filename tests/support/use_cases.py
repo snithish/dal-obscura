@@ -1,26 +1,26 @@
 from __future__ import annotations
 
 import base64
-import pickle
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import cast
 
 import pyarrow as pa
 
-from dal_obscura.common.access_control.filters import deserialize_row_filter
-from dal_obscura.common.access_control.models import AccessDecision, Principal
-from dal_obscura.common.catalog.ports import TableFormat
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
-from dal_obscura.common.ticket_delivery.models import (
+from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.policy.filters import deserialize_row_filter
+from dal_obscura.policy.models import AccessDecision, Principal
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.read.ticket_repository import StoredTicket
+from dal_obscura.read.tickets import (
     ScanPayload,
     TicketPayload,
     TicketReference,
     ticket_payload_hash,
 )
-from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
-from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
+from dal_obscura.sources.contracts import TableFormat
+from dal_obscura.sources.planning import InputPartition, Plan, ScanTask
 
 
 def scan_payload() -> ScanPayload:
@@ -166,14 +166,6 @@ class FakeAuthorizer:
             return self._decision
         return replace(self._decision, asset_id=self._asset_id)
 
-    def current_policy_version(
-        self,
-        target,
-        catalog,
-    ):
-        del target, catalog
-        return self._current_version
-
 
 class FakeCatalogRegistry:
     def __init__(self, table_format: TableFormat) -> None:
@@ -186,15 +178,6 @@ class FakeCatalogRegistry:
     ) -> TableFormat:
         del catalog, target
         return self._table_format
-
-
-class FakeMasking:
-    def apply(self, base_schema, columns, masks):
-        del base_schema, columns, masks
-
-    def masked_schema(self, base_schema, columns, masks):
-        del columns, masks
-        return base_schema
 
 
 class FakeTicketCodec:
@@ -293,8 +276,102 @@ class FakeRowTransform:
         return batches
 
 
+class FixtureTaskCodec:
+    """In-memory test sources use Arrow IPC; production plugins use the real codec."""
+
+    def encode(self, task: ScanTask) -> str:
+        if not isinstance(
+            task.table_format, (StubTableFormat, TrackingTableFormat, PretendPushdownTableFormat)
+        ):
+            if task.table_format.__class__.__module__ == "tests.support.flight":
+                return self._fixture(task)
+            return self._production().encode(public_native_scan(task))
+        return self._fixture(task)
+
+    def _fixture(self, task: ScanTask) -> str:
+        batches = getattr(task.table_format, "batches", ())
+        sink = pa.BufferOutputStream()
+        with pa.ipc.new_stream(sink, task.schema) as writer:
+            for batch in batches:
+                writer.write_batch(batch)
+        return json.dumps({"fixture_ipc": base64.b64encode(sink.getvalue()).decode("ascii")})
+
+    def decode(self, payload: str) -> ScanTask:
+        try:
+            raw = json.loads(payload)
+            if not isinstance(raw, dict) or set(raw) != {"fixture_ipc"}:
+                return self._production().decode(payload)
+            reader = pa.ipc.open_stream(base64.b64decode(raw["fixture_ipc"], validate=True))
+            table = StubTableFormat(
+                catalog_name="fixture",
+                table_name="fixture",
+                format="test",
+                schema=reader.schema,
+                batches=tuple(reader),
+            )
+            return ScanTask(table, table.schema, StubInputPartition(payload=b"fixture"))
+        except (ValueError, TypeError, KeyError) as exc:
+            raise ValueError("Invalid read payload in ticket") from exc
+
+    @staticmethod
+    def _production():
+        from dal_obscura.sources.builtins import (
+            create_builtin_plugin_registry,
+        )
+        from dal_obscura.sources.task_codec import SourceTaskCodec
+
+        return SourceTaskCodec(create_builtin_plugin_registry())
+
+
 def encode_scan_task(table_format: TableFormat, schema: pa.Schema) -> str:
     task = ScanTask(
         table_format=table_format, schema=schema, partition=StubInputPartition(payload=b"payload")
     )
-    return base64.b64encode(pickle.dumps(task)).decode("utf-8")
+    return FixtureTaskCodec().encode(task)
+
+
+def public_native_scan(task: ScanTask) -> ScanTask:
+    """Native executor fixtures enter the same SDK envelope as production sources."""
+    from dal_obscura_plugin_api import TableHandle
+
+    from dal_obscura.sources.iceberg import IcebergInputPartition, IcebergTableFormat
+    from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
+    from dal_obscura.sources.plugin_runtime import (
+        PublicPluginPartition,
+        PublicPluginTableFormat,
+        _projected_schema,
+        _table_identifier,
+    )
+
+    table, partition = task.table_format, task.partition
+    if not isinstance(table, IcebergTableFormat) or not isinstance(
+        partition, IcebergInputPartition
+    ):
+        return task
+    handle = TableHandle(
+        catalog_plugin_id="iceberg.sql",
+        catalog_instance_id=table.catalog_name,
+        catalog_revision=0,
+        identifier=_table_identifier(table.table_name),
+        format_plugin_id="iceberg",
+        handle_version=1,
+        metadata={"metadata_location": table.metadata_location, "io_options": table.io_options},
+    )
+    source = PublicPluginTableFormat(
+        catalog_name=table.catalog_name,
+        table_name=table.table_name,
+        format="iceberg",
+        handle=handle,
+        format_factory=IcebergFormatPlugin,
+        path_roots=() if table.path_enforcer is None else table.path_enforcer.roots,
+    )
+    return ScanTask(
+        source,
+        task.schema,
+        PublicPluginPartition(
+            task=IcebergFormatPlugin._encode_partition(partition),
+            handle=handle,
+            format_factory=IcebergFormatPlugin,
+            schema=_projected_schema(task.schema, partition.columns),
+        ),
+    )

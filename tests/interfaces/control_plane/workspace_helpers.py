@@ -4,9 +4,7 @@ from fastapi.testclient import TestClient
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 ICEBERG_CATALOG_ID = "iceberg.sql"
-DEFAULT_AUTH_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
-)
+DEFAULT_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"
 
 
 def _provision_asset(client: TestClient) -> dict[str, str]:

@@ -7,12 +7,13 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import isfinite
-from typing import Literal, Protocol
+from types import MappingProxyType
+from typing import Literal, Protocol, cast
 
 import pyarrow as pa
 
 PluginKind = Literal["catalog", "table_format"]
-PLUGIN_API_VERSION = "1"
+PLUGIN_API_VERSION = "2"
 SUPPORTED_PLUGIN_API_VERSIONS = frozenset({PLUGIN_API_VERSION})
 SUPPORTED_PLUGIN_CONFIG_VERSIONS = frozenset({1})
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
@@ -177,17 +178,83 @@ class TableHandle:
             raise ValueError("Invalid table-format plugin ID")
         if not self.catalog_instance_id or len(self.catalog_instance_id) > 128:
             raise ValueError("Catalog instance ID must be non-empty and bounded")
-        if self.catalog_revision < 0:
-            raise ValueError("Catalog revision cannot be negative")
-        if self.handle_version < 1:
-            raise ValueError("Table handle version must be positive")
+        if type(self.catalog_revision) is not int or self.catalog_revision < 0:
+            raise ValueError("Catalog revision must be a nonnegative integer")
+        if type(self.handle_version) is not int or self.handle_version < 1:
+            raise ValueError("Table handle version must be a positive integer")
         if self.snapshot_id is not None and (
             not self.snapshot_id
             or len(self.snapshot_id) > 256
             or any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.snapshot_id)
         ):
             raise ValueError("Table handle snapshot ID must be bounded and printable")
+        if not isinstance(self.identifier, TableIdentifier):
+            raise ValueError("Table handle identifier is invalid")
         _validate_handle_metadata(self.metadata)
+        object.__setattr__(self, "metadata", _freeze_json(self.metadata))
+
+    def to_json(self) -> dict[str, object]:
+        """Explicit passive contract; factories and executable objects never cross it."""
+        return {
+            "catalog_plugin_id": self.catalog_plugin_id,
+            "catalog_instance_id": self.catalog_instance_id,
+            "catalog_revision": self.catalog_revision,
+            "identifier": {
+                "namespace": list(self.identifier.namespace),
+                "name": self.identifier.name,
+            },
+            "format_plugin_id": self.format_plugin_id,
+            "handle_version": self.handle_version,
+            "snapshot_id": self.snapshot_id,
+            "metadata": _mutable_json(self.metadata),
+        }
+
+    @classmethod
+    def from_json(cls, value: object) -> TableHandle:
+        if not isinstance(value, dict) or set(value) != {
+            "catalog_plugin_id",
+            "catalog_instance_id",
+            "catalog_revision",
+            "identifier",
+            "format_plugin_id",
+            "handle_version",
+            "snapshot_id",
+            "metadata",
+        }:
+            raise ValueError("Invalid table handle JSON")
+        wire = cast(dict[str, object], value)
+        raw_identifier = wire["identifier"]
+        if not isinstance(raw_identifier, dict) or set(raw_identifier) != {"namespace", "name"}:
+            raise ValueError("Invalid table handle identifier JSON")
+        identifier = cast(dict[str, object], raw_identifier)
+        namespace, name = identifier["namespace"], identifier["name"]
+        if (
+            not isinstance(namespace, list)
+            or not all(isinstance(part, str) for part in namespace)
+            or not isinstance(name, str)
+        ):
+            raise ValueError("Invalid table handle identifier JSON")
+        for key in ("catalog_plugin_id", "catalog_instance_id", "format_plugin_id"):
+            if not isinstance(wire[key], str):
+                raise ValueError("Table handle identities must be text")
+        for key in ("catalog_revision", "handle_version"):
+            if type(wire[key]) is not int:
+                raise ValueError("Table handle revisions must be integers")
+        snapshot_id = wire["snapshot_id"]
+        if snapshot_id is not None and not isinstance(snapshot_id, str):
+            raise ValueError("Table handle snapshot identity must be text")
+        if not isinstance(wire["metadata"], Mapping):
+            raise ValueError("Table handle metadata must be a mapping")
+        return cls(
+            catalog_plugin_id=cast(str, wire["catalog_plugin_id"]),
+            catalog_instance_id=cast(str, wire["catalog_instance_id"]),
+            catalog_revision=cast(int, wire["catalog_revision"]),
+            identifier=TableIdentifier(namespace=tuple(cast(list[str], namespace)), name=name),
+            format_plugin_id=cast(str, wire["format_plugin_id"]),
+            handle_version=cast(int, wire["handle_version"]),
+            snapshot_id=snapshot_id,
+            metadata=cast(Mapping[str, object], wire["metadata"]),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,8 +266,8 @@ class SchemaDescriptor:
     stable_ids: bool = False
 
     def __post_init__(self) -> None:
-        if self.schema_version < 1:
-            raise ValueError("Schema version must be positive")
+        if type(self.schema_version) is not int or self.schema_version < 1:
+            raise ValueError("Schema version must be a positive integer")
         if not re.fullmatch(r"[0-9a-f]{64}", self.fingerprint):
             raise ValueError("Schema fingerprint must be a SHA-256 hex digest")
 
@@ -300,7 +367,9 @@ class TableFormatPlugin(Protocol):
         nested selections and supplies filter dependencies before calling here.
         Filters are optional DuckDB SQL hints, sent only for filter_pushdown;
         core always reapplies the complete filter before masking output.
-        An empty sequence means no rows. None is an ordinary opaque task value,
+        Tasks must contain bounded JSON data (objects with text keys, arrays,
+        finite scalars, or null). They are serialized and decoded before execution.
+        An empty sequence means no rows. None is an ordinary passive task value,
         never a core-generated empty-scan sentinel.
         """
         ...
@@ -467,3 +536,19 @@ def _validate_handle_metadata(value: object) -> None:  # noqa: C901
     if not isinstance(value, Mapping):
         raise ValueError("Table handle metadata must be a mapping")
     visit(value, 0)
+
+
+def _freeze_json(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze_json(child) for key, child in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json(child) for child in value)
+    return value
+
+
+def _mutable_json(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {key: _mutable_json(child) for key, child in value.items()}
+    if isinstance(value, tuple):
+        return [_mutable_json(child) for child in value]
+    return value

@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.sources.secrets import EnvSecretProvider
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.control_plane.interfaces.api import create_app
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
 from examples.demo.keycloak.scripts import provision_demo, seed_table
 
 

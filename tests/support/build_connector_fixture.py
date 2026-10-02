@@ -37,13 +37,16 @@ if str(REPO_ROOT) not in sys.path:
 
 create_iceberg_table = importlib.import_module("tests.support.iceberg").create_iceberg_table
 
-from dal_obscura.common.config_store.db import (  # noqa: E402
+import tests.support.seed as _commands_seed  # noqa: E402
+from dal_obscura.control import asset_service, policy_service  # noqa: E402
+from dal_obscura.control.access import ControlPlaneActor  # noqa: E402
+from dal_obscura.control.runtime import ControlContext  # noqa: E402
+from dal_obscura.storage import workspace as _db_workspace  # noqa: E402
+from dal_obscura.storage.database.db import (  # noqa: E402
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.control_plane.application.access import ControlPlaneActor  # noqa: E402
-from dal_obscura.control_plane.application.provisioning import ProvisioningService  # noqa: E402
 
 JWT_SECRET = "spark-jwt-secret-32-characters-long"
 TICKET_SECRET = "spark-ticket-secret-32-characters"
@@ -508,9 +511,12 @@ def _provision_control_plane(
     migrate_config_store(engine)
 
     with session_factory(engine)() as session:
-        service = ProvisioningService(session)
-        service.upsert_runtime_settings(ttl=900, max_tickets=16, max_ticket_exchanges=1)
-        service.upsert_catalog(
+        service = ControlContext(session)
+        _db_workspace.upsert_runtime_settings(
+            service.session, ticket_ttl_seconds=900, max_tickets=16, max_ticket_exchanges=1
+        )
+        _commands_seed.create_catalog(
+            service,
             name=CATALOG_NAME,
             plugin_id="iceberg.sql",
             options={
@@ -519,16 +525,18 @@ def _provision_control_plane(
                 "warehouse": str(output_dir / WAREHOUSE_NAME),
             },
         )
-        asset = service.upsert_asset(
+        asset = _commands_seed.create_asset(
+            service,
             catalog=CATALOG_NAME,
             target=table_id,
             backend="iceberg",
             table_identifier=table_id,
             options={},
         )
-        service.replace_policy_rules(
-            asset_id=UUID(asset["id"]),
-            rules=[
+        policy_service.replace_policy_rules(
+            service.session,
+            UUID(asset["id"]),
+            [
                 {
                     "ordinal": 10,
                     "principals": ["spark_user"],
@@ -557,20 +565,22 @@ def _provision_control_plane(
                 },
             ],
             actor=ControlPlaneActor.for_platform_admin("fixture:setup"),
+            expected_revision=None,
+            revoke_existing_tokens=False,
         )
-        service.replace_asset_owners(
-            asset_id=UUID(asset["id"]),
-            owners=["user:fixture-owner@example.com"],
+        asset_service.replace_asset_owners(
+            service.session,
+            UUID(asset["id"]),
+            ["user:fixture-owner@example.com"],
             expected_revision=0,
+            actor=None,
         )
-        service.replace_auth_providers(
+        _db_workspace.replace_auth_providers(
+            service.session,
             providers=[
                 {
                     "ordinal": 1,
-                    "module": (
-                        "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
-                        "OidcJwksIdentityProvider"
-                    ),
+                    "module": "dal_obscura.identity.oidc.OidcJwksIdentityProvider",
                     "args": {
                         "issuer": "https://issuer.example",
                         "jwks_url": f"http://127.0.0.1:{jwks_port}/jwks.json",
@@ -579,7 +589,7 @@ def _provision_control_plane(
                     },
                     "enabled": True,
                 }
-            ]
+            ],
         )
         session.commit()
 

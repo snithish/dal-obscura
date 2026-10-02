@@ -6,8 +6,8 @@ from pydantic import ValidationError
 from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType, StructType
 
-from dal_obscura.control_plane.application import schema_service
-from dal_obscura.control_plane.interfaces.routes.schemas import PolicyEvaluationResponse
+from dal_obscura.control import schema_service
+from dal_obscura.interfaces.http.routes.schemas import PolicyEvaluationResponse
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
@@ -127,7 +127,9 @@ def test_asset_schema_route_reads_authoritative_iceberg_schema(client_factory, m
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers=ADMIN_HEADERS,
     ).json()
-    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: _FakeCatalog())
+    monkeypatch.setattr(
+        schema_service, "load_source_schema", lambda **kwargs: _FakeTable().schema().as_arrow()
+    )
 
     response = client.get(f"/v1/assets/{asset['id']}/schema", headers=ADMIN_HEADERS)
 
@@ -214,8 +216,8 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(
     )
     monkeypatch.setattr(
         schema_service,
-        "load_catalog",
-        lambda *args, **kwargs: EvaluationCatalog(),
+        "load_source_schema",
+        lambda **kwargs: EvaluationCatalog().load_table("prod.users").schema().as_arrow(),
     )
 
     response = client.post(

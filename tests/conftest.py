@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
@@ -51,7 +51,7 @@ def http_client():
 @pytest.fixture
 def client_factory(db_engine, http_client):
     """Compose real HTTP routes with explicit app overrides."""
-    from dal_obscura.control_plane.interfaces.api import create_app
+    from dal_obscura.interfaces.http.app import create_app
 
     def create(*, base_url="http://testserver", **app_options):
         factory = session_factory(db_engine)

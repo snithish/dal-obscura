@@ -4,24 +4,21 @@ from typing import Any, cast
 
 import pytest
 
-from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.common.ticket_delivery.models import ScanPayload
-from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
-from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
-from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.policy.models import Principal
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.read.ticket_repository import StoredTicket
+from dal_obscura.read.tickets import ScanPayload
 from tests.application.access_flow.helpers import (
     AUTHORIZATION_HEADER,
     _build_use_case_dependencies,
     _ticket_store_with,
 )
+from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
 from tests.support.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
-    FakeMasking,
     FakeRowTransform,
     FakeTicketCodec,
     FakeTicketStore,
@@ -46,9 +43,8 @@ def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(mo
     )
     ticket_store = FakeTicketStore()
     monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
@@ -56,7 +52,7 @@ def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(mo
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
 
@@ -78,9 +74,8 @@ def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
     )
     ticket_store = FakeTicketStore()
     monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
@@ -88,7 +83,7 @@ def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
 
@@ -118,9 +113,8 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
         expires_at=signed_payload.expires_at,
     )
     monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(signed_payload),
         ticket_store=ticket_store,
@@ -128,7 +122,7 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
 
@@ -151,33 +145,31 @@ def test_fetch_stream_reserves_exchange_before_scan_execution():
     )
     ticket_store = FakeTicketStore()
     ticket_store.store(payload, max_exchanges=1)
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
         now=lambda: 1000,
     )
 
-    first = use_case.execute("token", AUTHORIZATION_HEADER)
+    first = use_case.fetch("token", AUTHORIZATION_HEADER)
     assert first.columns == ["id"]
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
 
 def test_plan_access_persists_ticket_with_id_before_returning_signed_token():
     _schema, decision, table_format = _build_use_case_dependencies()
     ticket_codec = FakeTicketCodec()
     ticket_store = FakeTicketStore()
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(decision=decision),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
         ticket_ttl_seconds=300,
@@ -188,7 +180,7 @@ def test_plan_access_persists_ticket_with_id_before_returning_signed_token():
         ticket_id_factory=lambda: "00000000-0000-0000-0000-000000000001",
     )
 
-    result = use_case.execute(
+    result = use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
     )
 
@@ -205,13 +197,12 @@ def test_plan_access_does_not_sign_ticket_when_persistence_fails():
     ticket_codec = FakeTicketCodec()
     ticket_store = FakeTicketStore()
     ticket_store.fail_store = True
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(decision=decision),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
         ticket_ttl_seconds=300,
@@ -223,11 +214,43 @@ def test_plan_access_does_not_sign_ticket_when_persistence_fails():
     )
 
     with pytest.raises(RuntimeError, match="store failed"):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
         )
 
     assert ticket_codec.signed_payloads == []
+
+
+def test_invalid_output_projection_does_not_issue_or_persist_tickets():
+    from dal_obscura.policy.models import AccessDecision, MaskRule
+
+    _, _, table = _build_use_case_dependencies()
+    store, codec = FakeTicketStore(), FakeTicketCodec()
+    reader = make_read_service(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id"],
+                    masks={"id": MaskRule(type="unsupported")},
+                    row_filter=None,
+                    policy_version=100,
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table)),
+        ),
+        ticket_codec=codec,
+        ticket_store=store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
+    with pytest.raises(ValueError, match="Unsupported mask type"):
+        reader.plan(PlanRequest(target="users", columns=["id"]), AUTHORIZATION_HEADER)
+
+    assert store.stored == []
+    assert codec.signed_payloads == []
 
 
 @pytest.mark.parametrize(
@@ -260,16 +283,15 @@ def test_fetch_stream_rejects_invalid_scan_payloads(change, error_match):
         ticket_id="00000000-0000-0000-0000-000000000001",
         scan=cast(ScanPayload, scan),
     )
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=_ticket_store_with(payload),
     )
 
     with pytest.raises(ValueError, match=error_match):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_rejects_legacy_partition_payload():
@@ -286,20 +308,19 @@ def test_fetch_stream_rejects_legacy_partition_payload():
         },
     )
     ticket_store = _ticket_store_with(payload)
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
     )
 
     with pytest.raises(ValueError, match="Invalid read payload"):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
 
 def test_scan_decoder_rejects_missing_authorization_columns():
-    from dal_obscura.data_plane.application.use_cases.fetch_stream import _decode_scan
+    from dal_obscura.read.service import _decode_scan
 
     with pytest.raises(ValueError, match="Invalid authorization columns"):
         _decode_scan({"read_payload": "cGF5bG9hZA==", "masks": {}, "full_row_filter": None})

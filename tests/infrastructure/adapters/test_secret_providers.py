@@ -4,7 +4,7 @@ from typing import cast
 
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+from dal_obscura.sources.secrets import (
     EnvSecretProvider,
     SecretProvider,
     SecretProviderConfig,
@@ -38,9 +38,7 @@ def test_load_secret_provider_from_environment_uses_startup_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("LOCAL_catalog-password", "value")
-    module_name = (
-        "dal_obscura.data_plane.infrastructure.adapters.secret_providers.EnvSecretProvider"
-    )
+    module_name = "dal_obscura.sources.secrets.EnvSecretProvider"
 
     provider = load_secret_provider_from_environment(
         {
@@ -65,9 +63,7 @@ def test_load_secret_provider_from_environment_rejects_retired_secret_payload():
 
 
 def test_load_secret_provider_from_environment_requires_production_grants():
-    module_name = (
-        "dal_obscura.data_plane.infrastructure.adapters.secret_providers.EnvSecretProvider"
-    )
+    module_name = "dal_obscura.sources.secrets.EnvSecretProvider"
     with pytest.raises(ValueError, match=r"non-empty.*scope_grants"):
         load_secret_provider_from_environment(
             {

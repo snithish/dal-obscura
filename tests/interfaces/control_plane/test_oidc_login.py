@@ -9,18 +9,18 @@ import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 
-from dal_obscura.common.config_store.db import (
-    session_factory,
-)
-from dal_obscura.control_plane.interfaces import api as api_module
-from dal_obscura.control_plane.interfaces.api import create_app
-from dal_obscura.control_plane.interfaces.routes import session as session_routes
-from dal_obscura.control_plane.interfaces.routes.session import (
+from dal_obscura.identity.http_session import exchange_authorization_code
+from dal_obscura.interfaces.http import app as api_module
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.interfaces.http.routes import session as session_routes
+from dal_obscura.interfaces.http.routes.session import (
     _oidc_endpoint,
     _post_login_redirect,
     _provider_logout_url,
 )
-from dal_obscura.control_plane.interfaces.session_api import exchange_authorization_code
+from dal_obscura.storage.database.db import (
+    session_factory,
+)
 
 
 def _client(http_client, db_engine, nonce_resolver) -> TestClient:
@@ -51,7 +51,7 @@ def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(
         exchanges.append((code, verifier))
         return {"access_token": "access-token", "id_token": "id-token"}
 
-    monkeypatch.setattr(api_module, "_exchange_authorization_code", exchange)
+    monkeypatch.setattr(api_module, "exchange_authorization_code", exchange)
     client = _client(
         http_client,
         db_engine,
@@ -95,7 +95,7 @@ def test_logout_revokes_local_session_and_returns_provider_logout_without_tokens
 ) -> None:
     monkeypatch.setattr(
         api_module,
-        "_exchange_authorization_code",
+        "exchange_authorization_code",
         lambda config, code, verifier: {"id_token": "private-id-token"},
     )
     client = _client(
@@ -199,7 +199,7 @@ def test_oidc_callback_rejects_state_replay_and_nonce_failure(
 ) -> None:
     monkeypatch.setattr(
         api_module,
-        "_exchange_authorization_code",
+        "exchange_authorization_code",
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
     client = _client(http_client, db_engine, lambda token, nonce_hash: None)
@@ -335,7 +335,7 @@ def test_successful_oidc_callback_clears_client_login_limit(
 ) -> None:
     monkeypatch.setattr(
         api_module,
-        "_exchange_authorization_code",
+        "exchange_authorization_code",
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
     client = _client(
@@ -361,7 +361,7 @@ def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(
 ) -> None:
     monkeypatch.setattr(
         api_module,
-        "_exchange_authorization_code",
+        "exchange_authorization_code",
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
     engine = db_engine
@@ -490,7 +490,7 @@ def test_authorization_code_exchange_uses_canonical_token_endpoint(monkeypatch) 
         return _Response()
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.interfaces.session_api._open_token_endpoint",
+        "dal_obscura.identity.http_session._open_token_endpoint",
         open_token,
     )
 
@@ -521,7 +521,7 @@ def test_authorization_code_exchange_logs_safe_upstream_error_metadata(monkeypat
         )
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.interfaces.session_api._open_token_endpoint",
+        "dal_obscura.identity.http_session._open_token_endpoint",
         reject_exchange,
     )
 

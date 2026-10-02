@@ -7,10 +7,10 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
-from dal_obscura.common.config_store.db import create_engine_from_url, migrate_config_store
-from dal_obscura.common.plugin_api import PluginRegistry
-from dal_obscura.control_plane.interfaces import control_plane_cli
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
+from dal_obscura.interfaces.cli import control as control_plane_cli
+from dal_obscura.sources.plugins import PluginRegistry
+from dal_obscura.sources.secrets import SecretProvider
+from dal_obscura.storage.database.db import create_engine_from_url, migrate_config_store
 
 
 def test_control_plane_cli_starts_configured_app(monkeypatch, tmp_path) -> None:

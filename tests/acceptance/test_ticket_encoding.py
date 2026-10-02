@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from dal_obscura.common.ticket_delivery.models import (
+from dal_obscura.read.tickets import (
     TicketPayload,
     canonical_ticket_payload_bytes,
 )

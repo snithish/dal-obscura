@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pickle
 from collections.abc import Generator
 from dataclasses import dataclass
 from typing import Any, ClassVar, cast
@@ -8,21 +7,47 @@ from typing import Any, ClassVar, cast
 import pyarrow as pa
 import pytest
 from pyiceberg.expressions import EqualTo
+from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
+from pyiceberg.table import FileScanTask
+from pyiceberg.typedef import Record
 
-from dal_obscura.common.access_control.filters import (
+from dal_obscura.policy.filters import (
     deserialize_row_filter,
     row_filter_to_sql,
 )
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.sources.iceberg import (
     IcebergInputPartition,
     IcebergTableFormat,
     _check_file_tasks,
     _check_io_options,
     _check_table_locations,
+    _chunk_by_max_tickets,
 )
+from dal_obscura.sources.iceberg_tasks import encode_scan_task
+from dal_obscura.sources.paths import PathRuleEnforcer
 from tests.support.iceberg_schema import _FakeProjectedSchema
+
+
+def test_scan_groups_balance_data_and_delete_bytes_without_losing_tasks() -> None:
+    def data_file(size: int, ordinal: int) -> DataFile:
+        return DataFile.from_args(
+            content=DataFileContent.DATA,
+            file_path=f"/tmp/{ordinal}.parquet",
+            file_format=FileFormat.PARQUET,
+            partition=Record(),
+            record_count=1,
+            file_size_in_bytes=size,
+        )
+
+    tasks = [FileScanTask(data_file(size, index)) for index, size in enumerate((1000, 1, 500, 1))]
+    tasks[2].delete_files.add(data_file(500, 4))
+    groups = _chunk_by_max_tickets(tasks, 2)
+
+    assert groups == [[tasks[0], tasks[1]], [tasks[2], tasks[3]]]
+    assert _chunk_by_max_tickets(tasks, 2) == groups
+    assert _chunk_by_max_tickets(tasks, 8) == [[task] for task in tasks]
+    assert _chunk_by_max_tickets([], 2) == []
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -105,13 +130,22 @@ def test_iceberg_execute_deserializes_sql_string_pushdown_filter(monkeypatch):
             return iter(())
 
     monkeypatch.setattr(
-        "dal_obscura.data_plane.infrastructure.table_formats.iceberg.ArrowScan",
+        "dal_obscura.sources.iceberg.ArrowScan",
         _CapturingArrowScan,
     )
 
+    file = DataFile.from_args(
+        content=DataFileContent.DATA,
+        file_path="/tmp/data.parquet",
+        file_format=FileFormat.PARQUET,
+        partition=Record(),
+        record_count=1,
+        file_size_in_bytes=10,
+    )
+    file.spec_id = 0
     partition = IcebergInputPartition(
         columns=["id"],
-        tasks=[pickle.dumps(object())],
+        tasks=[encode_scan_task(FileScanTask(file))],
         backend_pushdown_row_filter="region = 'us'",
     )
 
@@ -125,7 +159,7 @@ def test_iceberg_execute_deserializes_sql_string_pushdown_filter(monkeypatch):
 
 
 def test_iceberg_rejects_unproven_format_versions():
-    from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
+    from dal_obscura.sources.iceberg import (
         _require_supported_format_version,
     )
 
@@ -258,7 +292,7 @@ def test_iceberg_native_schema_preserves_nested_field_ids(tmp_path):
 
 
 def test_iceberg_stream_reads_one_batch_and_one_files_deletes_at_a_time(monkeypatch):
-    from dal_obscura.data_plane.infrastructure.table_formats import iceberg
+    from dal_obscura.sources import iceberg as iceberg
 
     visited = []
     closed = []
@@ -291,7 +325,7 @@ def test_iceberg_stream_reads_one_batch_and_one_files_deletes_at_a_time(monkeypa
 
 @pytest.mark.parametrize("sql", ["id = NULL", "id <> NULL", "id > NULL", "id IN (1, NULL)"])
 def test_iceberg_keeps_null_literal_predicates_in_core(sql):
-    from dal_obscura.data_plane.infrastructure.table_formats.iceberg import _split_row_filter
+    from dal_obscura.sources.iceberg import _split_row_filter
 
     row_filter = deserialize_row_filter(sql)
     pushdown, residual = _split_row_filter(row_filter)

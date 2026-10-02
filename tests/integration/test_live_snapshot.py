@@ -5,13 +5,17 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import event, select
 
-from dal_obscura.common.config_store.orm import (
+from dal_obscura.storage import assets as _db_assets
+from dal_obscura.storage import catalogs as _db_catalogs
+from dal_obscura.storage import policies as _db_policies
+from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.storage.database.orm import (
     AssetRecord,
     AssetSchemaFieldRecord,
     CatalogRecord,
     PolicyRuleRecord,
 )
-from dal_obscura.data_plane.infrastructure.adapters.live_config import LiveConfigStore
+from dal_obscura.storage.snapshots import LiveConfigStore
 from tests.support.live_config import seed_live_config
 from tests.support.postgres import isolated_postgres_sessions
 
@@ -80,9 +84,9 @@ def test_postgres_snapshot_survives_writer_commit_between_configuration_reads():
 @pytest.mark.integration
 @pytest.mark.parametrize("resource", ["policy", "asset", "catalog", "runtime", "auth"])
 def test_resource_cas_rejects_stale_session_after_another_writer_commits(resource):
-    from dal_obscura.common.config_store.orm import RuntimeSettingsRecord, WorkspaceRecord
-    from dal_obscura.control_plane.application.errors import ConfigurationConflictError
-    from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
+
+    from dal_obscura.control.errors import ConfigurationConflictError
+    from dal_obscura.storage.database.orm import RuntimeSettingsRecord, WorkspaceRecord
 
     with isolated_postgres_sessions() as factory:
         with factory() as session:
@@ -90,9 +94,12 @@ def test_resource_cas_rejects_stale_session_after_another_writer_commits(resourc
 
         def mutate(store):
             if resource == "policy":
-                store.replace_policy_rules(asset_id=asset_id, rules=[], expected_revision=4)
+                _db_policies.replace_policy_rules(
+                    store, asset_id=asset_id, rules=[], expected_revision=4
+                )
             elif resource == "asset":
-                store.upsert_asset(
+                _db_assets.upsert_asset(
+                    store,
                     catalog="analytics",
                     target="default.users",
                     backend="iceberg",
@@ -101,21 +108,23 @@ def test_resource_cas_rejects_stale_session_after_another_writer_commits(resourc
                     expected_revision=2,
                 )
             elif resource == "catalog":
-                store.upsert_catalog(
+                _db_catalogs.upsert_catalog(
+                    store,
                     name="analytics",
                     plugin_id="iceberg.sql",
                     options={"uri": "sqlite:///changed.db"},
                     expected_revision=3,
                 )
             elif resource == "runtime":
-                store.upsert_runtime_settings(
+                _db_workspace.upsert_runtime_settings(
+                    store,
                     ticket_ttl_seconds=700,
                     max_tickets=12,
                     max_ticket_exchanges=2,
                     expected_revision=1,
                 )
             else:
-                store.replace_auth_providers(providers=[], expected_revision=0)
+                _db_workspace.replace_auth_providers(store, providers=[], expected_revision=0)
 
         with factory() as stale:
             # Keep ORM identities alive, reproducing reads made before the lock.
@@ -125,7 +134,7 @@ def test_resource_cas_rejects_stale_session_after_another_writer_commits(resourc
             ]
             assert all(record is not None for record in cached)
             with factory() as writer:
-                mutate(ConfigStore(writer))
+                mutate(writer)
                 writer.commit()
             with pytest.raises(ConfigurationConflictError):
-                mutate(ConfigStore(stale))
+                mutate(stale)

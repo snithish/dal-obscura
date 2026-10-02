@@ -4,8 +4,8 @@ from pathlib import Path
 
 from sqlalchemy import inspect
 
-from dal_obscura.common.config_store.cli import run
-from dal_obscura.common.config_store.db import create_engine_from_url
+from dal_obscura.storage.database.cli import run
+from dal_obscura.storage.database.db import create_engine_from_url
 
 
 def _database_url(path: Path) -> str:

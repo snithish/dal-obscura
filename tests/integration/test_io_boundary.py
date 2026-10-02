@@ -9,9 +9,9 @@ import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
 
-from dal_obscura.control_plane.application.catalog_service import validate_catalog_options
-from dal_obscura.control_plane.application.errors import ValidationFailure
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.control.catalog_service import validate_catalog_options
+from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.sources.paths import PathRuleEnforcer
 
 pytestmark = pytest.mark.socket
 

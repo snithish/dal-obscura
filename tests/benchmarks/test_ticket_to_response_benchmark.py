@@ -3,9 +3,10 @@ from typing import Any
 import pyarrow as pa
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
+from dal_obscura.read.transform import (
     _DUCKDB_ARROW_OUTPUT_BATCH_SIZE,
 )
+from dal_obscura.sources.planning import ScanTask
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
@@ -26,6 +27,26 @@ from tests.support.stream_benchmark import (
 )
 
 pytestmark = pytest.mark.heavy
+
+
+class _BenchmarkTaskCodec:
+    """Keep fixture data outside tickets, as a real source keeps rows in storage.
+
+    This lane measures fetch authentication, ticket integrity, transformation and
+    Flight delivery. The multifile lane measures production scan-task restoration.
+    """
+
+    def __init__(self) -> None:
+        self.task: ScanTask | None = None
+
+    def encode(self, task: ScanTask) -> str:
+        self.task = task
+        return "benchmark-source-task"
+
+    def decode(self, payload: str) -> ScanTask:
+        if payload != "benchmark-source-task" or self.task is None:
+            raise ValueError("Unknown benchmark source task")
+        return self.task
 
 
 @pytest.mark.benchmark(group="ticket-to-response", min_rounds=5, max_time=1)
@@ -66,6 +87,7 @@ def test_benchmark_ticket_to_response_complex_schema(tmp_path, benchmark):
         jwt_secret=JWT_SECRET,
         ticket_secret="benchmark-ticket-secret",
         max_ticket_exchanges=10_000,
+        task_codec=_BenchmarkTaskCodec(),
     )
     with running_flight_client(server) as client:
         options = flight_call_options("user1", groups=["analyst"], jwt_secret=JWT_SECRET)

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-import pickle
 from dataclasses import dataclass
 
 import pyarrow as pa
 import pytest
+from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
+from pyiceberg.table import FileScanTask
+from pyiceberg.typedef import Record
 
-from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
+from dal_obscura.sources.iceberg import (
     IcebergInputPartition,
     IcebergTableFormat,
 )
+from dal_obscura.sources.iceberg_tasks import encode_scan_task
 from tests.support.iceberg_schema import _FakeProjectedSchema
 
 pytestmark = pytest.mark.heavy
@@ -32,7 +35,7 @@ class _BatchingArrowScan:
 
     def _record_batches_from_scan_tasks_and_deletes(self, file_tasks, deletes):
         for task in file_tasks:
-            index = task["file"]
+            index = task.file.record_count
             yield pa.record_batch(
                 [
                     pa.array([index], type=pa.int64()),
@@ -44,9 +47,9 @@ class _BatchingArrowScan:
 
 @pytest.mark.benchmark(group="iceberg-multifile")
 def test_benchmark_iceberg_multifile_scan_baseline(benchmark, monkeypatch):
-    # Measure dispatch overhead only; the ticket-to-response benchmark uses real files.
+    # Measure dispatch overhead only; the large streaming probe uses real files.
     monkeypatch.setattr(
-        "dal_obscura.data_plane.infrastructure.table_formats.iceberg._read_all_delete_files",
+        "dal_obscura.sources.iceberg._read_all_delete_files",
         lambda io, tasks: {},
     )
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
@@ -63,13 +66,25 @@ def test_benchmark_iceberg_multifile_scan_baseline(benchmark, monkeypatch):
         lambda self: _FakeTable(schema_value=schema, metadata=object(), io=object()),
     )
     monkeypatch.setattr(
-        "dal_obscura.data_plane.infrastructure.table_formats.iceberg.ArrowScan",
+        "dal_obscura.sources.iceberg.ArrowScan",
         _BatchingArrowScan,
     )
 
+    encoded = []
+    for index in range(file_count):
+        file = DataFile.from_args(
+            content=DataFileContent.DATA,
+            file_path=f"/tmp/{index}.parquet",
+            file_format=FileFormat.PARQUET,
+            partition=Record(),
+            record_count=index,
+            file_size_in_bytes=100,
+        )
+        file.spec_id = 0
+        encoded.append(encode_scan_task(FileScanTask(file)))
     partition = IcebergInputPartition(
         columns=["id", "region"],
-        tasks=[pickle.dumps({"file": index}) for index in range(file_count)],
+        tasks=encoded,
     )
 
     def run() -> pa.Table:

@@ -1,0 +1,284 @@
+from __future__ import annotations
+
+import logging
+import socket
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Any, cast
+
+import pyarrow.flight as flight
+import uvicorn
+from sqlalchemy.orm import Session, sessionmaker
+
+from dal_obscura.identity.contracts import IdentityPort
+from dal_obscura.identity.oidc import (
+    OidcJwksIdentityProvider,
+)
+from dal_obscura.interfaces.cli.settings import (
+    DataPlaneRuntimeConfig,
+    load_data_plane_runtime_config,
+)
+from dal_obscura.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.interfaces.read_health import create_health_app, live_runtime_readiness
+from dal_obscura.logging_config import LoggingConfig, setup_logging
+from dal_obscura.read.service import ReadService, ReadSettings
+from dal_obscura.read.signing import HmacTicketCodecAdapter
+from dal_obscura.read.transform import (
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.sources.builtins import (
+    create_builtin_plugin_registry,
+)
+from dal_obscura.sources.paths import PathRuleEnforcer
+from dal_obscura.sources.plugins import load_plugin_lock_file
+from dal_obscura.sources.published import LiveConfigCatalogRegistry
+from dal_obscura.sources.secrets import (
+    SecretProvider,
+    SecretProviderContext,
+    load_secret_provider,
+    resolve_secret_refs,
+)
+from dal_obscura.sources.task_codec import SourceTaskCodec
+from dal_obscura.storage.database.db import (
+    check_config_store_schema,
+    create_engine_from_url,
+    session_factory,
+)
+from dal_obscura.storage.snapshots import LiveConfigStore, LiveRuntime
+from dal_obscura.storage.tickets import (
+    SqlAlchemyTicketStore,
+)
+
+LOGGER = logging.getLogger(__name__)
+
+_OIDC_IDENTITY_PROVIDER = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"
+
+
+def main() -> None:
+    """CLI entry point that wires the data plane from live control-plane state."""
+    if any(argument in {"-h", "--help"} for argument in sys.argv[1:]):
+        print(_HELP_TEXT)
+        return
+    runtime_config = load_data_plane_runtime_config()
+    setup_logging(LoggingConfig(level=runtime_config.log_level, json=runtime_config.json_logs))
+    LOGGER.info("Starting dal-obscura data plane")
+
+    engine = create_engine_from_url(runtime_config.database_url)
+    check_config_store_schema(engine)
+    session_maker = session_factory(engine)
+    _start_health_server(session_maker, runtime_config)
+    config_store = LiveConfigStore(session_maker)
+    live_runtime = config_store.get_runtime()
+    secret_provider = load_secret_provider(
+        runtime_config.secret_provider,
+        context=SecretProviderContext(database_url=runtime_config.database_url),
+    )
+
+    identity = _identity_from_runtime(live_runtime, secret_provider=secret_provider)
+    plugin_registry = create_builtin_plugin_registry(
+        allowlist=(
+            load_plugin_lock_file(runtime_config.plugin_lock_file)
+            if runtime_config.plugin_lock_file
+            else None
+        )
+    )
+    catalog_registry = LiveConfigCatalogRegistry(
+        config_store,
+        secret_provider=secret_provider,
+        plugin_registry=plugin_registry,
+        path_enforcer=PathRuleEnforcer(live_runtime.path_rules),
+        max_cached_providers=runtime_config.max_cached_catalog_providers,
+        provider_wait_seconds=runtime_config.catalog_provider_wait_seconds,
+    )
+
+    row_transform = DuckDBRowTransformAdapter(
+        max_active_streams=runtime_config.max_active_streams,
+        duckdb_memory_limit=runtime_config.duckdb_memory_limit,
+        max_input_batch_bytes=runtime_config.max_input_batch_bytes,
+        max_output_batch_bytes=runtime_config.max_output_batch_bytes,
+    )
+    ticket_codec = HmacTicketCodecAdapter(
+        runtime_config.ticket_secret, previous_secrets=runtime_config.ticket_previous_secrets
+    )
+    ticket_store = SqlAlchemyTicketStore(session_maker)
+    _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
+    ticket_settings = live_runtime.ticket
+    reads = ReadService(
+        identity=identity,
+        access_context=catalog_registry,
+        row_transform=row_transform,
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        task_codec=SourceTaskCodec(plugin_registry),
+        settings=ReadSettings(
+            ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
+            max_tickets=int(ticket_settings.get("max_tickets", 1)),
+            max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
+            max_ticket_payload_bytes=runtime_config.max_ticket_payload_bytes,
+            max_stream_seconds=runtime_config.max_stream_seconds,
+        ),
+    )
+
+    server = DataAccessFlightService(
+        location=runtime_config.location,
+        reads=reads,
+        tls_certificates=_tls_certificates(
+            cert=runtime_config.tls_cert, key=runtime_config.tls_key
+        ),
+        verify_client=runtime_config.tls_verify_client,
+        root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
+        health_check=lambda: _live_runtime_readiness(session_maker, runtime_config),
+    )
+    try:
+        server.serve()
+    finally:
+        catalog_registry.close()
+
+
+_HELP_TEXT = """dal-obscura — governed Arrow Flight data plane
+
+Starts the data plane from an already migrated database with live control-plane
+configuration. Runtime settings are read from DAL_OBSCURA_* environment variables.
+
+Required variables:
+  DAL_OBSCURA_DATABASE_URL   PostgreSQL (production) or SQLite (local) URL
+  DAL_OBSCURA_TICKET_SECRET  HMAC ticket secret
+
+Common variables:
+  DAL_OBSCURA_LOCATION           Flight location (default: grpc://0.0.0.0:8815)
+  DAL_OBSCURA_DATA_PLANE_PROFILE  local or production
+  DAL_OBSCURA_TLS_CERT / DAL_OBSCURA_TLS_KEY  TLS files in production
+
+Use dal-obscura-migrate to initialize the schema before starting the service.
+"""
+
+
+def _identity_from_runtime(
+    runtime: LiveRuntime,
+    *,
+    secret_provider: SecretProvider,
+) -> IdentityPort:
+    providers_raw = _provider_records(runtime.auth_chain.get("providers", []))
+    if not providers_raw:
+        raise ValueError("Live runtime auth_chain must define at least one provider")
+
+    enabled = [provider for provider in providers_raw if bool(provider.get("enabled", True))]
+    if not enabled:
+        raise ValueError("Live runtime auth_chain has no enabled providers")
+    if len(enabled) != 1:
+        raise ValueError("Live runtime must define exactly one enabled OIDC provider")
+    return _load_identity_provider(enabled[0], secret_provider=secret_provider)
+
+
+def _start_health_server(
+    session_maker: sessionmaker[Session],
+    runtime_config: DataPlaneRuntimeConfig,
+) -> None:
+    if runtime_config.health_port is None:
+        return
+    health_socket = _bind_health_socket(runtime_config.health_host, runtime_config.health_port)
+
+    def readiness() -> dict[str, object]:
+        return _live_runtime_readiness(session_maker, runtime_config)
+
+    app = create_health_app(readiness=readiness)
+    config = uvicorn.Config(
+        app,
+        host=runtime_config.health_host,
+        port=runtime_config.health_port,
+        log_level=runtime_config.log_level.lower(),
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(
+        target=lambda: server.run(sockets=[health_socket]), name="dal-obscura-health", daemon=True
+    )
+    thread.start()
+
+
+def _start_ticket_cleanup(ticket_store: SqlAlchemyTicketStore, interval_seconds: int) -> None:
+    """Runs bounded durable-ticket cleanup in a daemon worker."""
+
+    if interval_seconds <= 0:
+        raise ValueError("ticket cleanup interval must be positive")
+
+    def cleanup_loop() -> None:
+        while True:
+            time.sleep(interval_seconds)
+            try:
+                deleted = ticket_store.cleanup_expired(now=int(time.time()))
+                if deleted:
+                    LOGGER.info("ticket_cleanup", extra={"deleted": deleted})
+            except Exception:
+                # Cleanup runs outside request handling; do not emit provider or
+                # database exception text into logs that may be user-visible.
+                LOGGER.warning("ticket_cleanup_failed")
+
+    threading.Thread(target=cleanup_loop, name="dal-obscura-ticket-cleanup", daemon=True).start()
+
+
+def _live_runtime_readiness(
+    session_maker: sessionmaker[Session],
+    runtime_config: DataPlaneRuntimeConfig,
+) -> dict[str, object]:
+    return live_runtime_readiness(LiveConfigStore(session_maker))
+
+
+def _bind_health_socket(host: str, port: int) -> socket.socket:
+    health_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        health_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        health_socket.bind((host, port))
+        health_socket.listen()
+        return health_socket
+    except OSError:
+        health_socket.close()
+        raise
+
+
+def _tls_certificates(cert: str | None, key: str | None) -> list[flight.CertKeyPair] | None:
+    if cert is None and key is None:
+        return None
+    if cert is None or key is None:
+        raise ValueError("DAL_OBSCURA_TLS_CERT and DAL_OBSCURA_TLS_KEY must be set together")
+    return [flight.CertKeyPair(_tls_material(cert, "certificate"), _tls_material(key, "key"))]
+
+
+def _tls_root_certificates(client_ca: str | None) -> bytes | None:
+    if client_ca is None:
+        return None
+    return _tls_material(client_ca, "client CA")
+
+
+def _tls_material(value: str, label: str) -> bytes:
+    """Loads a PEM file path or inline PEM material with a bounded size."""
+
+    path = Path(value)
+    material = path.read_bytes() if path.is_file() else value.encode("utf-8")
+    if not material or len(material) > 1024 * 1024:
+        raise ValueError(f"TLS {label} material must be between 1 byte and 1 MiB")
+    return material
+
+
+def _load_identity_provider(
+    raw: dict[str, object],
+    *,
+    secret_provider: SecretProvider,
+) -> IdentityPort:
+    module_path = raw.get("module")
+    if module_path != _OIDC_IDENTITY_PROVIDER:
+        raise ValueError("Unsupported identity provider; only built-in OIDC is supported")
+    args = cast(
+        dict[str, object],
+        resolve_secret_refs(
+            raw.get("args", {}), provider=secret_provider, expected_scope="identity"
+        ),
+    )
+    return OidcJwksIdentityProvider(**cast(Any, args))
+
+
+def _provider_records(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [cast(dict[str, object], item) for item in value if isinstance(item, dict)]

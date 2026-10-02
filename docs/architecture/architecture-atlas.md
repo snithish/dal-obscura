@@ -1,306 +1,152 @@
-# dal-obscura architecture and request/data flow
+# Core 0.2 architecture and governed reads
 
-Current implementation reviewed 2026-09-30. Open `architecture-atlas.html` for the
-interactive atlas with zoom, pan, full-size expansion, and source references.
+Reviewed 2026-10-02. The interactive atlas includes zoom/pan and editable diagrams.
+Six feature owners replace the old common/control_plane/data_plane layer trees.
+Workers remain stateless apart from existing shared database records and bounded
+provider caches. No tenant routing or global policy generation counter is added.
 
-These diagrams describe the current implementation, not the proposed hardening work.
-PostgreSQL owns durable configuration and tickets; workers have bounded ephemeral
-provider caches. There is no tenant/cell routing or global generation counter.
-
-## C4 · LEVEL 1 · SYSTEM CONTEXT: The governed access boundary
-
-Who uses the product, and which external systems supply identity, metadata, and data?
+## System context
 
 ```mermaid
 flowchart TD
-    Analyst(("Data consumer<br/>Analyst / application")):::external
-    Steward(("Policy administrator<br/>Owner / delegated editor")):::external
-    DAL["dal-obscura<br/>Governed data access system"]:::dp
-    IDP["Identity provider<br/>OIDC / JWT issuer + JWKS"]:::external
-    Catalog["Catalog systems<br/>Iceberg SQL / REST / manifest"]:::external
-    Storage[("Data storage<br/>Parquet / Iceberg files and deletes")]:::external
-    Analyst -->|"Plans and reads · Arrow Flight"| DAL
-    Steward -->|"Configures and evaluates · governance UI / HTTP API"| DAL
-    DAL -->|"Validates identity / browser login"| IDP
-    DAL -->|"Resolves tables and scan metadata"| Catalog
-    DAL -->|"Reads governed source data"| Storage
-
-classDef cp fill:#f4e1d8,stroke:#ac4e2b,color:#40251c
-classDef dp fill:#e1eadf,stroke:#58715a,color:#233b29
-classDef store fill:#f4ebd3,stroke:#aa8430,color:#493b19
-classDef external fill:#f2f0ec,stroke:#8a8881,color:#353732,stroke-dasharray:5 4
+    Reader((Data consumer)) -->|Arrow Flight v1| DAL[dal-obscura]
+    Steward((Asset owner / admin)) -->|Governance UI / HTTP v1| DAL
+    DAL -->|OIDC / JWT + JWKS| IAM[Identity provider]
+    DAL -->|Admitted SDK API 2| Catalog[Catalog providers]
+    DAL -->|Pinned scans| Files[(Data and delete files)]
 ```
 
-The system boundary is one deployment. Tenant/cell routing and the global generation counter are absent. Per-resource revisions still protect writes and identify captured policy.
+Python, DuckDB, Polars, Java and Spark 3 consume the same governed Flight contract.
+The deployment owns TLS, runtime secrets, metadata egress policy and plugin locks.
 
-## C4 · LEVEL 2 · CONTAINERS: Separate governance from execution
-
-Workers are replaceable. Durable configuration, sessions, audit, and ticket state live in the database.
+## Deployment containers
 
 ```mermaid
 flowchart TD
-    Consumer["Consumer clients<br/>Python / DuckDB / Polars / Java / Spark"]:::external
-    IDP["Identity provider<br/>JWT + JWKS / OIDC login"]:::external
-    Sources["Catalogs and file storage<br/>External metadata + data"]:::external
-    subgraph Product["dal-obscura deployment"]
-        UI["Governance UI<br/>React + TypeScript / static web assets"]:::cp
-        CP["Control plane<br/>FastAPI · authenticated HTTP API"]:::cp
-        DP["Data plane<br/>Arrow Flight · Arrow + embedded DuckDB"]:::dp
-        DB[("PostgreSQL<br/>Config · policy · sessions · audit · tickets")]:::store
-        UI -->|"JSON API / session cookie + CSRF"| CP
-        CP -->|"Transactions / revisions / audit / revocation"| DB
-        DP -->|"Configuration snapshots / ticket exchanges + revocation"| DB
-    end
-    Consumer -->|"Arrow Flight / gRPC · TLS in production"| DP
-    CP -->|"OIDC login / identity validation"| IDP
-    DP -->|"JWT validation / key lookup"| IDP
-    CP -->|"Discovery / schema admission"| Sources
-    DP -->|"Discovery / planned reads"| Sources
-
-classDef cp fill:#f4e1d8,stroke:#ac4e2b,color:#40251c
-classDef dp fill:#e1eadf,stroke:#58715a,color:#233b29
-classDef store fill:#f4ebd3,stroke:#aa8430,color:#493b19
-classDef external fill:#f2f0ec,stroke:#8a8881,color:#353732,stroke-dasharray:5 4
+    UI[React governance UI] -->|Session cookie + CSRF| CP[HTTP control plane]
+    Clients[Consumer clients] -->|Plan / fetch| DP[Arrow Flight data plane]
+    CP -->|Transactions / revisions / audit| DB[(PostgreSQL or development SQLite)]
+    DP -->|Snapshots / tickets / revocation| DB
+    CP --> IAM[OIDC issuer + JWKS]
+    DP --> IAM
+    CP --> Sources[Catalogs + table formats]
+    DP --> Sources
+    DP --> DuckDB[Embedded DuckDB filters and masks]
 ```
 
-DuckDB is embedded in each data-plane worker, not a separate service. SQLite is supported for development. HTTP edge/TLS termination depends on deployment configuration; the diagram shows logical relationships.
+Sessions, audit and ticket exchanges use the existing database. Provider IO starts
+after the configuration snapshot transaction closes. Both planes use the same
+admitted exact plugin artifacts and lock; DuckDB runs inside each data worker.
 
-## C4 · LEVEL 3 · CONTROL-PLANE COMPONENTS: Control plane: change governed state
-
-Capabilities, revision checks, transactions, and audit protect the administrative write path.
+## Feature ownership
 
 ```mermaid
 flowchart TD
-    HTTP["HTTP routes + request middleware<br/>Validation · safe errors · request IDs"]:::cp
-    Auth["Actor and browser-session boundary<br/>Bearer / OIDC · cookie CSRF · rate limits"]:::cp
-    Services["Application services<br/>Catalogs · assets · grants · policy · settings"]:::cp
-    Rules["Shared domain models<br/>Policy validation / resolution · field identities"]:::dp
-    Repo["Repositories + session stores<br/>Locks · CAS revisions · persisted audit"]:::store
-    Plugins["Plugin admission + catalog adapters<br/>Lockfile registry · secret/path/egress checks"]:::dp
-    DB[("Configuration database")]:::store
-    Providers["External catalogs<br/>Discovery / schemas"]:::external
-    HTTP -->|"Authenticated actor"| Auth
-    Auth --> Services
-    Services -->|"Validate and evaluate"| Rules
-    Services -->|"Read / mutate under authority"| Repo
-    Repo -->|"SQL transactions"| DB
-    Services -->|"Discover / admit schemas"| Plugins
-    Plugins --> Providers
-
-classDef cp fill:#f4e1d8,stroke:#ac4e2b,color:#40251c
-classDef dp fill:#e1eadf,stroke:#58715a,color:#233b29
-classDef store fill:#f4ebd3,stroke:#aa8430,color:#493b19
-classDef external fill:#f2f0ec,stroke:#8a8881,color:#353732,stroke-dasharray:5 4
+    Transport[interfaces: HTTP / Flight / CLI] --> Control[control: administrative commands]
+    Transport --> Read[read: schema / plan / fetch]
+    Transport --> Identity[identity: claims and sessions]
+    Control --> Policy[policy: authorization and projection]
+    Read --> Policy
+    Control --> Sources[sources: admitted SDK lifecycle]
+    Read --> Sources
+    Control --> Storage[storage: queries and snapshots]
+    Read --> Storage
+    Identity --> Storage
 ```
 
-Policy evaluation uses synthetic rows through the same SQL masking/filter semantics. Saving policy changes affects future plans; explicit ticket revocation controls outstanding access.
+- **policy** owns immutable principal/rule/decision contracts, canonical typed
+  field paths, filter ASTs, schema traversal and the SQL/output-schema compiler.
+- **read** owns ReadService, ticket signing/integrity, exchange reservation,
+  stream guards, cleanup and bounded DuckDB execution.
+- **sources** owns provider leases, SDK catalogs/formats, bounded discovery,
+  immutable handles, passive task envelopes and native Iceberg IO.
+- **identity** owns JWT/JWKS/OIDC validation, claim normalization, session exchange
+  and federated logout. Control attribute mapping/allowed values use these claims.
+- **storage** owns feature-specific SQL queries, optimistic revisions, atomic
+  snapshots, sessions, ticket exchange records and explicit migrations.
+- **control** owns authorization-aware catalog/asset/policy/settings commands,
+  schema admission, preview and publication. Routes supply transaction boundaries.
+- **interfaces** maps transport requests/responses and composes the owners; Flight
+  objects do not enter policy/read command contracts.
 
-## C4 · LEVEL 3 · DATA-PLANE COMPONENTS: Data plane: authorize, capture, execute
+UI App coordinates commands. Navigation owns URL/leave guards; server-query hooks
+own session-scoped assets and management data; the policy draft reducer owns edits,
+baselines and save fences. HTTP shapes come from checked-in OpenAPI generation.
 
-Application use cases depend on ports. Infrastructure adapters implement those ports.
-
-```mermaid
-flowchart TD
-    Flight["Flight service + middleware<br/>Descriptor parsing / transport errors / Arrow streams"]:::dp
-    Plan["PlanAccess / GetSchema use cases<br/>Identity · projection · policy · schema checks"]:::dp
-    Fetch["FetchStream use case<br/>Ticket + identity verification / guarded execution"]:::dp
-    Identity["Identity adapters<br/>JWT / OIDC claim mapping"]:::dp
-    Context["LiveConfig access context<br/>Consistent snapshot + bounded provider lease"]:::store
-    Source["Catalog / TableFormat adapters<br/>Admitted plugins · split tasks · Arrow scans"]:::dp
-    Tickets["HMAC codec + SQL ticket store<br/>References · payloads · atomic exchange · revocation"]:::store
-    Transform["Masking + DuckDB transform<br/>Full row filter · masks · visible projection"]:::dp
-    Flight --> Plan
-    Flight --> Fetch
-    Plan --> Identity
-    Plan --> Context
-    Context --> Source
-    Plan -->|"Store task payloads and sign references"| Tickets
-    Fetch --> Identity
-    Fetch -->|"Load / reserve / ensure active"| Tickets
-    Fetch -->|"Execute captured scan task"| Source
-    Source -->|"Arrow input batches"| Transform
-    Transform -->|"Governed Arrow batches"| Flight
-
-classDef cp fill:#f4e1d8,stroke:#ac4e2b,color:#40251c
-classDef dp fill:#e1eadf,stroke:#58715a,color:#233b29
-classDef store fill:#f4ebd3,stroke:#aa8430,color:#493b19
-classDef external fill:#f2f0ec,stroke:#8a8881,color:#353732,stroke-dasharray:5 4
-```
-
-Fetch does not resolve current policy again. Its execution instructions come from the stored ticket. Live configuration snapshots bind source configuration, schema admission, and policy before provider I/O.
-
-## REQUEST FLOW · GET_FLIGHT_INFO: Request 1: plan access
-
-One configuration snapshot becomes multiple bounded ticket endpoints. Source rows are not streamed during planning.
+## Planning a read
 
 ```mermaid
 sequenceDiagram
-    autonumber
     participant C as Client
-    participant F as Flight / PlanAccess
+    participant R as ReadService
     participant I as Identity
-    participant S as LiveConfig snapshot
-    participant P as Catalog / TableFormat
-    participant T as Ticket DB + HMAC
-    C->>F: Descriptor: catalog, target, columns, filter + auth
-    F->>I: Authenticate request
-    I-->>F: Issuer, subject, groups, attributes, expiry
-    F->>S: Open bound access context
-    S-->>F: Binding, policy, schema admission from one DB snapshot
-    Note over S,P: DB snapshot ends before provider I/O, provider is leased
-    F->>P: Resolve source and obtain schema
-    P-->>F: Arrow schema
-    F->>F: Validate paths and filter dependencies, authorize columns
-    F->>F: Combine policy + requested row filters, retain hidden dependencies
-    F->>P: Plan parallel scan tasks within max tickets
-    P-->>F: Tasks + schema, planner verifies schema consistency
-    F->>T: Persist captured policy, task, identity binding and expiry
-    T-->>F: Sign opaque references
-    F-->>C: Masked output schema + Flight endpoints
-    Note over C,T: Client may fetch endpoints concurrently, get_schema omits scan planning and ticket minting
+    participant DB as Snapshot / tickets
+    participant S as Admitted source
+    participant P as Policy
+    C->>R: PlanRequest + authentication
+    R->>I: Normalize authenticated principal
+    R->>DB: Capture catalog, policy and schema admission
+    DB-->>R: Immutable request snapshot, release connection
+    R->>S: Resolve handle, open format, load schema once
+    R->>P: Authorize visible fields and caller predicates
+    P-->>R: Captured decision + execution dependencies
+    R->>S: Plan bounded parallel tasks
+    S-->>R: Pinned tasks + declared schema
+    R->>R: Validate all tasks, compile output, encode passive envelopes
+    R->>DB: Atomically store all captured tickets
+    R-->>C: Output schema + signed ticket references
 ```
 
-The database snapshot is request-local. Provider reuse is bounded and keyed by concrete configuration identity; it is not a policy cache or a generation system.
+Native SQL Iceberg and external catalogs use the same SDK lifecycle. Catalog
+pagination reuses one bounded listing within its operation; later operations
+refresh. Iceberg grouping balances estimated data plus delete bytes and preserves
+every task exactly once. Literal dotted field/table names remain distinct.
 
-## REQUEST FLOW · DO_GET: Request 2: fetch governed data
-
-Re-authentication, exchange reservation, and output guards protect each captured read.
+## Fetching and streaming
 
 ```mermaid
 sequenceDiagram
-    autonumber
     participant C as Client
-    participant F as Flight / FetchStream
+    participant R as ReadService
     participant I as Identity
-    participant T as SQL ticket store
-    participant S as Captured TableFormat
-    participant D as DuckDB transform
-    C->>F: Signed reference + fresh auth headers
-    F->>F: Verify reference signature and expiry
-    F->>I: Re-authenticate caller
-    I-->>F: Current principal context
-    F->>T: Load stored payload
-    T-->>F: Payload + hash + exchange state
-    F->>F: Check payload integrity, nonce, issuer, subject, context digest
-    F->>T: Atomically reserve exchange if active, unexpired, not exhausted
-    T-->>F: Reservation succeeds
-    F->>F: Decode captured scan task
-    F->>S: Execute captured partition
-    loop Stream Arrow batches
-        S-->>D: Original values + execution columns
-        D->>D: Bound batch, full filter then masks/projection
-        D-->>F: Governed batch
-        F->>F: Check ticket / identity expiry and stream deadline
-        F->>T: Ensure ticket is not revoked
-        T-->>F: Active
-        F-->>C: Emit governed Arrow batch
+    participant T as Ticket store
+    participant S as Source
+    participant D as DuckDB
+    C->>R: Signed ticket + authentication
+    R->>I: Re-authenticate and bind principal context
+    R->>T: Load captured payload and verify integrity
+    R->>R: Decode bounded passive task through admitted artifact
+    R->>T: Atomically reserve exchange
+    R->>S: Lazily execute pinned scan
+    loop Each Arrow input batch
+        S-->>D: Original columns plus hidden dependencies
+        D->>D: Full SQL filter, then shared masking/projection
+        D-->>R: Exact declared output batch
+        R->>T: Check revocation, expiry and deadline
+        R-->>C: Governed Arrow batch
     end
-    Note over F,D: Failure, cancellation or early termination closes upstream iterators
+    R->>S: Close on exhaustion, error or early cancellation
 ```
 
-Admission occurs once when the lazy transform starts; batch limits apply throughout. Deadline checks occur between yielded batches, not as hard interruption of every blocked provider/query operation.
+SQL projection and output schema share one compiler, including NULL structs,
+map keys, lists, ancestor masks and typed mask defaults. Schema normalization
+reorders Arrow column references without copying matching buffers; casts occur
+only when native types differ from declared types. ManagedStream closes once,
+including unstarted streams, and preserves the primary error during cleanup.
 
-## DATA FLOW · FILTER BEFORE MASK: Raw data becomes governed Arrow
+## Trust and resource limits
 
-Backend pushdown is an optimization. The final transform enforces the complete filter on original values.
+Scan envelopes contain passive JSON, not pickle, module names or live callbacks.
+They capture an admitted plugin identity, immutable handle, schemas, path roots and
+bounded task payload. Schema encodings are checked before Arrow decoding; duplicate
+JSON object keys and ambiguous Arrow field names are rejected. Filter pushdown
+remains advisory; the complete restriction is enforced against original values.
 
-```mermaid
-flowchart LR
-    Raw["Source Arrow batch<br/>Original values<br/>Visible + hidden dependencies"]:::store
-    Filter["DuckDB WHERE<br/>Complete policy AND<br/>requested filter"]:::dp
-    Mask["DuckDB projection<br/>Masks + visible fields<br/>Governed Arrow output"]:::dp
-    Output["Flight output boundary<br/>Batch limits / expiry<br/>deadline / revocation"]:::store
-    Raw --> Filter --> Mask --> Output
+Input/output byte limits, DuckDB memory budgets and stream admission are per
+worker, not a global RSS cap. Deadline checks stop late output but cannot interrupt
+all blocking backend IO. Planning memory grows with file count and delete buffers
+are bounded by associated files, not a hard aggregate byte limit. Deployments must
+measure concurrent readers, skew and delete density separately.
 
-classDef cp fill:#f4e1d8,stroke:#ac4e2b,color:#40251c
-classDef dp fill:#e1eadf,stroke:#58715a,color:#233b29
-classDef store fill:#f4ebd3,stroke:#aa8430,color:#493b19
-classDef external fill:#f2f0ec,stroke:#8a8881,color:#353732,stroke-dasharray:5 4
-```
-
-The client receives only governed Arrow batches. WHERE and masking projection are parts of one row-local SQL query; boxes represent semantic order, not separate materialized tables. Hidden filter dependencies are removed from output. Arrow avoids unnecessary copies where supported; zero-copy is not guaranteed across every transform.
-
-## ARCHITECTURE · DEPENDENCY DIRECTION: Ports keep the core independent
-
-Runtime calls go outward through ports; implementation dependencies point toward application and domain contracts.
-
-```mermaid
-flowchart TD
-    subgraph Outer["Outer adapters"]
-        Interfaces["Interfaces<br/>Flight / HTTP / CLI"]:::cp
-        Infra["Infrastructure<br/>SQL stores / identity / plugins / DuckDB"]:::dp
-    end
-    subgraph Core["Application + domain"]
-        UseCases["Application use cases / services<br/>Planning · fetch · governance"]:::dp
-        Ports["Ports<br/>Identity · access context · tickets · row transform"]:::store
-        Domain["Common domain models<br/>Policy · PlanRequest · ScanTask · TicketPayload"]:::store
-    end
-    Interfaces -->|"Depends on"| UseCases
-    UseCases -->|"Depends on contracts"| Ports
-    UseCases --> Domain
-    Infra -->|"Implements"| Ports
-    Infra -->|"Consumes / returns"| Domain
-
-classDef cp fill:#f4e1d8,stroke:#ac4e2b,color:#40251c
-classDef dp fill:#e1eadf,stroke:#58715a,color:#233b29
-classDef store fill:#f4ebd3,stroke:#aa8430,color:#493b19
-classDef external fill:#f2f0ec,stroke:#8a8881,color:#353732,stroke-dasharray:5 4
-```
-
-The public plugin SDK is a separate package. Plugins implement SDK contracts and are admitted by locked identity; callers do not select arbitrary module paths.
-
-## C4 · LEVEL 4 · SELECTED CODE RELATIONSHIPS: The captured-read contract
-
-A focused code view of the planning and fetch boundary; intentionally not a complete class inventory.
-
-```mermaid
-classDiagram
-    class AccessContextPort {
-        open(catalog, target) AccessContext
-    }
-    class AccessContext {
-        TableFormat table_format
-        AuthorizationPort authorizer
-    }
-    class TableFormat {
-        get_schema() Schema
-        plan(request, max_tickets) Plan
-        execute(partition) ArrowStream
-    }
-    class Plan {
-        Schema schema
-        ScanTask[] tasks
-        RowFilter full_row_filter
-    }
-    class ScanTask {
-        TableFormat table_format
-        Schema schema
-        InputPartition partition
-    }
-    class TicketPayload {
-        asset_id
-        principal_id / issuer / identity_context
-        columns / scan / policy_version
-        ticket_id / nonce / expires_at
-    }
-    AccessContextPort ..> AccessContext : yields
-    AccessContext --> TableFormat : binds
-    TableFormat ..> Plan : plans
-    Plan "1" *-- "many" ScanTask : contains
-    ScanTask --> TableFormat : executes through
-    TicketPayload ..> ScanTask : scan contains serialized task
-```
-
-Current implementation serializes trusted internal tasks with pickle + base64. Typed data-only descriptors and keyed authentication of complete stored payloads are recommendations, not implemented components.
-
-## Source map
-
-- [Flight transport](../../src/dal_obscura/data_plane/interfaces/flight/server.py)
-- [Plan access](../../src/dal_obscura/data_plane/application/use_cases/plan_access.py)
-- [Fetch stream](../../src/dal_obscura/data_plane/application/use_cases/fetch_stream.py)
-- [Live configuration snapshot and leases](../../src/dal_obscura/data_plane/infrastructure/adapters/live_config.py)
-- [DuckDB filtering and masking](../../src/dal_obscura/data_plane/infrastructure/adapters/duckdb_transform.py)
-- [Ticket exchange store](../../src/dal_obscura/data_plane/infrastructure/adapters/ticket_store_sqlalchemy.py)
-- [Control-plane composition](../../src/dal_obscura/control_plane/interfaces/api.py)
-- [Public SDK execution bridge](../../src/dal_obscura/data_plane/infrastructure/adapters/public_plugin_adapter.py)
-- [Execution invariants](../../docs/read-execution-invariants.md)
+See [execution invariants](../read-execution-invariants.md),
+[cutover runbook](../core-cutover.md), and [qualification report](core-rewrite-review.html).

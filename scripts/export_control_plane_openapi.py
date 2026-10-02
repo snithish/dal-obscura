@@ -10,8 +10,8 @@ import argparse
 import json
 from pathlib import Path
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.control_plane.interfaces.api import create_app
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.storage.database.db import create_engine_from_url, session_factory
 
 
 def main() -> None:

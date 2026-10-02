@@ -42,14 +42,14 @@ UUID so revocation has one unambiguous target; older tickets without that
 identity are unsupported. Revocation is audited and returns the number of
 affected tickets.
 
-The packaged Alembic history is a single initial baseline for the current
-live schema. Older schemas are unsupported; the baseline does not convert
-or preserve their records. Start a new database.
+The packaged Alembic history includes the current baseline and explicit upgrades.
+Core 0.2 migration preserves catalogs, policies, owners and audit while invalidating
+old executable scan tickets. Follow the [cutover runbook](core-cutover.md) with both
+planes stopped; API 1 plugins and mixed old/new workers are unsupported.
 
-The codebase keeps its existing security boundary and does not change the
-trusted internal pickle-based scan-ticket logic. The UI still uses authenticated
-sessions, CSRF protections, owner authorization, and the supported local SSO or
-bootstrap profiles.
+Tickets now contain bounded passive JSON scan envelopes tied to admitted plugin
+artifacts. Browser sessions retain CSRF protection, owner authorization and the
+supported SSO/bootstrap profiles.
 
 Related guides: [quickstart](quickstart.md), [policy authoring](policy-authoring.md),
 [operators](operators.md), [security](security.md).

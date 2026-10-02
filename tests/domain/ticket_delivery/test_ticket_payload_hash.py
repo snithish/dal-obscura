@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from dal_obscura.common.ticket_delivery.models import (
+from dal_obscura.read.tickets import (
     ScanPayload,
     TicketPayload,
     ticket_payload_hash,

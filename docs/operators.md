@@ -117,6 +117,9 @@ before any factory import.
 
 See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
 
+For upgrades from 0.1, follow the [core 0.2 cutover](core-cutover.md) before
+starting either plane. API 2 requires rebuilt plugins and a fresh artifact lock.
+
 ## Startup Order
 
 ```mermaid

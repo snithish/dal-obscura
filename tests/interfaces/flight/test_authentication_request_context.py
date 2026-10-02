@@ -4,10 +4,10 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
-from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaResult
-from dal_obscura.data_plane.interfaces.flight.contracts import authentication_request_from_context
-from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.interfaces.flight.contracts import authentication_request_from_context
+from dal_obscura.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.read.contracts import GetSchemaResult
 from tests.support.flight import command_descriptor
 
 pytestmark = pytest.mark.socket
@@ -39,7 +39,7 @@ class BytesPeerContext(DummyContext):
 class RecordingGetSchemaUseCase:
     auth_request: AuthenticationRequest | None = None
 
-    def execute(self, request: object, auth_request: AuthenticationRequest) -> GetSchemaResult:
+    def schema(self, request: object, auth_request: AuthenticationRequest) -> GetSchemaResult:
         del request
         self.auth_request = auth_request
         return GetSchemaResult(
@@ -88,9 +88,7 @@ def test_flight_service_passes_authentication_request_to_use_case():
     get_schema = RecordingGetSchemaUseCase()
     service = DataAccessFlightService(
         location="grpc+tcp://127.0.0.1:0",
-        get_schema_use_case=cast(Any, get_schema),
-        plan_access_use_case=cast(Any, object()),
-        fetch_stream_use_case=cast(Any, object()),
+        reads=cast(Any, get_schema),
     )
     try:
         service.get_schema(

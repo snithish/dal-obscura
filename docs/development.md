@@ -16,30 +16,28 @@ This guide is for contributors changing the service, policies, or connectors.
 
 ## Architecture
 
-dal-obscura follows a hexagonal architecture. Domain and application code should
-not depend on transport adapters. The authenticated control plane writes
-validated catalogs, assets, owners, and live policies directly to the shared
-configuration database. Asset policy updates use an optimistic revision; the
-data plane reads the current records for new plans. Existing tickets continue
-with their captured permissions until expiry unless explicitly revoked.
+The runtime uses six feature owners and thin transport adapters. Policy models
+and SQL/schema compilation are pure. ReadService owns the schema/plan/fetch
+lifecycle; sources owns all admitted plugin IO; storage owns SQL queries and
+atomic snapshots. Control commands use explicit transactions supplied by routes.
+Identity normalizes claims once for both browser sessions and Flight identities.
 
-```mermaid
-flowchart TB
-    interfaces["interfaces/*\nFlight and control-plane HTTP"] --> app["application/*\nuse cases and ports"]
-    app --> domain["domain/*\nmodels and rules"]
-    infra["infrastructure/*\nadapters"] --> app
-    infra --> domain
-```
+Imports point at the owning feature. Do not introduce forwarding modules, parallel
+DTO trees, or transport types in policy/read/control contracts. The public plugin
+SDK remains an independent package; plugins cannot import private service modules.
+The [architecture atlas](architecture/architecture-atlas.html) shows these boundaries.
 
 ## Repo Map
 
 | Path | Purpose |
 | --- | --- |
-| `src/dal_obscura/data_plane/interfaces/flight` | Arrow Flight transport. |
-| `src/dal_obscura/control_plane` | Authenticated routes, live configuration use cases, and repositories. |
-| `src/dal_obscura/data_plane/application` | Data-plane use cases and ports. |
-| `src/dal_obscura/common` | Shared models, policy logic, catalog contracts, tickets, and config-store ORM. |
-| `src/dal_obscura/data_plane/infrastructure` | Catalogs, auth, ticket codecs, table formats, transforms. |
+| `src/dal_obscura/policy` | Canonical policy, paths, filters, authorization and SQL/schema projection. |
+| `src/dal_obscura/read` | Schema/plan/fetch orchestration, signed tickets, stream ownership and DuckDB execution. |
+| `src/dal_obscura/sources` | Admitted SDK catalogs/formats, discovery, passive scan codecs and provider lifecycle. |
+| `src/dal_obscura/identity` | Canonical claims, JWT/JWKS validation, OIDC browser sessions and logout. |
+| `src/dal_obscura/storage` | Feature queries, atomic snapshots, ticket exchanges and migrations. |
+| `src/dal_obscura/control` | Administrative commands, schema admission, attributes, preview and publication. |
+| `src/dal_obscura/interfaces` | HTTP/Flight transport adapters and CLI composition roots. |
 | `connectors` | JVM connector modules and contract fixtures. |
 | `examples` | Auth examples, sample data, and local reference environments. |
 | `tests` | Unit, integration, smoke, and benchmark tests. |
@@ -180,8 +178,8 @@ and admit the exact wheel through the plugin lock. See
 
 - Keep the control plane and data plane stateless apart from the shared
   configuration and ticket records in the database.
-- Preserve the internal ticket serialization boundary; do not broaden pickle
-  use or place client-controlled content in trusted ticket payloads.
+- Scan tasks must contain bounded passive JSON, never pickled executable objects.
+  Decode only through the captured, admitted plugin artifact and handle version.
 - Preserve issued-ticket access until expiry unless the asset owner explicitly
   revokes tickets. Cover both default retention and revocation-on-save.
 - Keep schema and policy revisions separate. Write policy changes with the

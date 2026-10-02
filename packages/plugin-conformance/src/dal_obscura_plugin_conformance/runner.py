@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -17,6 +17,7 @@ from dal_obscura_plugin_api import (
     TableFormatPlugin,
     TableHandle,
     TableIdentifier,
+    validate_task_payload,
 )
 
 DEFAULT_MAX_OUTPUT_BATCHES = 1_024
@@ -36,7 +37,7 @@ class ConformanceResult:
 
     package: str
     plugin_id: str
-    core_version: str = "0.1.0"
+    core_version: str = "0.2.0"
     arrow_version: str = pa.__version__
     artifact_identity: str | None = None
     capability_matrix: dict[str, bool] = field(default_factory=dict)
@@ -404,7 +405,9 @@ def run_format_checks(  # noqa: C901
         for task in tasks:
             if context.cancel_check is not None and context.cancel_check():
                 raise RuntimeError("execution context was cancelled")
-            output_schema, batches = plugin.execute(task, context)
+            validate_task_payload(task)
+            passive_task = json.loads(json.dumps(task, allow_nan=False, default=_mapping_json))
+            output_schema, batches = plugin.execute(passive_task, context)
             if output_schema != schema.arrow_schema:
                 raise ValueError("format output schema differs from the declared schema")
             check_record_batches(
@@ -428,3 +431,9 @@ def run_format_checks(  # noqa: C901
         else:
             result.record_failure("cleanup", "table-format plugin must expose close()")
     return result
+
+
+def _mapping_json(value: object) -> dict:
+    if not isinstance(value, Mapping):
+        raise TypeError("Task must contain passive JSON data")
+    return dict(value)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dal_obscura.control_plane.application import schema_service
+from dal_obscura.control import schema_service
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     DEFAULT_AUTH_MODULE,
@@ -87,7 +87,11 @@ def test_policy_test_maps_subject_groups_attributes_and_reports_missing_conditio
             "providers": [{"ordinal": 1, "module": DEFAULT_AUTH_MODULE, "args": _args()}],
         },
     )
-    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: EvaluationCatalog())
+    monkeypatch.setattr(
+        schema_service,
+        "load_source_schema",
+        lambda **kwargs: EvaluationCatalog().load_table("prod.users").schema().as_arrow(),
+    )
     url = f"/v1/assets/{asset['id']}/policy-evaluate"
     payload = {
         "principal": "ignored-synthetic-id",
@@ -119,7 +123,11 @@ def test_policy_test_maps_subject_groups_attributes_and_reports_missing_conditio
 def test_internal_attribute_preview_rejects_nested_values(client_factory, monkeypatch):
     client = client_factory()
     asset = _provision_asset(client)
-    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: EvaluationCatalog())
+    monkeypatch.setattr(
+        schema_service,
+        "load_source_schema",
+        lambda **kwargs: EvaluationCatalog().load_table("prod.users").schema().as_arrow(),
+    )
     response = client.post(
         f"/v1/assets/{asset['id']}/policy-evaluate",
         headers=ADMIN_HEADERS,

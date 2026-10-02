@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.control_plane.application.asset_service import upsert_workspace_asset
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control.asset_service import upsert_workspace_asset
+from dal_obscura.control.errors import ValidationFailure
 
 
 def _registry(*, overlap: bool = True) -> Any:
@@ -17,7 +17,7 @@ def _registry(*, overlap: bool = True) -> Any:
     catalog = PluginDescriptor(
         kind="catalog",
         plugin_id="fixture.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="fixture",
         version="1.0.0",
@@ -28,7 +28,7 @@ def _registry(*, overlap: bool = True) -> Any:
     format_descriptor = PluginDescriptor(
         kind="table_format",
         plugin_id="fixture.format",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="fixture",
         version="1.0.0",
@@ -128,3 +128,19 @@ def test_asset_binding_rejects_shared_capabilities_without_declared_output_forma
             {"format_option": "safe"},
             plugin_registry=registry,
         )
+
+
+@pytest.fixture(autouse=True)
+def query_boundary(monkeypatch):
+    from tests.support.storage_queries import install_query_doubles
+
+    install_query_doubles(
+        monkeypatch,
+        [
+            "get_workspace",
+            "get_workspace_catalog",
+            "upsert_asset",
+            "get_workspace_asset",
+            "record_asset_audit_event",
+        ],
+    )

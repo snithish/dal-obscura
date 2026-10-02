@@ -16,12 +16,12 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.common.config_store.orm import WorkspaceRecord
-from dal_obscura.common.ticket_delivery.models import TicketPayload
-from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.infrastructure.session_store import BrowserSessionStore
-from dal_obscura.control_plane.interfaces.maintenance_cli import invalidate_access
-from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
+from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.identity.sessions import BrowserSessionStore
+from dal_obscura.interfaces.cli.maintenance import invalidate_access
+from dal_obscura.read.tickets import TicketPayload
+from dal_obscura.storage.database.orm import WorkspaceRecord
+from dal_obscura.storage.tickets import (
     SqlAlchemyTicketStore,
 )
 from tests.support.postgres import isolated_postgres_sessions

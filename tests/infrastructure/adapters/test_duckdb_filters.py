@@ -1,16 +1,15 @@
 import pyarrow as pa
 
-import dal_obscura.data_plane.infrastructure.adapters.duckdb_transform as duckdb_transform
-from dal_obscura.common.access_control.filters import parse_row_filter
-from dal_obscura.common.access_control.models import MaskRule
-from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
-    DefaultMaskingAdapter,
+import dal_obscura.read.transform as duckdb_transform
+from dal_obscura.policy.filters import parse_row_filter
+from dal_obscura.policy.models import MaskRule
+from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
 
 
 def test_duckdb_transform_filters_on_hidden_execution_column():
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     input_batch = pa.record_batch(
         [
             pa.array([1, 2, 3], type=pa.int64()),
@@ -34,7 +33,7 @@ def test_duckdb_transform_filters_on_hidden_execution_column():
 
 
 def test_duckdb_transform_filters_original_masked_values_before_output_mask():
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     input_batch = pa.record_batch(
         [pa.array(["alice@example.com", "bob@example.com"], type=pa.string())],
         names=["email"],
@@ -82,7 +81,7 @@ def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
 
     fake_connection = FakeConnection()
     monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_kwargs: fake_connection)
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     input_batch = pa.record_batch(
         [pa.array([1], type=pa.int64()), pa.array(["us"], type=pa.string())],
         names=["id", "region"],

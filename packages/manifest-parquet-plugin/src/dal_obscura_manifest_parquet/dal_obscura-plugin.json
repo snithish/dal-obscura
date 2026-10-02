@@ -3,7 +3,7 @@
     {
       "kind": "catalog",
       "plugin_id": "manifest",
-      "api_version": "1",
+      "api_version": "2",
       "config_version": 1,
       "output_formats": ["parquet.dataset"],
       "handle_versions": [1],
@@ -19,7 +19,7 @@
     {
       "kind": "table_format",
       "plugin_id": "parquet.dataset",
-      "api_version": "1",
+      "api_version": "2",
       "config_version": 1,
       "handle_versions": [1],
       "capabilities": ["nested_schema", "splittable_scan"],

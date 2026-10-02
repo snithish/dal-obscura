@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from dal_obscura.common.plugin_api import PluginAdmissionError, load_plugin_lock_file
+from dal_obscura.sources.plugins import PluginAdmissionError, load_plugin_lock_file
 
 
 def _write_lock(path, entries) -> None:

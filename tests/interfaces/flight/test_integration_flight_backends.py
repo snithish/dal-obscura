@@ -3,7 +3,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
+from dal_obscura.sources.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,

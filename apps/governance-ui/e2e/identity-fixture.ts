@@ -8,7 +8,7 @@ export const attributes = [
   { key: "region", label: "Region", description: "Operating region", claim_path: "employee.region", allowed_values: ["US", "EU"] },
 ];
 const providerArgs = { issuer, subject_claim: "sub", group_claims: ["groups"], attribute_claims: Object.fromEntries(attributes.map((item) => [item.key, item.claim_path])), attribute_definitions: Object.fromEntries(attributes.map((item) => [item.key, { label: item.label, description: item.description, allowed_values: item.allowed_values }])) };
-export const provider = { id: "provider-1", ordinal: 1, module: "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider", args: providerArgs, enabled: true, revision: 1 };
+export const provider = { id: "provider-1", ordinal: 1, module: "dal_obscura.identity.oidc.OidcJwksIdentityProvider", args: providerArgs, enabled: true, revision: 1 };
 const rules = [{ ordinal: 1, name: "Department analysts", effect: "allow", principals: ["*"], columns: ["email"], masks: {}, when: { department: ["Engineering", "Finance"] }, row_filter: null }];
 
 export async function identityApi(page: Page) {

@@ -10,12 +10,12 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
-import dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks as jwks_module
-from dal_obscura.data_plane.application.ports.identity import (
+import dal_obscura.identity.oidc as jwks_module
+from dal_obscura.identity.contracts import (
     AuthenticationRequest,
     MissingCredentialsError,
 )
-from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
+from dal_obscura.identity.oidc import (
     OidcJwksIdentityProvider,
 )
 
@@ -112,7 +112,7 @@ def test_valid_keycloak_like_access_token_authenticates():
     assert principal.id == "user-123"
     assert principal.issuer == ISSUER
     assert principal.expires_at is not None
-    assert principal.groups == []
+    assert principal.groups == ()
     assert principal.attributes == {}
 
 
@@ -264,7 +264,7 @@ def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
 
     principal = provider.authenticate(_auth_request(token))
 
-    assert principal.groups == ["/analytics", "finance", "analyst", "reader"]
+    assert principal.groups == ("/analytics", "finance", "analyst", "reader")
     assert principal.attributes == {"department": "acme", "clearance": "high"}
 
 
@@ -282,7 +282,7 @@ def test_ignores_missing_optional_group_and_attribute_claims():
 
     principal = provider.authenticate(_auth_request(token))
 
-    assert principal.groups == []
+    assert principal.groups == ()
     assert principal.attributes == {}
 
 

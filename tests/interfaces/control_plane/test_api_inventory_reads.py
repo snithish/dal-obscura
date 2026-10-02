@@ -4,10 +4,10 @@ import asyncio
 from collections.abc import MutableMapping
 from typing import Any
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.storage.database.db import (
     session_factory,
 )
-from dal_obscura.control_plane.interfaces.api import create_app
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 
@@ -88,6 +88,4 @@ def test_control_plane_rejects_oversized_chunked_body_without_content_length(db_
 
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
-DEFAULT_AUTH_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
-)
+DEFAULT_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"

@@ -19,6 +19,7 @@ from dal_obscura_plugin_api.contracts import (
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.tasks import validate_task_payload
 
 __all__ = [
     "PLUGIN_API_VERSION",
@@ -38,4 +39,5 @@ __all__ = [
     "TableFormatPlugin",
     "TableHandle",
     "TableIdentifier",
+    "validate_task_payload",
 ]

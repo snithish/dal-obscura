@@ -3,21 +3,22 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from dal_obscura.common.config_store.orm import (
+from dal_obscura.storage import audit as _db_audit
+from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.storage.database.orm import (
     AssetOwnerRecord,
     AssetRecord,
     AuditEventRecord,
     CatalogRecord,
 )
-from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
 
 def test_audit_visibility_enforces_asset_ownership(db_session) -> None:
-    store = ConfigStore(db_session)
+    store = db_session
 
     visible_asset_id = uuid4()
     hidden_asset_id = uuid4()
-    store.ensure_workspace()
+    _db_workspace.ensure_workspace(store)
     db_session.add_all(
         [
             CatalogRecord(
@@ -81,8 +82,8 @@ def test_audit_visibility_enforces_asset_ownership(db_session) -> None:
     )
     db_session.flush()
 
-    context = store.get_workspace()
+    context = _db_workspace.get_workspace(store)
     assert context is not None
-    page = store.list_audit_events_page(principals={"shared-owner"}, limit=50)
+    page = _db_audit.list_audit_events_page(store, principals={"shared-owner"}, limit=50)
 
     assert [item["action"] for item in page.items] == ["visible.action"]

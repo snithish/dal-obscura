@@ -103,7 +103,7 @@ Start with [docs/README.md](docs/README.md). It groups docs by user need.
 ## Architecture
 
 Explore the [interactive architecture atlas](docs/architecture/architecture-atlas.html)
-for C4 levels 1–4, planning/fetch sequences, and the governed Arrow data flow.
+for feature ownership, planning/fetch sequences, and the governed Arrow data flow.
 [Editable Mermaid diagrams](docs/architecture/architecture-atlas.md) are included.
 
 ```mermaid
@@ -134,12 +134,19 @@ Key paths:
 
 | Path | Purpose |
 | --- | --- |
-| `src/dal_obscura/control_plane` | Authenticated API, live configuration use cases, and repositories. |
-| `src/dal_obscura/data_plane` | Arrow Flight service, planning, fetching, auth, transforms. |
-| `src/dal_obscura/common` | Shared policy, catalog, table-format, ticket, and config-store code. |
+| `src/dal_obscura/policy` | Canonical policy, paths, filters, authorization and SQL/schema projection. |
+| `src/dal_obscura/read` | Schema/plan/fetch orchestration, signed tickets, stream ownership and DuckDB execution. |
+| `src/dal_obscura/sources` | Admitted SDK catalogs/formats, discovery, passive scan codecs and provider lifecycle. |
+| `src/dal_obscura/identity` | Canonical claims, JWT/JWKS validation, OIDC browser sessions and logout. |
+| `src/dal_obscura/storage` | Feature queries, atomic snapshots, ticket exchanges and migrations. |
+| `src/dal_obscura/control` | Administrative commands, schema admission, attributes, preview and publication. |
+| `src/dal_obscura/interfaces` | HTTP/Flight transport adapters and CLI composition roots. |
 | `connectors` | JVM client, Spark datasource, testkit, and contract fixtures. |
 | `examples` | Auth examples, local demo, and sample data. |
 | `tests` | Unit, integration, smoke, and benchmark tests. |
+
+Version 0.2 uses plugin API 2 and passive JSON scan tasks. Follow the
+[core cutover runbook](docs/core-cutover.md) when upgrading an existing database.
 
 ## Runtime model
 

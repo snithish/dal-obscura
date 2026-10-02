@@ -27,7 +27,7 @@ const emptyRuntime: RuntimeSettings = {
   path_rules: [],
 };
 
-const OIDC_IDENTITY_MODULE = "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider";
+const OIDC_IDENTITY_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider";
 
 function providerText(provider: AuthProvider, key: string): string {
   const value = provider.args[key];

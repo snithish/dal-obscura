@@ -10,18 +10,18 @@ from dal_obscura_plugin_api import PluginDescriptor, SchemaDescriptor, TableHand
 from pyiceberg.schema import Schema
 from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringType, StructType
 
-from dal_obscura.common.schema_identity import schema_scope_digest
-from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
-from dal_obscura.control_plane.application.schema_service import (
+from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
+from dal_obscura.control.schema_service import (
     MAX_SCHEMA_DEPTH,
     MAX_SCHEMA_NODES,
-    _arrow_field_id,
-    _close_plugins,
     get_asset_schema,
     schema_fingerprint,
 )
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
+from dal_obscura.policy.schema_identity import numeric_field_id, schema_scope_digest
+from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
+from dal_obscura.sources.secrets import EnvSecretProvider
+from tests.support.schema_catalog import schema_registry
 
 
 class _FakeTable:
@@ -49,6 +49,8 @@ class _FakeStore:
     def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
         assert asset_id == self.asset_id
         return {
+            "id": str(asset_id),
+            "backend": "iceberg",
             "catalog": "analytics",
             "name": "default.events",
             "table_identifier": "default.events",
@@ -103,12 +105,16 @@ def _nested_schema() -> Schema:
 
 
 def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
-    from dal_obscura.common.query_planning.field_paths import FieldSegment
-    from dal_obscura.control_plane.application.schema_service import _field_node
+    from dal_obscura.control.schema_service import _arrow_field_node
+    from dal_obscura.policy.paths import FieldSegment
 
     schema = _nested_schema()
     for field, arrow_field in zip(schema.fields, schema.as_arrow(), strict=True):
-        node = _field_node(field, (FieldSegment(field.name, field.field_id),))
+        node = _arrow_field_node(
+            arrow_field,
+            (FieldSegment(field.name, field.field_id),),
+            schema_scope_digest(schema.as_arrow()),
+        )
         assert node["type"] == str(arrow_field.type)
 
 
@@ -126,7 +132,7 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
         store,  # type: ignore[arg-type]
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
-        load_catalog_fn=load_catalog,
+        plugin_registry=schema_registry(load_catalog),
     )
 
     assert calls == [("analytics", {"type": "sql", "uri": "sqlite:///catalog.db"})]
@@ -160,10 +166,10 @@ def test_arrow_synthetic_field_ids_are_schema_scoped() -> None:
     integer_schema = pa.schema([pa.field("value", pa.int64())])
     string_schema = pa.schema([pa.field("value", pa.string())])
 
-    integer_id = _arrow_field_id(
+    integer_id = numeric_field_id(
         integer_schema.field("value"), ("value",), schema_scope_digest(integer_schema)
     )
-    string_id = _arrow_field_id(
+    string_id = numeric_field_id(
         string_schema.field("value"), ("value",), schema_scope_digest(string_schema)
     )
 
@@ -178,7 +184,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
         [
             pa.field(
                 "profile",
-                pa.struct([pa.field("email", pa.string())]),
+                pa.struct([pa.field("email", pa.string()), pa.field("$value", pa.int64())]),
                 metadata={b"iceberg.field.id": b"2"},
             )
         ]
@@ -220,7 +226,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
         descriptor = PluginDescriptor(
             kind="catalog",
             plugin_id="fixture.catalog",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="fixture",
             version="1.0.0",
@@ -240,6 +246,9 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             assert value == identifier
             return handle
 
+        def list_tables(self, context, **kwargs):
+            raise AssertionError("Schema discovery must not list tables")
+
         def close(self):
             closed.append("catalog")
 
@@ -247,7 +256,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
         descriptor = PluginDescriptor(
             kind="table_format",
             plugin_id="fixture.format",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="fixture",
             version="1.0.0",
@@ -258,6 +267,12 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             del context
             assert value == handle
             return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, *args, **kwargs):
+            raise AssertionError("Schema discovery must not plan rows")
+
+        def execute(self, *args, **kwargs):
+            raise AssertionError("Schema discovery must not read rows")
 
         def close(self):
             closed.append("format")
@@ -286,10 +301,15 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
     assert result["target"] == "default.events"
     assert result["stable_field_ids"] is False
     assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
+    fields = cast(list[dict[str, object]], result["fields"])
+    children = cast(list[dict[str, object]], fields[0]["children"])
+    assert children[1]["human_path"] == 'profile.["$value"]'
+    path = cast(dict[str, object], children[1]["path"])
+    assert cast(list[dict[str, object]], path["segments"])[1]["kind"] == "field"
     assert closed == ["format", "catalog"]
 
     format_close_fails = True
-    with pytest.raises(RuntimeError, match="format close failed"):
+    with pytest.raises(ValidationFailure, match="Schema discovery failed"):
         get_asset_schema(
             PublicStore(asset_id),  # type: ignore[arg-type]
             asset_id,
@@ -310,7 +330,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
                 return lambda config, context: ForgedHandleCatalog()
             return super().load(kind, plugin_id)
 
-    with pytest.raises(ValidationFailure, match="table handle identity"):
+    with pytest.raises(ValidationFailure, match="Schema discovery failed"):
         get_asset_schema(
             PublicStore(asset_id),  # type: ignore[arg-type]
             asset_id,
@@ -322,7 +342,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
         descriptor = PluginDescriptor(
             kind="table_format",
             plugin_id="other.format",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="fixture",
             version="1.0.0",
@@ -334,7 +354,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
                 return lambda value, context: ForgedFormat()
             return super().load(kind, plugin_id)
 
-    with pytest.raises(ValidationFailure, match="identity"):
+    with pytest.raises(ValidationFailure, match="Schema discovery failed"):
         get_asset_schema(
             PublicStore(asset_id),  # type: ignore[arg-type]
             asset_id,
@@ -355,7 +375,7 @@ def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factor
     descriptor = PluginDescriptor(
         kind="catalog",
         plugin_id="fixture.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="fixture",
         version="1.0.0",
@@ -408,7 +428,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
             store,  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
-            load_catalog_fn=load_catalog,
+            plugin_registry=schema_registry(load_catalog),
             egress_allowlist=("catalog.example",),
         )
     assert called is False
@@ -442,7 +462,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         store,  # type: ignore[arg-type]
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
-        load_catalog_fn=load_catalog,
+        plugin_registry=schema_registry(load_catalog),
         egress_allowlist=("catalog.example",),
         secret_provider=EnvSecretProvider(
             config={"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}}
@@ -498,7 +518,9 @@ def test_get_asset_schema_requires_read_capability() -> None:
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor("outsider", ()),
-            load_catalog_fn=lambda **_: pytest.fail("catalog must not be loaded"),
+            plugin_registry=schema_registry(
+                lambda *args, **kwargs: pytest.fail("catalog must not be loaded")
+            ),
         )
 
 
@@ -513,7 +535,7 @@ def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
-            load_catalog_fn=failing_catalog,
+            plugin_registry=schema_registry(failing_catalog),
         )
 
     assert "catalog-password" not in str(failure.value)
@@ -528,7 +550,7 @@ def test_schema_plugin_cleanup_does_not_mask_primary_error() -> None:
         try:
             raise ValueError("primary failure")
         except ValueError:
-            _close_plugins(FailingClose())
+            _close_plugin_preserving_error(FailingClose())
             raise
 
 
@@ -541,13 +563,14 @@ def test_get_asset_schema_rejects_excessive_node_count() -> None:
         )
     )
 
-    with pytest.raises(ValidationFailure, match="field-node limit"):
+    with pytest.raises(ValidationFailure, match="Schema discovery failed") as caught:
         get_asset_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
-            load_catalog_fn=lambda *_args, **_: _FakeCatalog(_FakeTable(schema)),
+            plugin_registry=schema_registry(lambda *_args, **_: _FakeCatalog(_FakeTable(schema))),
         )
+    assert "node" in str(caught.value.__cause__)
 
 
 def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
@@ -557,10 +580,27 @@ def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
         nested = StructType(NestedField(field_id=index, name=f"level_{index}", field_type=nested))
     schema = Schema(NestedField(field_id=MAX_SCHEMA_DEPTH + 2, name="root", field_type=nested))
 
-    with pytest.raises(ValidationFailure, match="nesting-depth limit"):
+    with pytest.raises(ValidationFailure, match="Schema discovery failed") as caught:
         get_asset_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
-            load_catalog_fn=lambda *_args, **_: _FakeCatalog(_FakeTable(schema)),
+            plugin_registry=schema_registry(lambda *_args, **_: _FakeCatalog(_FakeTable(schema))),
         )
+    assert "depth" in str(caught.value.__cause__)
+
+
+@pytest.fixture(autouse=True)
+def query_boundary(monkeypatch):
+    from tests.support.storage_queries import install_query_doubles
+
+    install_query_doubles(
+        monkeypatch,
+        [
+            "get_workspace",
+            "get_workspace_asset",
+            "get_workspace_catalog",
+            "list_asset_owners",
+            "list_asset_grants",
+        ],
+    )

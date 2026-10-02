@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import cast
+from typing import Any, cast
 
 import pyarrow as pa
 import pytest
@@ -22,7 +22,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="../loader",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -31,7 +31,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="example",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -41,7 +41,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="example",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -52,7 +52,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="example",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -62,7 +62,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="example",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -72,7 +72,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="example",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -82,7 +82,7 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
         PluginDescriptor(
             kind="catalog",
             plugin_id="example",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="example",
             version="1.0.0",
@@ -191,3 +191,25 @@ def test_table_identifier_rejects_unbounded_or_non_printable_segments() -> None:
         TableIdentifier(namespace=("default",), name="orders\narchive")
     with pytest.raises(ValueError, match="bounded printable"):
         TableIdentifier(namespace=("default",), name=cast(str, 42))
+
+
+def test_table_handle_captures_nested_metadata_and_rejects_boolean_versions() -> None:
+    metadata = {"options": {"roots": ["warehouse"]}}
+    arguments: dict[str, Any] = {
+        "catalog_plugin_id": "manifest",
+        "catalog_instance_id": "fixture",
+        "catalog_revision": 1,
+        "identifier": TableIdentifier(namespace=("default",), name="users"),
+        "format_plugin_id": "parquet.dataset",
+        "handle_version": 1,
+    }
+    handle = TableHandle(**arguments, metadata=metadata)
+    metadata["options"]["roots"].append("outside")
+    assert handle.to_json()["metadata"] == {"options": {"roots": ["warehouse"]}}
+    assert TableHandle.from_json(handle.to_json()) == handle
+    with pytest.raises(TypeError):
+        cast(dict, handle.metadata["options"])["roots"] = []
+    for field in ("catalog_revision", "handle_version"):
+        with pytest.raises(ValueError, match="integer"):
+            invalid: dict[str, Any] = {**arguments, field: True}
+            TableHandle(**invalid)

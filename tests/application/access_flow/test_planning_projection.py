@@ -3,21 +3,19 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
+from dal_obscura.read.request import PlanRequest
 from tests.application.access_flow.helpers import (
     AUTHORIZATION_HEADER,
     _build_end_to_end_access_flow,
     _build_use_case_dependencies,
 )
+from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
 from tests.support.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
-    FakeMasking,
     FakeTicketCodec,
     FakeTicketStore,
     StubTableFormat,
@@ -31,19 +29,18 @@ def test_plan_access_expands_wildcard_columns():
     catalog_registry = FakeCatalogRegistry(table_format)
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(ticket_payload(columns=["id", "region"], scan=scan_payload()))
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
         ),
-        masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
         max_ticket_exchanges=1,
     )
-    use_case.execute(
+    use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["*"]), AUTHORIZATION_HEADER
     )
 
@@ -52,16 +49,41 @@ def test_plan_access_expands_wildcard_columns():
     assert ticket_codec.signed_payloads[0].scan["full_row_filter"] is not None
 
 
+def test_wildcard_preserves_literal_field_names_during_authorization() -> None:
+    schema = pa.schema(
+        [pa.field("a.b", pa.int64()), pa.field("*", pa.string()), pa.field("$value", pa.bool_())]
+    )
+    paths = ['["a.b"]', '["*"]', '["$value"]']
+    source = StubTableFormat(
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
+    )
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(allowed_columns=paths, masks={}, row_filter=None, policy_version=1)
+    )
+    service = make_read_service(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(source))
+        ),
+    )
+
+    result = service.schema(
+        PlanRequest(catalog="catalog1", target="users", columns=["*"]), AUTHORIZATION_HEADER
+    )
+
+    assert authorizer.last_requested_columns == paths
+    assert result.output_schema.names == schema.names
+
+
 @pytest.mark.parametrize("columns", [[], ["*", "id"], ["id", "id"]])
 def test_plan_access_rejects_ambiguous_or_empty_column_requests(columns):
     _schema, decision, table_format = _build_use_case_dependencies()
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(decision=decision),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -70,7 +92,7 @@ def test_plan_access_rejects_ambiguous_or_empty_column_requests(columns):
     )
 
     with pytest.raises(ValueError, match="columns"):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(catalog="catalog1", target="users", columns=columns), AUTHORIZATION_HEADER
         )
 
@@ -96,12 +118,11 @@ def test_plan_access_accepts_nested_requested_columns():
     ticket_codec = FakeTicketCodec(
         ticket_payload(columns=["user.address.zip"], scan=scan_payload())
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
         ),
-        masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -109,7 +130,7 @@ def test_plan_access_accepts_nested_requested_columns():
         max_ticket_exchanges=1,
     )
 
-    use_case.execute(
+    use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["user.address.zip"]),
         AUTHORIZATION_HEADER,
     )
@@ -128,7 +149,7 @@ def test_plan_access_expands_parent_request_with_null_masked_siblings():
     table_format = StubTableFormat(
         catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -141,7 +162,6 @@ def test_plan_access_expands_parent_request_with_null_masked_siblings():
             ),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -149,7 +169,7 @@ def test_plan_access_expands_parent_request_with_null_masked_siblings():
         max_ticket_exchanges=1,
     )
 
-    result = use_case.execute(
+    result = use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["profile"]), AUTHORIZATION_HEADER
     )
 
@@ -168,12 +188,11 @@ def test_plan_access_requires_map_key_permission_for_map_value_projection():
             allowed_columns=["contacts.$value.name"], masks={}, row_filter=None, policy_version=100
         )
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -182,7 +201,7 @@ def test_plan_access_requires_map_key_permission_for_map_value_projection():
     )
 
     with pytest.raises(PermissionError, match="Requested columns are not authorized"):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(catalog="catalog1", target="users", columns=["contacts.$value.name"]),
             AUTHORIZATION_HEADER,
         )
@@ -205,12 +224,11 @@ def test_plan_access_includes_authorized_map_keys_with_value_projection():
             policy_version=100,
         )
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -218,7 +236,7 @@ def test_plan_access_includes_authorized_map_keys_with_value_projection():
         max_ticket_exchanges=1,
     )
 
-    result = use_case.execute(
+    result = use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["contacts.$value.name"]),
         AUTHORIZATION_HEADER,
     )
@@ -238,7 +256,7 @@ def test_plan_access_rejects_unknown_requested_columns():
     table_format = StubTableFormat(
         catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -251,7 +269,6 @@ def test_plan_access_rejects_unknown_requested_columns():
             ),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload())),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -261,7 +278,7 @@ def test_plan_access_rejects_unknown_requested_columns():
 
     for requested_columns in (["missing"], ["id.value"], ["user.missing"]):
         with pytest.raises(ValueError, match="Unknown columns requested"):
-            use_case.execute(
+            use_case.plan(
                 PlanRequest(catalog="catalog1", target="users", columns=requested_columns),
                 AUTHORIZATION_HEADER,
             )
@@ -282,7 +299,7 @@ def test_plan_access_rejects_explicit_denied_column_request():
         schema=schema,
         planned_columns=planned_columns,
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -292,7 +309,6 @@ def test_plan_access_rejects_explicit_denied_column_request():
             ),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload())),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -301,7 +317,7 @@ def test_plan_access_rejects_explicit_denied_column_request():
     )
 
     with pytest.raises(PermissionError, match="not authorized"):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(catalog="catalog1", target="users", columns=["id", "secret"]),
             AUTHORIZATION_HEADER,
         )
@@ -319,7 +335,7 @@ def test_plan_access_prunes_wildcard_to_authorized_columns():
         schema=schema,
         planned_columns=planned_columns,
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -329,7 +345,6 @@ def test_plan_access_prunes_wildcard_to_authorized_columns():
             ),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -337,7 +352,7 @@ def test_plan_access_prunes_wildcard_to_authorized_columns():
         max_ticket_exchanges=1,
     )
 
-    result = use_case.execute(
+    result = use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["*"]), AUTHORIZATION_HEADER
     )
 
@@ -365,6 +380,6 @@ def test_backend_schema_drift_is_rejected_before_ticket_creation(monkeypatch, dr
     )
     planner, _ = _build_end_to_end_access_flow(table, decision)
     with pytest.raises(ValueError, match="schema changed"):
-        planner.execute(
+        planner.plan(
             PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
         )

@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+
+class ValidationFailure(ValueError):
+    """Raised when a live configuration mutation is invalid."""
+
+
+class PolicyValidationFailure(ValidationFailure):
+    """A policy rule failed semantic validation before storage."""
+
+    def __init__(self, rule_index: int, message: str) -> None:
+        super().__init__(message)
+        self.rule_index = rule_index
+
+
+class AuthorizationFailure(PermissionError):
+    """Raised when a control-plane actor cannot mutate a protected resource."""
+
+
+class ConfigurationConflictError(RuntimeError):
+    """Raised when an optimistic live-configuration update is stale."""
+
+    def __init__(self, message: str, *, current_revision: int | None = None) -> None:
+        super().__init__(message)
+        self.current_revision = current_revision
+
+
+class RevisionPreconditionRequired(ConfigurationConflictError):
+    """Raised when an existing mutable resource is written without its revision."""

@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.common.access_control.identity_claims import PrincipalClaimMapper
+from dal_obscura.identity.claims import PrincipalClaimMapper
 
 
 def test_principal_claim_mapper_extracts_subject_groups_and_attributes():
@@ -22,7 +22,7 @@ def test_principal_claim_mapper_extracts_subject_groups_and_attributes():
     )
 
     assert principal.id == "user-123"
-    assert principal.groups == ["/analytics", "finance", "analyst", "reader"]
+    assert principal.groups == ("/analytics", "finance", "analyst", "reader")
     assert principal.attributes == {"department": "acme", "clearance": "high"}
 
 

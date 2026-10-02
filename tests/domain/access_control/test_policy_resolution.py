@@ -1,18 +1,14 @@
 import pytest
 
-from dal_obscura.common.access_control.compiled_policy import (
-    CompiledMaskRule,
-    CompiledPolicy,
-    CompiledPolicyRule,
-)
-from dal_obscura.common.access_control.models import (
+from dal_obscura.policy.models import (
     AccessRule,
+    AssetPolicy,
     DatasetPolicy,
     MaskRule,
     Policy,
     Principal,
 )
-from dal_obscura.common.access_control.policy_resolution import dataset_version, resolve_access
+from dal_obscura.policy.policy_resolution import resolve_access
 
 
 def test_resolve_access_allows_columns():
@@ -228,29 +224,6 @@ def test_resolve_access_parent_grant_authorizes_requested_nested_leaf():
     assert allowed == ["profile.name"]
 
 
-def test_policy_version_changes_when_abac_clauses_change():
-    first = _policy(
-        AccessRule(
-            principals=["group:analyst"],
-            when={"department": "acme"},
-            columns=["id"],
-            masks={},
-            row_filter=None,
-        )
-    ).datasets[0]
-    second = _policy(
-        AccessRule(
-            principals=["group:analyst"],
-            when={"department": "globex"},
-            columns=["id"],
-            masks={},
-            row_filter=None,
-        )
-    ).datasets[0]
-
-    assert dataset_version(first) != dataset_version(second)
-
-
 def test_mask_exemption_skips_only_that_rule_mask_and_preserves_grant_and_filter():
     policy = _policy(
         AccessRule(
@@ -311,49 +284,16 @@ def test_exempt_non_reader_gets_no_grant_and_condition_mismatch_does_not_exempt(
         assert row_filter is None
 
 
-def test_mask_exemption_changes_effective_policy_version():
-    empty = _policy(
-        AccessRule(
-            principals=["user:alice"],
-            columns=["email"],
-            masks={"email": MaskRule(type="hash")},
-            row_filter=None,
-        )
-    ).datasets[0]
-    explicit_empty = _policy(
-        AccessRule(
-            principals=["user:alice"],
-            columns=["email"],
-            masks={"email": MaskRule(type="hash", exempt_principals=())},
-            row_filter=None,
-        )
-    ).datasets[0]
-    exempt = _policy(
-        AccessRule(
-            principals=["user:alice"],
-            columns=["email"],
-            masks={"email": MaskRule(type="hash", exempt_principals=("user:bob",))},
-            row_filter=None,
-        )
-    ).datasets[0]
-    assert dataset_version(empty) == dataset_version(explicit_empty)
-    assert dataset_version(empty) != dataset_version(exempt)
-
-
 def test_compiled_mask_exemptions_round_trip():
-    rule = CompiledPolicyRule(
+    rule = AccessRule(
         ordinal=0,
         effect="allow",
         principals=["group:analyst"],
         columns=["email"],
-        masks={
-            "email": CompiledMaskRule(
-                type="hash", exempt_principals=("group:privacy", "user:alice")
-            )
-        },
+        masks={"email": MaskRule(type="hash", exempt_principals=("group:privacy", "user:alice"))},
     )
-    policy = CompiledPolicy(version=1, catalog="analytics", target="orders", rules=[rule])
-    decoded = CompiledPolicy.from_json(policy.to_json())
+    policy = AssetPolicy(version=1, catalog="analytics", target="orders", rules=[rule])
+    decoded = AssetPolicy.from_json(policy.to_json())
     assert decoded.rules[0].masks["email"].exempt_principals == ("group:privacy", "user:alice")
 
 

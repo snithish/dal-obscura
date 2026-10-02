@@ -3,17 +3,13 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.common.access_control.filters import deserialize_row_filter
-from dal_obscura.common.access_control.models import AccessDecision, Principal
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
-from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
-    DefaultMaskingAdapter,
+from dal_obscura.policy.filters import deserialize_row_filter
+from dal_obscura.policy.models import AccessDecision, Principal
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.read.signing import HmacTicketCodecAdapter
+from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from tests.application.access_flow.helpers import (
     AUTHORIZATION_HEADER,
     _build_end_to_end_access_flow,
@@ -21,11 +17,11 @@ from tests.application.access_flow.helpers import (
     _ticket_store_with,
 )
 from tests.support.flight import InMemoryPolicyAuthorizer
+from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
 from tests.support.use_cases import (
     FakeCatalogRegistry,
     FakeIdentity,
-    FakeMasking,
     FakeRowTransform,
     FakeTicketCodec,
     FakeTicketStore,
@@ -66,31 +62,29 @@ def test_exempt_reader_keeps_rule_row_filter_through_plan_and_fetch():
     )
     ticket_codec = HmacTicketCodecAdapter("secret")
     ticket_store = FakeTicketStore()
-    masking = DefaultMaskingAdapter()
+
     identity = FakeIdentity(principal=principal)
-    plan_access = PlanAccessUseCase(
+    plan_access = make_read_service(
         identity=identity,
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=FakeCatalogRegistry(table_format)
         ),
-        masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
         ticket_ttl_seconds=300,
         max_tickets=1,
         max_ticket_exchanges=1,
     )
-    fetch_stream = FetchStreamUseCase(
+    fetch_stream = make_read_service(
         identity=identity,
-        masking=masking,
-        row_transform=DuckDBRowTransformAdapter(masking),
+        row_transform=DuckDBRowTransformAdapter(),
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
     )
-    planned = plan_access.execute(
+    planned = plan_access.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["email"]), AUTHORIZATION_HEADER
     )
-    result = fetch_stream.execute(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
+    result = fetch_stream.fetch(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
     output = pa.Table.from_batches(list(result.result_batches), schema=result.output_schema)
     assert output.schema.names == ["email"]
     assert output.column("email").to_pylist() == ["alice@example.com"]
@@ -121,7 +115,7 @@ def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution(
     )
     plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
 
-    plan_result = plan_access.execute(
+    plan_result = plan_access.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -130,7 +124,7 @@ def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution(
         ),
         AUTHORIZATION_HEADER,
     )
-    fetch_result = fetch_stream.execute(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
+    fetch_result = fetch_stream.fetch(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
     table = pa.Table.from_batches(
         list(fetch_result.result_batches), schema=fetch_result.output_schema
     )
@@ -174,7 +168,7 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
     )
     plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
 
-    plan_result = plan_access.execute(
+    plan_result = plan_access.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -183,7 +177,7 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
         ),
         AUTHORIZATION_HEADER,
     )
-    fetch_result = fetch_stream.execute(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
+    fetch_result = fetch_stream.fetch(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
     table = pa.Table.from_batches(
         list(fetch_result.result_batches), schema=fetch_result.output_schema
     )
@@ -205,16 +199,15 @@ def test_fetch_stream_principal_mismatch():
         },
     )
     ticket_store = _ticket_store_with(payload)
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user2", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
 
 @pytest.mark.parametrize(
@@ -245,36 +238,34 @@ def test_fetch_stream_rejects_ticket_when_identity_context_changes(before, after
         target="users",
         rules=[{"principals": ["group:analyst"], "columns": ["id"]}],
     )
-    masking = DefaultMaskingAdapter()
+
     ticket_codec = HmacTicketCodecAdapter("secret")
     ticket_store = FakeTicketStore()
-    plan_access = PlanAccessUseCase(
+    plan_access = make_read_service(
         identity=identity,
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=FakeCatalogRegistry(table_format)
         ),
-        masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
         ticket_ttl_seconds=300,
         max_tickets=1,
         max_ticket_exchanges=1,
     )
-    fetch_stream = FetchStreamUseCase(
+    fetch_stream = make_read_service(
         identity=identity,
-        masking=masking,
-        row_transform=DuckDBRowTransformAdapter(masking),
+        row_transform=DuckDBRowTransformAdapter(),
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
     )
 
-    planned = plan_access.execute(
+    planned = plan_access.plan(
         PlanRequest(catalog="analytics", target="users", columns=["id"]), AUTHORIZATION_HEADER
     )
     identity._principal = after
 
     with pytest.raises(PermissionError):
-        fetch_stream.execute(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
+        fetch_stream.fetch(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_rejects_matching_subject_from_another_issuer():
@@ -291,20 +282,19 @@ def test_fetch_stream_rejects_matching_subject_from_another_issuer():
         issuer="https://issuer-a.example",
     )
     ticket_store = _ticket_store_with(payload)
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(
             principal=Principal(
                 id="user1", groups=[], attributes={}, issuer="https://issuer-b.example"
             )
         ),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
     )
 
     with pytest.raises(PermissionError, match="Unauthorized"):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+        use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
 
@@ -334,18 +324,17 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         nonce="nonce",
     )
     clock = [999]
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={}, expires_at=1000)
         ),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=_ticket_store_with(payload),
         now=lambda: clock[0],
     )
 
-    result = use_case.execute("ticket", AUTHORIZATION_HEADER)
+    result = use_case.fetch("ticket", AUTHORIZATION_HEADER)
     batches = iter(result.result_batches)
     assert next(batches).column("id").to_pylist() == [1]
     clock[0] = 1000
@@ -377,15 +366,14 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
         nonce="nonce",
     )
     ticket_store = _ticket_store_with(payload)
-    use_case = FetchStreamUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
     )
 
-    batches = iter(use_case.execute("ticket", AUTHORIZATION_HEADER).result_batches)
+    batches = iter(use_case.fetch("ticket", AUTHORIZATION_HEADER).result_batches)
     assert next(batches).column("id").to_pylist() == [1]
     assert payload.ticket_id is not None
     ticket_store.revoked.add(payload.ticket_id)
@@ -394,10 +382,10 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
 
 
 def test_stream_expiry_guard_rejects_ticket_expiry_before_identity_expiry():
-    from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
+    from tests.support.reads import expiry_stream
 
     batch = pa.record_batch([pa.array([1])], names=["id"])
-    guarded = _guard_stream_expiry(
+    guarded = expiry_stream(
         [batch],
         ticket_expires_at=1000,
         identity_expires_at=2000,
@@ -410,10 +398,10 @@ def test_stream_expiry_guard_rejects_ticket_expiry_before_identity_expiry():
 
 
 def test_stream_deadline_guard_stops_before_emitting_a_late_batch():
-    from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
+    from tests.support.reads import expiry_stream
 
     batch = pa.record_batch([pa.array([1])], names=["id"])
-    guarded = _guard_stream_expiry(
+    guarded = expiry_stream(
         [batch],
         ticket_expires_at=1000,
         identity_expires_at=None,
@@ -426,7 +414,7 @@ def test_stream_deadline_guard_stops_before_emitting_a_late_batch():
 
 
 def test_stream_guard_closes_upstream_when_consumer_stops_early() -> None:
-    from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
+    from tests.support.reads import expiry_stream
 
     class ClosableBatches:
         def __init__(self) -> None:
@@ -440,7 +428,7 @@ def test_stream_guard_closes_upstream_when_consumer_stops_early() -> None:
             self.closed = True
 
     upstream = ClosableBatches()
-    guarded = _guard_stream_expiry(
+    guarded = expiry_stream(
         upstream,
         ticket_expires_at=9999,
         identity_expires_at=None,

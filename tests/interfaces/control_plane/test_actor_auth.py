@@ -8,22 +8,21 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.config_store.db import (
+from dal_obscura.identity import http_session
+from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.identity.http_session import create_oidc_actor_resolver
+from dal_obscura.identity.names import encode_federated_identity
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.policy.models import Principal
+from dal_obscura.storage.database.db import (
     session_factory,
 )
-from dal_obscura.common.config_store.orm import AssetRecord, DataPlaneTicketRecord
-from dal_obscura.common.identity import encode_federated_identity
-from dal_obscura.control_plane.interfaces import api as api_module
-from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
-from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.storage.database.orm import AssetRecord, DataPlaneTicketRecord
 from tests.support.actors import _actor_for_token, _bearer, _client
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 ICEBERG_CATALOG_ID = "iceberg.sql"
-OIDC_AUTH_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
-)
+OIDC_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"
 
 
 def _replace_live_policy(
@@ -247,10 +246,10 @@ def test_cookie_mutation_origin_and_host_matrix(
 def test_static_bootstrap_token_can_be_disabled_when_oidc_admin_is_available(
     http_client, db_engine
 ):
-    from dal_obscura.common.config_store.db import (
+    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.storage.database.db import (
         session_factory,
     )
-    from dal_obscura.control_plane.interfaces.api import create_app
 
     engine = db_engine
     client = http_client(
@@ -389,7 +388,7 @@ def test_oidc_actor_resolver_builds_actor_from_validated_token(monkeypatch):
             assert request.headers == {"authorization": "Bearer token-123"}
             return Principal(id="asset-owner", groups=["asset-owners"], attributes={})
 
-    monkeypatch.setattr(api_module, "OidcJwksIdentityProvider", FakeProvider)
+    monkeypatch.setattr(http_session, "OidcJwksIdentityProvider", FakeProvider)
 
     resolver = create_oidc_actor_resolver(
         issuer="http://keycloak:8080/realms/demo",
@@ -415,7 +414,7 @@ def test_oidc_actor_resolver_preserves_validated_issuer_scope(monkeypatch):
                 issuer="https://issuer.example/realms/demo",
             )
 
-    monkeypatch.setattr(api_module, "OidcJwksIdentityProvider", FakeProvider)
+    monkeypatch.setattr(http_session, "OidcJwksIdentityProvider", FakeProvider)
 
     resolver = create_oidc_actor_resolver(
         issuer="https://issuer.example/realms/demo",

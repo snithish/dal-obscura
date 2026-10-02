@@ -4,8 +4,8 @@ from hashlib import sha256
 
 import pytest
 
-from dal_obscura.common.ticket_delivery.models import TicketPayload
-from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.read.signing import HmacTicketCodecAdapter
+from dal_obscura.read.tickets import TicketPayload
 from tests.support.tickets import ticket_payload
 
 
@@ -113,9 +113,7 @@ def test_ticket_rejects_expiry_at_current_second(monkeypatch):
         expires_at=100,
         nonce="expired",
     )
-    monkeypatch.setattr(
-        "dal_obscura.data_plane.infrastructure.adapters.ticket_hmac.time.time", lambda: 100
-    )
+    monkeypatch.setattr("dal_obscura.read.signing.time.time", lambda: 100)
 
     with pytest.raises(PermissionError, match="expired"):
         codec.verify(codec.sign_payload(payload))

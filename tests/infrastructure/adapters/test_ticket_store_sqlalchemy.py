@@ -6,12 +6,12 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import select
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.read.tickets import TicketPayload
+from dal_obscura.storage.database.db import (
     session_factory,
 )
-from dal_obscura.common.config_store.orm import DataPlaneTicketRecord
-from dal_obscura.common.ticket_delivery.models import TicketPayload
-from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
+from dal_obscura.storage.database.orm import DataPlaneTicketRecord
+from dal_obscura.storage.tickets import (
     SqlAlchemyTicketStore,
 )
 from tests.support.tickets import ticket_payload

@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.read.request import PlanRequest
 
 
 def test_plan_request_copies_caller_columns() -> None:
@@ -9,7 +9,7 @@ def test_plan_request_copies_caller_columns() -> None:
 
     columns.append("email")
 
-    assert request.columns == ["id"]
+    assert request.columns == ("id",)
 
 
 @pytest.mark.parametrize(

@@ -4,15 +4,15 @@ export type ColumnOption = {
   value: string;
   label: string;
   type: string;
-  path: SchemaPath;
+  path?: SchemaPath;
   valid: boolean;
 };
 
 export type MaskGroup = { mask?: Mask; columns: string[] };
 
-/** Schema is authoritative: legacy schema summaries are deliberately not used. */
+/** Missing or removed fields remain visible without fabricating schema paths. */
 export function authoritativeColumnOptions(fields: SchemaNode[] | undefined, selected: string[] = []): ColumnOption[] {
-  if (!fields) return selected.map((value) => ({ value, label: value, type: "Unavailable", path: { version: 0, segments: [] }, valid: false }));
+  if (!fields) return selected.map((value) => ({ value, label: value, type: "Unavailable", valid: false }));
   const options: ColumnOption[] = [];
   const visit = (node: SchemaNode) => {
     options.push({ value: node.human_path, label: node.human_path, type: node.type, path: node.path, valid: true });
@@ -20,7 +20,7 @@ export function authoritativeColumnOptions(fields: SchemaNode[] | undefined, sel
   };
   fields.forEach(visit);
   const known = new Set(options.map((option) => option.value));
-  for (const value of selected) if (!known.has(value)) options.push({ value, label: value, type: "Removed from schema", path: { version: 0, segments: [] }, valid: false });
+  for (const value of selected) if (!known.has(value)) options.push({ value, label: value, type: "Removed from schema", valid: false });
   return options;
 }
 

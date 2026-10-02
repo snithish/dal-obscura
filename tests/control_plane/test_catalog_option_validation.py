@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.control_plane.application.catalog_service import (
+from dal_obscura.control.catalog_service import (
     validate_admitted_catalog_options,
     validate_catalog_options,
     validate_descriptor_options,
 )
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control.errors import ValidationFailure
 
 
 def test_catalog_options_reject_non_finite_numbers() -> None:
@@ -59,7 +59,7 @@ def test_admitted_descriptor_rejects_unknown_and_missing_form_fields() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",
         plugin_id="example.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="example",
         version="1.0.0",
@@ -80,7 +80,7 @@ def test_admitted_secret_reference_accepts_bounded_scope() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",
         plugin_id="example.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="example",
         version="1.0.0",
@@ -101,7 +101,7 @@ def test_admitted_descriptor_preserves_typed_boolean_integer_and_enum_values() -
     descriptor = PluginDescriptor(
         kind="catalog",
         plugin_id="typed.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="example",
         version="1.0.0",
@@ -139,7 +139,7 @@ def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",
         plugin_id="example.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="example",
         version="1.0.0",

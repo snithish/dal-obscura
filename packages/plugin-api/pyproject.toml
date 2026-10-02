@@ -1,16 +1,10 @@
 [project]
 name = "dal-obscura-plugin-api"
-version = "0.1.0"
+version = "0.2.0"
 description = "Versioned contracts for Dal Obscura catalog and table-format plugins"
 requires-python = ">=3.12,<3.13"
 dependencies = ["pyarrow>=15.0.0"]
 
 [build-system]
-requires = ["setuptools>=68.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

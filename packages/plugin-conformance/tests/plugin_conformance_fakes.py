@@ -14,7 +14,7 @@ def _descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         kind="table_format",
         plugin_id="fixture",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="fixture-package",
         version="1.0.0",
@@ -36,12 +36,12 @@ class _ConformingFormat:
 
     def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
         del handle, context, projection, row_filter, max_tasks
-        return [schema]
+        return [{"rows": [{"id": 1}]}]
 
     def execute(self, task, context):
         del context
-        batch = pa.RecordBatch.from_pylist([{"id": 1}], schema=task.arrow_schema)
-        return task.arrow_schema, [batch]
+        schema = pa.schema([("id", pa.int64())])
+        return schema, [pa.RecordBatch.from_pylist(task["rows"], schema=schema)]
 
 
 class _EndlessFormat(_ConformingFormat):
@@ -86,7 +86,7 @@ def _catalog_descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         kind="catalog",
         plugin_id="fixture.catalog",
-        api_version="1",
+        api_version="2",
         config_version=1,
         distribution="fixture-catalog-package",
         version="1.0.0",

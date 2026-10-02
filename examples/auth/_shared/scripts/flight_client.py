@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 import pyarrow.flight as flight
 
-from dal_obscura.common.flight_contract import encode_plan_command
+from dal_obscura.interfaces.flight_contract import encode_plan_command
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 DEFAULT_CATALOG = "example_catalog"

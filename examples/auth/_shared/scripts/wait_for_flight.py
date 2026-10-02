@@ -6,7 +6,7 @@ import time
 import flight_client
 import pyarrow.flight as flight
 
-from dal_obscura.common.flight_contract import encode_plan_command
+from dal_obscura.interfaces.flight_contract import encode_plan_command
 
 
 def main() -> None:

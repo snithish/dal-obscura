@@ -22,14 +22,17 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, LongType, NestedField, StringType, StructType
 
-from dal_obscura.common.config_store.db import (
+import tests.support.seed as _commands_seed
+from dal_obscura.control import asset_service, policy_service
+from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.runtime import ControlContext
+from dal_obscura.interfaces.flight_contract import encode_plan_command
+from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.common.flight_contract import encode_plan_command
-from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.provisioning import ProvisioningService
 
 pytestmark = pytest.mark.heavy
 
@@ -217,24 +220,28 @@ def control_plane_setup(
     migrate_config_store(engine)
 
     with session_factory(engine)() as session:
-        service = ProvisioningService(session)
-        service.upsert_runtime_settings(ttl=900, max_tickets=64, max_ticket_exchanges=1)
-        service.upsert_catalog(
+        service = ControlContext(session)
+        _db_workspace.upsert_runtime_settings(
+            service.session, ticket_ttl_seconds=900, max_tickets=64, max_ticket_exchanges=1
+        )
+        _commands_seed.create_catalog(
+            service,
             name="e2e_catalog",
             plugin_id="iceberg.sql",
             options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
         )
-        asset = service.upsert_asset(
+        asset = _commands_seed.create_asset(
+            service,
             catalog="e2e_catalog",
             target="default.users",
             backend="iceberg",
             table_identifier="default.users",
             options={},
         )
-        service.replace_asset_schema_fields(
-            asset_id=UUID(asset["id"]),
-            expected_revision=0,
-            fields=[
+        asset_service.replace_asset_schema_fields(
+            service.session,
+            UUID(asset["id"]),
+            [
                 {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64"},
                 {
                     "name": "email",
@@ -247,8 +254,8 @@ def control_plane_setup(
                     "field_id": "iceberg:3",
                     "path": ["metadata"],
                     "type": (
-                        "struct<preferences: large_list<element: struct<name: large_string, "
-                        "theme: large_string, notifications: large_string>>>"
+                        "struct<preferences: large_list<element: struct<name: large_string"
+                        ", theme: large_string, notifications: large_string>>>"
                     ),
                 },
                 {
@@ -256,8 +263,8 @@ def control_plane_setup(
                     "field_id": "iceberg:4",
                     "path": ["metadata", "preferences"],
                     "type": (
-                        "large_list<element: struct<name: large_string, theme: large_string, "
-                        "notifications: large_string>>"
+                        "large_list<element: struct<name: large_string, theme: large_strin"
+                        "g, notifications: large_string>>"
                     ),
                 },
                 {
@@ -265,8 +272,8 @@ def control_plane_setup(
                     "field_id": "iceberg:5",
                     "path": ["metadata", "preferences", "$element"],
                     "type": (
-                        "struct<name: large_string, theme: large_string, "
-                        "notifications: large_string>"
+                        "struct<name: large_string, theme: large_string, notifications: la"
+                        "rge_string>"
                     ),
                 },
                 {
@@ -288,10 +295,12 @@ def control_plane_setup(
                     "type": "large_string",
                 },
             ],
+            expected_revision=0,
         )
-        service.replace_policy_rules(
-            asset_id=UUID(asset["id"]),
-            rules=[
+        policy_service.replace_policy_rules(
+            service.session,
+            UUID(asset["id"]),
+            [
                 {
                     "ordinal": 10,
                     "principals": ["e2e_user"],
@@ -303,18 +312,22 @@ def control_plane_setup(
                 }
             ],
             actor=ControlPlaneActor.for_platform_admin("test:setup"),
+            expected_revision=None,
+            revoke_existing_tokens=False,
         )
-        service.replace_asset_owners(
-            asset_id=UUID(asset["id"]), owners=["user:e2e-owner@example.com"], expected_revision=1
+        asset_service.replace_asset_owners(
+            service.session,
+            UUID(asset["id"]),
+            ["user:e2e-owner@example.com"],
+            expected_revision=1,
+            actor=None,
         )
-        service.replace_auth_providers(
+        _db_workspace.replace_auth_providers(
+            service.session,
             providers=[
                 {
                     "ordinal": 1,
-                    "module": (
-                        "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
-                        "OidcJwksIdentityProvider"
-                    ),
+                    "module": "dal_obscura.identity.oidc.OidcJwksIdentityProvider",
                     "args": {
                         "issuer": "https://issuer.example",
                         "algorithms": ["RS256"],
@@ -323,7 +336,7 @@ def control_plane_setup(
                     },
                     "enabled": True,
                 }
-            ]
+            ],
         )
         session.commit()
 
@@ -342,7 +355,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
     cmd = [
         sys.executable,
         "-c",
-        "import sys; from dal_obscura.data_plane.interfaces.cli.main import main; sys.exit(main())",
+        "import sys; from dal_obscura.interfaces.cli.read import main; sys.exit(main())",
     ]
 
     if os.environ.get("DEBUG_SERVER") == "1":
@@ -354,7 +367,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
             "0.0.0.0:5678",
             "--wait-for-client",
             "-m",
-            "dal_obscura.data_plane.interfaces.cli.main",
+            "dal_obscura.interfaces.cli.read",
         ]
 
     process = subprocess.Popen(

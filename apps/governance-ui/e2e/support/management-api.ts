@@ -21,9 +21,9 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
   ] : [];
   const configuredPlugins = {
     plugins: [
-      { kind: "catalog", plugin_id: "synthetic.catalog.iceberg", api_version: "1", config_version: 1, distribution: "synthetic-catalog", version: "1.0.0", display_name: "Synthetic Iceberg Catalog", capabilities: ["discover"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [{ name: "uri", type: "uri", required: true }, { name: "password", type: "secret_reference", required: true, secret: true }] }, status: "admitted" },
-      { kind: "table_format", plugin_id: "synthetic.table.iceberg", api_version: "1", config_version: 1, distribution: "synthetic-iceberg", version: "1.0.0", display_name: "Synthetic Iceberg", capabilities: ["scan"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [] }, status: "admitted" },
-      ...(options.multipleFormats ? [{ kind: "table_format", plugin_id: "synthetic.table.delta", api_version: "1", config_version: 1, distribution: "synthetic-delta", version: "1.0.0", display_name: "Synthetic Delta", capabilities: ["scan"], output_formats: ["delta"], handle_versions: [1], config_schema: { fields: [] }, status: "admitted" }] : []),
+      { kind: "catalog", plugin_id: "synthetic.catalog.iceberg", api_version: "2", config_version: 1, distribution: "synthetic-catalog", version: "1.0.0", display_name: "Synthetic Iceberg Catalog", capabilities: ["discover"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [{ name: "uri", type: "uri", required: true }, { name: "password", type: "secret_reference", required: true, secret: true }] }, status: "admitted" },
+      { kind: "table_format", plugin_id: "synthetic.table.iceberg", api_version: "2", config_version: 1, distribution: "synthetic-iceberg", version: "1.0.0", display_name: "Synthetic Iceberg", capabilities: ["scan"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [] }, status: "admitted" },
+      ...(options.multipleFormats ? [{ kind: "table_format", plugin_id: "synthetic.table.delta", api_version: "2", config_version: 1, distribution: "synthetic-delta", version: "1.0.0", display_name: "Synthetic Delta", capabilities: ["scan"], output_formats: ["delta"], handle_versions: [1], config_schema: { fields: [] }, status: "admitted" }] : []),
     ],
     states: pluginStates,
     pairs: [

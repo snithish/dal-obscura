@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.common.config_store.orm import (
+from dal_obscura.storage.database.orm import (
     AssetRecord,
     AuthProviderRecord,
     CatalogRecord,

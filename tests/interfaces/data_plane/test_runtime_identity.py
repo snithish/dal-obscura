@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.live_config import LiveRuntime
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
-from dal_obscura.data_plane.interfaces.cli.main import (
+from dal_obscura.interfaces.cli.read import (
     _identity_from_runtime,
     _load_identity_provider,
 )
+from dal_obscura.sources.secrets import EnvSecretProvider
+from dal_obscura.storage.snapshots import LiveRuntime
 
 
 def test_runtime_rejects_dynamic_identity_provider_module():

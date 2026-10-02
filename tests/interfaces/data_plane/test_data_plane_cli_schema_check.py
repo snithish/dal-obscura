@@ -4,9 +4,9 @@ import importlib
 
 from sqlalchemy import inspect
 
-from dal_obscura.common.config_store.db import create_engine_from_url
+from dal_obscura.storage.database.db import create_engine_from_url
 
-cli = importlib.import_module("dal_obscura.data_plane.interfaces.cli.main")
+cli = importlib.import_module("dal_obscura.interfaces.cli.read")
 
 
 def test_data_plane_startup_checks_schema_without_migrating(tmp_path, monkeypatch) -> None:

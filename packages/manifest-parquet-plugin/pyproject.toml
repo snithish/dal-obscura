@@ -1,29 +1,19 @@
 [project]
 name = "dal-obscura-manifest-parquet"
-version = "0.1.0"
+version = "0.2.0"
 description = "Manifest-governed Parquet catalog and table-format plugin"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "dal-obscura-plugin-api==0.1.0",
+  "dal-obscura-plugin-api==0.2.0",
   "pyarrow>=15.0.0",
 ]
 
-[project.entry-points."dal_obscura.catalogs.v1"]
+[project.entry-points."dal_obscura.catalogs.v2"]
 manifest = "dal_obscura_manifest_parquet.catalog:manifest_factory"
 
-[project.entry-points."dal_obscura.table_formats.v1"]
+[project.entry-points."dal_obscura.table_formats.v2"]
 "parquet.dataset" = "dal_obscura_manifest_parquet.format:parquet_factory"
 
 [build-system]
-requires = ["setuptools>=68.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-dal_obscura_manifest_parquet = ["dal_obscura-plugin.json"]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

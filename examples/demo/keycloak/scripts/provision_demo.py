@@ -11,8 +11,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from dal_obscura.common.identity import encode_federated_group, encode_federated_identity
-from dal_obscura.common.query_planning.field_paths import FieldPath
+from dal_obscura.identity.names import encode_federated_group, encode_federated_identity
+from dal_obscura.policy.paths import FieldPath
 
 FIXTURE_FILE = Path(__file__).resolve().parents[1] / "fixtures/demo_fixture.json"
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")
@@ -20,9 +20,7 @@ DEMO_OIDC_ISSUER = os.environ.get(
     "DEMO_OIDC_ISSUER", "http://localhost:20080/realms/dal-obscura-demo"
 )
 DEMO_RUNTIME_SETTINGS = {"ticket_ttl_seconds": 600, "max_tickets": 16, "max_ticket_exchanges": 1}
-OIDC_AUTH_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
-)
+OIDC_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"
 
 
 def _demo_auth_provider() -> dict[str, Any]:

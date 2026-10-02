@@ -3,22 +3,20 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.common.access_control.filters import deserialize_row_filter, row_filter_to_sql
-from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.policy.filters import deserialize_row_filter, row_filter_to_sql
+from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
+from dal_obscura.read.request import PlanRequest
 from tests.application.access_flow.helpers import (
     AUTHORIZATION_HEADER,
     _build_end_to_end_access_flow,
     _build_use_case_dependencies,
 )
+from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
 from tests.support.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
-    FakeMasking,
     FakeTicketCodec,
     FakeTicketStore,
     PretendPushdownTableFormat,
@@ -43,12 +41,11 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
     )
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload()))
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
         ),
-        masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -56,7 +53,7 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
         max_ticket_exchanges=1,
     )
 
-    result = use_case.execute(
+    result = use_case.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
     )
 
@@ -67,7 +64,7 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
 
 def test_plan_access_rejects_requested_row_filter_for_masked_column():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -91,7 +88,6 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
                 ),
             ),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload())),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -102,7 +98,7 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
     with pytest.raises(
         PermissionError, match="Requested row filter may not reference masked columns: region"
     ):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(
                 catalog="catalog1",
                 target="users",
@@ -122,7 +118,7 @@ def test_plan_access_rejects_requested_row_filter_below_masked_parent():
             )
         ]
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -146,7 +142,6 @@ def test_plan_access_rejects_requested_row_filter_below_masked_parent():
                 ),
             ),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -155,7 +150,7 @@ def test_plan_access_rejects_requested_row_filter_below_masked_parent():
     )
 
     with pytest.raises(PermissionError, match=r"masked columns: profile\.region"):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(
                 catalog="catalog1",
                 target="users",
@@ -168,7 +163,7 @@ def test_plan_access_rejects_requested_row_filter_below_masked_parent():
 
 def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -189,7 +184,6 @@ def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
                 ),
             ),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload())),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -201,7 +195,7 @@ def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
         PermissionError,
         match="Requested row filter may only reference visible unmasked columns: region",
     ):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(
                 catalog="catalog1",
                 target="users",
@@ -222,7 +216,7 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
         schema=schema,
         planned_columns=planned_columns,
     )
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -232,7 +226,6 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
             ),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload())),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -240,7 +233,7 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
         max_ticket_exchanges=1,
     )
 
-    result = use_case.execute(
+    result = use_case.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -271,7 +264,7 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
         planned_columns=planned_columns,
     )
     ticket_codec = FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload()))
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -284,7 +277,6 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
             ),
             catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -292,7 +284,7 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
         max_ticket_exchanges=1,
     )
 
-    use_case.execute(
+    use_case.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -336,7 +328,7 @@ def test_plan_access_reports_non_sensitive_filter_and_projection_metrics():
     )
     plan_access, _fetch_stream = _build_end_to_end_access_flow(table_format, decision)
 
-    result = plan_access.execute(
+    result = plan_access.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -355,7 +347,7 @@ def test_plan_access_reports_non_sensitive_filter_and_projection_metrics():
 
 def test_plan_access_revalidates_requested_row_filter_against_base_schema():
     schema = pa.schema([pa.field("id", pa.int64())])
-    use_case = PlanAccessUseCase(
+    use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         access_context=StaticAccessContext(
             authorizer=FakeAuthorizer(
@@ -376,7 +368,6 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
                 ),
             ),
         ),
-        masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(ticket_payload(columns=["id"], scan=scan_payload())),
         ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
@@ -385,7 +376,7 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
     )
 
     with pytest.raises(ValueError, match="Unknown column in row filter: missing"):
-        use_case.execute(
+        use_case.plan(
             PlanRequest(
                 catalog="catalog1",
                 target="users",
@@ -412,9 +403,9 @@ def test_backend_cannot_remove_core_row_filter(monkeypatch):
         ),
     )
     planner, fetch = _build_end_to_end_access_flow(table, decision)
-    plan = planner.execute(
+    plan = planner.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["id", "region"]),
         AUTHORIZATION_HEADER,
     )
-    result = fetch.execute(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
+    result = fetch.fetch(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
     assert pa.Table.from_batches(result.result_batches).column("id").to_pylist() == [1]

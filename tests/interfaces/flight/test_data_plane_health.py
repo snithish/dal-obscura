@@ -6,11 +6,11 @@ from typing import cast
 
 import pytest
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.data_plane.infrastructure.adapters.runtime_config import DataPlaneRuntimeConfig
-from dal_obscura.data_plane.interfaces.cli.main import _start_health_server
-from dal_obscura.data_plane.interfaces.flight.server import _health_payload
-from dal_obscura.data_plane.interfaces.health import create_health_app, live_runtime_readiness
+from dal_obscura.interfaces.cli.read import _start_health_server
+from dal_obscura.interfaces.cli.settings import DataPlaneRuntimeConfig
+from dal_obscura.interfaces.flight.server import _health_payload
+from dal_obscura.interfaces.read_health import create_health_app, live_runtime_readiness
+from dal_obscura.storage.database.db import create_engine_from_url, session_factory
 
 
 def test_data_plane_healthz_reports_process_alive(

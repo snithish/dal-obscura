@@ -1,10 +1,9 @@
 import pyarrow as pa
 import pytest
 
-from dal_obscura.common.access_control.filters import parse_row_filter
-from dal_obscura.common.access_control.models import MaskRule
-from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
-    DefaultMaskingAdapter,
+from dal_obscura.policy.filters import parse_row_filter
+from dal_obscura.policy.models import MaskRule
+from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
 from tests.support.benchmark_data import (
@@ -18,7 +17,7 @@ pytestmark = pytest.mark.heavy
 
 @pytest.mark.benchmark(group="row-filter-mask")
 def test_benchmark_row_filter_only(benchmark):
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     batch_count = 8
     rows_per_batch = 4_096
     batches = scalar_masking_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
@@ -50,7 +49,7 @@ def test_benchmark_row_filter_only(benchmark):
 
 @pytest.mark.benchmark(group="row-filter-mask")
 def test_benchmark_mask_only(benchmark):
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     batch_count = 8
     rows_per_batch = 4_096
     batches = scalar_masking_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
@@ -84,7 +83,7 @@ def test_benchmark_mask_only(benchmark):
 
 @pytest.mark.benchmark(group="row-filter-mask")
 def test_benchmark_row_filter_and_top_level_masks(benchmark):
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     batches = scalar_masking_batches(batch_count=8, rows_per_batch=4_096)
     expected_rows = 8 * 2_048
     row_filter = parse_row_filter("region = 'us'", batches[0].schema)
@@ -118,7 +117,7 @@ def test_benchmark_row_filter_and_top_level_masks(benchmark):
 
 @pytest.mark.benchmark(group="row-filter-mask")
 def test_benchmark_row_filter_and_nested_masks(benchmark):
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    adapter = DuckDBRowTransformAdapter()
     batch_count = 8
     rows_per_batch = 2_048
     batches = nested_masking_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)

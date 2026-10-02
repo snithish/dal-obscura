@@ -120,9 +120,11 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
   const lifecycleBusyRef = useRef<Set<string>>(new Set());
   useEffect(() => () => {
     discoveryEpoch.current += 1;
+    diagnosticEpoch.current += 1;
+    void queryClient.cancelQueries({ queryKey: ["management", sessionScope, "connections", "discover"] });
     for (const controller of mutationControllers.current) controller.abort();
     mutationControllers.current.clear();
-  }, [sessionScope]);
+  }, [queryClient, sessionScope]);
   useEffect(() => {
     catalogStateEpoch.current += 1;
   }, [catalogs, pluginPairs]);

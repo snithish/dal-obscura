@@ -1,11 +1,37 @@
 from __future__ import annotations
 
+import pytest
+
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
     _keys_recursive,
     _provision_asset,
 )
+
+
+@pytest.mark.parametrize("nullable", ["false", 0, None])
+def test_schema_admission_requires_boolean_nullability_without_coercion(client_factory, nullable):
+    client = client_factory()
+    asset = _provision_asset(client)
+    response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={
+            "expected_revision": 0,
+            "fields": [
+                {
+                    "name": "id",
+                    "field_id": "1",
+                    "path": ["id"],
+                    "type": "int64",
+                    "nullable": nullable,
+                }
+            ],
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 422
+    assert client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["revision"] == 0
 
 
 def test_asset_access_reports_effective_capabilities_and_reasons(client_factory):

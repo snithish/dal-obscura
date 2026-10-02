@@ -2,7 +2,7 @@
 
 import pytest
 
-from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.read.tickets import TicketPayload
 from tests.support.tickets import ticket_payload
 
 

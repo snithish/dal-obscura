@@ -6,13 +6,13 @@ from decimal import Decimal
 import pyarrow as pa
 import pytest
 
-from dal_obscura.control_plane.application.errors import ValidationFailure
-from dal_obscura.control_plane.application.evaluation_service import (
+from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.control.evaluation_service import (
     MAX_SYNTHETIC_BYTES,
-    _leaf_paths,
     _sample_row,
     _validate_synthetic_rows,
 )
+from dal_obscura.policy.schema_index import SchemaIndex
 
 
 def test_leaf_paths_keep_literal_dotted_names_distinct_from_nested_fields() -> None:
@@ -23,7 +23,7 @@ def test_leaf_paths_keep_literal_dotted_names_distinct_from_nested_fields() -> N
         ]
     )
 
-    assert _leaf_paths(schema) == ['["a.b"]', "a.b"]
+    assert SchemaIndex(schema).expand(["*"]) == ['["a.b"]', "a.b"]
 
 
 def test_sample_row_matches_nested_typed_arrow_schema() -> None:
@@ -63,7 +63,7 @@ def test_sample_row_supports_fixed_size_lists_and_top_level_collections() -> Non
     assert table.num_rows == 1
     assert row["fixed"] == [1, 1]
     assert row["large"] == ["synthetic"]
-    assert _leaf_paths(schema) == ["fixed.$element", "large.$element"]
+    assert SchemaIndex(schema).expand(["*"]) == ["fixed.$element", "large.$element"]
 
 
 def test_sample_row_rejects_unsupported_types_instead_of_inventing_values() -> None:

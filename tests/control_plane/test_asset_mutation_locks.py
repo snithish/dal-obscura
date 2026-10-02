@@ -5,8 +5,8 @@ from uuid import uuid4
 
 import pytest
 
-from dal_obscura.control_plane.application import asset_service
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control import asset_service
+from dal_obscura.control.errors import ValidationFailure
 
 
 def test_owner_replacement_locks_before_read_and_write() -> None:
@@ -70,3 +70,19 @@ def test_schema_identity_input_errors_are_safe_validation_failures() -> None:
 
     with pytest.raises(ValidationFailure, match="field id is unsafe"):
         asset_service.replace_asset_schema_fields(store, uuid4(), [{"name": "id"}])
+
+
+@pytest.fixture(autouse=True)
+def query_boundary(monkeypatch):
+    from tests.support.storage_queries import install_query_doubles
+
+    install_query_doubles(
+        monkeypatch,
+        [
+            "lock_asset_for_update",
+            "list_asset_owners",
+            "replace_asset_owners",
+            "replace_asset_grants",
+            "replace_asset_schema_fields",
+        ],
+    )

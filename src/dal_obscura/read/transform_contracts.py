@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
+from typing import Protocol
+
+import pyarrow as pa
+
+from dal_obscura.policy.filters import RowFilter
+from dal_obscura.policy.models import MaskRule
+
+
+class StreamResourceError(RuntimeError):
+    """A governed stream exceeded an operational resource budget."""
+
+
+class RowTransformPort(Protocol):
+    """Applies row-level filtering and masking to streamed backend batches."""
+
+    def apply_filters_and_masks_stream(
+        self,
+        batches: Iterable[pa.RecordBatch],
+        columns: Iterable[str],
+        row_filter: RowFilter | None,
+        masks: Mapping[str, MaskRule],
+    ) -> Iterable[pa.RecordBatch]: ...

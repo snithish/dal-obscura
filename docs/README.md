@@ -13,6 +13,7 @@ The data plane exposes Arrow Flight reads and enforces row filters and column ma
 ## Govern and operate
 
 - [Policy authoring](policy-authoring.md): rules, filters, masks, policy tests, and revocation.
+- [Core 0.2 cutover](core-cutover.md): coordinated upgrade, plugin API 2 and ticket invalidation.
 - [Operators](operators.md): deployment, startup settings, health, and risks.
 - [Operator runbook](operators-runbook.md): readiness, restart, reset, and triage.
 - [Security](security.md): trust boundaries, authentication, secrets, and tickets.

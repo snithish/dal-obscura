@@ -725,9 +725,7 @@ export interface components {
             /** Revision */
             revision: number;
             /** Schema Fields */
-            schema_fields: {
-                [key: string]: unknown;
-            }[];
+            schema_fields: components["schemas"]["SchemaFieldResponse"][];
             /** Table Identifier */
             table_identifier: string;
         };
@@ -925,9 +923,7 @@ export interface components {
             /** Asset Id */
             asset_id: string;
             /** Fields */
-            fields: {
-                [key: string]: unknown;
-            }[];
+            fields: components["schemas"]["SchemaFieldResponse"][];
         };
         /**
          * AssetSchemaResponse
@@ -939,9 +935,7 @@ export interface components {
             /** Catalog */
             catalog: string;
             /** Fields */
-            fields: {
-                [key: string]: unknown;
-            }[];
+            fields: components["schemas"]["SchemaNodeResponse"][];
             /** Schema Fingerprint */
             schema_fingerprint: string;
             /** Schema Version */
@@ -1180,6 +1174,40 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** EvaluationMaskResponse */
+        EvaluationMaskResponse: {
+            /** Column */
+            column: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "null" | "redact" | "hash" | "email" | "keep_last" | "default";
+            /** Value */
+            value?: string | number | boolean | null;
+        };
+        /** FieldPathResponse */
+        FieldPathResponse: {
+            /** Segments */
+            segments: components["schemas"]["FieldPathSegmentResponse"][];
+            /**
+             * Version
+             * @constant
+             */
+            version: 1;
+        };
+        /** FieldPathSegmentResponse */
+        FieldPathSegmentResponse: {
+            /** Field Id */
+            field_id?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "field" | "list_element" | "map_key" | "map_value";
+            /** Name */
+            name?: string | null;
+        };
         /** IdentityAttributeResponse */
         IdentityAttributeResponse: {
             /** Allowed Values */
@@ -1362,9 +1390,7 @@ export interface components {
             /** Input Rows */
             input_rows: number;
             /** Masks */
-            masks: {
-                [key: string]: unknown;
-            }[];
+            masks: components["schemas"]["EvaluationMaskResponse"][];
             /** Output Rows */
             output_rows: number;
             /** Policy Revision */
@@ -1562,6 +1588,46 @@ export interface components {
             revision: number;
             /** Ticket Ttl Seconds */
             ticket_ttl_seconds: number;
+        };
+        /**
+         * SchemaFieldResponse
+         * @description Admitted flat field metadata used by the policy draft.
+         */
+        SchemaFieldResponse: {
+            /** Field Id */
+            field_id?: string | null;
+            /** Name */
+            name: string;
+            /** Nullable */
+            nullable: boolean;
+            /** Path */
+            path?: string[] | null;
+            /** Type */
+            type: string;
+        };
+        /**
+         * SchemaNodeResponse
+         * @description Typed nested schema tree, shared with generated browser clients.
+         */
+        SchemaNodeResponse: {
+            /** Children */
+            children?: components["schemas"]["SchemaNodeResponse"][] | null;
+            /** Field Id */
+            field_id: number;
+            /** Human Path */
+            human_path: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "scalar" | "struct" | "list" | "map";
+            /** Name */
+            name: string;
+            /** Nullable */
+            nullable: boolean;
+            path: components["schemas"]["FieldPathResponse"];
+            /** Type */
+            type: string;
         };
         /**
          * SessionOptionsResponse

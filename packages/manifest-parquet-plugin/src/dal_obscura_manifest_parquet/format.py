@@ -6,7 +6,7 @@ import base64
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -28,10 +28,10 @@ _MAX_BATCH_ROWS = 65_536
 FORMAT_DESCRIPTOR = PluginDescriptor(
     kind="table_format",
     plugin_id="parquet.dataset",
-    api_version="1",
+    api_version="2",
     config_version=1,
     distribution="dal-obscura-manifest-parquet",
-    version="0.1.0",
+    version="0.2.0",
     capabilities=frozenset({"nested_schema", "splittable_scan"}),
     handle_versions=frozenset({1}),
     display_name="Manifest Parquet dataset format",
@@ -39,7 +39,7 @@ FORMAT_DESCRIPTOR = PluginDescriptor(
 
 
 @dataclass(frozen=True, slots=True)
-class ParquetRowGroupTask:
+class _ParquetRowGroup:
     """One immutable manifest member and Parquet row group."""
 
     relative_path: str
@@ -48,10 +48,10 @@ class ParquetRowGroupTask:
 
 
 @dataclass(frozen=True, slots=True)
-class ParquetScanTask:
+class _ParquetScan:
     """Bounded group of row-group scans assigned to one independently readable ticket."""
 
-    row_groups: tuple[ParquetRowGroupTask, ...]
+    row_groups: tuple[_ParquetRowGroup, ...]
     columns: tuple[str, ...]
 
 
@@ -109,7 +109,7 @@ class ParquetDatasetFormat:
         projection: Sequence[str],
         row_filter: str | None,
         max_tasks: int,
-    ) -> Sequence[ParquetScanTask]:
+    ) -> Sequence[object]:
         _check_context(context)
         if handle != self._handle or schema.arrow_schema != self._schema:
             raise ValueError("Parquet plan input does not match the admitted handle/schema")
@@ -118,7 +118,7 @@ class ParquetDatasetFormat:
         if max_tasks <= 0:
             raise ValueError("max_tasks must be positive")
         columns = _projected_columns(self._schema, projection)
-        tasks: list[ParquetRowGroupTask] = []
+        tasks: list[_ParquetRowGroup] = []
         for relative_path in self._files:
             _check_context(context)
             path = _safe_member(self._root, relative_path)
@@ -130,13 +130,22 @@ class ParquetDatasetFormat:
                 _validate_file_schema(parquet_file.schema_arrow, self._schema)
                 for row_group in range(parquet_file.num_row_groups):
                     _check_context(context)
-                    tasks.append(ParquetRowGroupTask(relative_path, row_group, columns))
+                    tasks.append(_ParquetRowGroup(relative_path, row_group, columns))
             finally:
                 parquet_file.close()
-        groups: list[list[ParquetRowGroupTask]] = [[] for _ in range(min(max_tasks, len(tasks)))]
+        groups: list[list[_ParquetRowGroup]] = [[] for _ in range(min(max_tasks, len(tasks)))]
         for index, task in enumerate(tasks):
             groups[index % len(groups)].append(task)
-        return [ParquetScanTask(tuple(group), columns) for group in groups]
+        return [
+            {
+                "columns": list(columns),
+                "row_groups": [
+                    {"relative_path": item.relative_path, "row_group": item.row_group}
+                    for item in group
+                ],
+            }
+            for group in groups
+        ]
 
     def execute(
         self,
@@ -144,8 +153,7 @@ class ParquetDatasetFormat:
         context: ExecutionContext,
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         _check_context(context)
-        if not isinstance(task, ParquetScanTask) or not task.row_groups:
-            raise ValueError("Parquet task has an invalid type or no row groups")
+        task = _decode_task(task)
         expected_schema = _select_schema(self._schema, task.columns)
         for group in task.row_groups:
             if (
@@ -267,3 +275,29 @@ def _schema_fingerprint(schema: pa.Schema) -> str:
     import hashlib
 
     return hashlib.sha256(schema.serialize().to_pybytes()).hexdigest()
+
+
+def _decode_task(task: object) -> _ParquetScan:
+    if not isinstance(task, dict) or set(task) != {"columns", "row_groups"}:
+        raise ValueError("Parquet task must contain columns and row groups")
+    payload = cast(dict[str, Any], task)
+    columns, groups = payload["columns"], payload["row_groups"]
+    if (
+        not isinstance(columns, list)
+        or not all(isinstance(name, str) for name in columns)
+        or not isinstance(groups, list)
+        or not groups
+    ):
+        raise ValueError("Invalid Parquet task")
+    decoded = []
+    for raw_group in groups:
+        group = cast(dict[str, Any], raw_group)
+        if (
+            not isinstance(group, dict)
+            or set(group) != {"relative_path", "row_group"}
+            or not isinstance(group["relative_path"], str)
+            or type(group["row_group"]) is not int
+        ):
+            raise ValueError("Invalid Parquet row group")
+        decoded.append(_ParquetRowGroup(group["relative_path"], group["row_group"], tuple(columns)))
+    return _ParquetScan(tuple(decoded), tuple(columns))

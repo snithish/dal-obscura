@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
+from dal_obscura.sources.catalogs import (
     CatalogConfig,
     CatalogType,
     ServiceConfig,

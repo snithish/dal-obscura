@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
+from dal_obscura.interfaces.cli.read import _tls_material
+from dal_obscura.interfaces.cli.settings import (
     load_data_plane_runtime_config,
 )
-from dal_obscura.data_plane.interfaces.cli.main import _tls_material
 
 
 def test_runtime_config_defaults(monkeypatch: pytest.MonkeyPatch):

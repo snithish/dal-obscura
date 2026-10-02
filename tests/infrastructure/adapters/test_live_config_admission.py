@@ -9,35 +9,35 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.config_store.db import (
+from dal_obscura.policy.models import Principal
+from dal_obscura.sources.paths import PathRuleEnforcer
+from dal_obscura.sources.published import (
+    PublishedPolicy,
+    _catalog_config_for_asset,
+    _schema_identities,
+    _validate_schema_admission,
+)
+from dal_obscura.storage.database.db import (
     session_factory,
 )
-from dal_obscura.common.config_store.orm import (
+from dal_obscura.storage.database.orm import (
     AssetRecord,
     CatalogRecord,
     PolicyRuleRecord,
     RuntimeSettingsRecord,
     WorkspaceRecord,
 )
-from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    LiveAsset,
-    LiveCatalog,
-    LiveConfigAuthorizer,
-    LiveConfigStore,
-    _catalog_config_for_asset,
-    _schema_identities,
-    _validate_schema_admission,
-)
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.storage.snapshots import LiveAsset, LiveCatalog, LiveConfigStore
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
 def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
     _seed_live_asset(db_session, policy_version=123)
-    authorizer = LiveConfigAuthorizer(
-        LiveConfigStore(session_factory(db_session.get_bind().engine))
+    authorizer = PublishedPolicy(
+        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset(
+            catalog="analytics", target="default.users"
+        )
     )
 
     decision = authorizer.authorize(
@@ -47,7 +47,7 @@ def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
         requested_columns=["id", "email"],
     )
 
-    assert decision.allowed_columns == ["id", "email"]
+    assert decision.allowed_columns == ("id", "email")
     assert decision.masks["email"].type == "email"
     assert decision.row_filter == "(region = 'us')"
     assert decision.policy_version == 123
@@ -138,9 +138,7 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
         compiled_config={
             **asset.compiled_config,
             "plugins": {
-                "catalog": (
-                    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-                ),
+                "catalog": ("dal_obscura.sources.catalogs.IcebergCatalog"),
                 "table_format": "iceberg",
             },
         },
@@ -341,8 +339,10 @@ def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
     record.masks_json["email"] = {}
     flag_modified(record, "masks_json")
     db_session.commit()
-    authorizer = LiveConfigAuthorizer(
-        LiveConfigStore(session_factory(db_session.get_bind().engine))
+    authorizer = PublishedPolicy(
+        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset(
+            catalog="analytics", target="default.users"
+        )
     )
 
     with pytest.raises(ValueError, match=r"mask\.type"):
@@ -712,10 +712,12 @@ def _seed_live_asset(
 
 def test_live_authorizer_changes_effective_version_after_policy_edit(db_session: Session):
     _seed_live_asset(db_session, policy_version=123)
-    authorizer = LiveConfigAuthorizer(
-        LiveConfigStore(session_factory(db_session.get_bind().engine))
+    authorizer = PublishedPolicy(
+        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset(
+            catalog="analytics", target="default.users"
+        )
     )
-    initial_version = authorizer.current_policy_version("default.users", "analytics")
+    initial_version = authorizer.asset.policy_version
     asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
     rule = db_session.scalar(select(PolicyRuleRecord))
     assert asset is not None and rule is not None
@@ -724,7 +726,11 @@ def test_live_authorizer_changes_effective_version_after_policy_edit(db_session:
     asset.policy_revision += 1
     db_session.commit()
 
-    current_version = authorizer.current_policy_version("default.users", "analytics")
+    current_version = (
+        LiveConfigStore(session_factory(db_session.get_bind().engine))
+        .get_asset(catalog="analytics", target="default.users")
+        .policy_version
+    )
     assert current_version != initial_version
 
 

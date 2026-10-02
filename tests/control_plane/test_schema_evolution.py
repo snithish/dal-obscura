@@ -3,11 +3,8 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    LiveAsset,
-    _schema_identities,
-    _validate_schema_admission,
-)
+from dal_obscura.sources.published import _schema_identities, _validate_schema_admission
+from dal_obscura.storage.snapshots import LiveAsset
 
 
 def _asset_for(schema: pa.Schema) -> LiveAsset:

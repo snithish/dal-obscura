@@ -3,7 +3,7 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
-from dal_obscura.common.schema_bounds import validate_arrow_schema_bounds
+from dal_obscura.policy.schema_bounds import validate_arrow_schema_bounds
 
 
 def test_schema_bounds_accept_exact_limits_and_nested_collections():
@@ -35,3 +35,11 @@ def test_schema_bounds_reject_depth_nodes_and_encoded_bytes():
 
     with pytest.raises(ValueError, match="encoding"):
         validate_arrow_schema_bounds(wide, max_encoding_bytes=1)
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["root", "struct"])
+def test_schema_bounds_reject_ambiguous_sibling_field_names(nested):
+    fields = [pa.field("duplicate", pa.int64()), pa.field("duplicate", pa.string())]
+    schema = pa.schema([pa.field("parent", pa.struct(fields))] if nested else fields)
+    with pytest.raises(ValueError, match="Duplicate Arrow field name"):
+        validate_arrow_schema_bounds(schema)

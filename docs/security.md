@@ -41,8 +41,12 @@ stream data.
 | Config database | Stores live policy revisions and trusted internal scan payloads. |
 | Secret values | Stay in runtime secret providers, not in config records. |
 
-Tickets persist trusted internal Python scan tasks server-side. That DB payload
-is an internal boundary and is not a public connector contract.
+Tickets persist bounded passive JSON scan envelopes server-side. Envelopes bind
+the admitted plugin artifact, immutable handle, schema and task data; decoding
+cannot import a module selected by the payload. Native Iceberg tasks explicitly
+encode file/delete metadata, partitions and residual expressions. No runtime
+ticket path uses pickle. The stored envelope is internal, outside the connector
+wire contract; payload integrity, identity binding and revocation still apply.
 
 ## Identity Providers
 

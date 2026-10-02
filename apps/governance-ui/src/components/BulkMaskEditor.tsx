@@ -58,7 +58,7 @@ export function BulkMaskEditor({ rule, options, supportedMasks, readOnly, onAppl
   }
   const exemptionTokens = [...new Set([...tokens, pendingToken.trim()].filter(Boolean))];
   if (exemptionTokens.some((token) => token === "*" || token.toLowerCase() === "everyone" || (token.startsWith("group:") && (!token.slice(6) || /\s/.test(token) || ["*", "everyone"].includes(token.slice(6).toLowerCase()))))) error = "Use a principal ID or group:name. Wildcard exemptions are not allowed.";
-  if (type && type !== "none" && type !== "null" && targets.some((target) => !excluded.includes(target) && options.find((option) => option.value === target)?.path.segments.at(-1)?.kind === "map_key")) error = "Map keys support No mask or Hide value only. Exclude map keys to mask their values.";
+  if (type && type !== "none" && type !== "null" && targets.some((target) => !excluded.includes(target) && options.find((option) => option.value === target)?.path?.segments.at(-1)?.kind === "map_key")) error = "Map keys support No mask or Hide value only. Exclude map keys to mask their values.";
   const selectedExcluded = excluded.filter((column) => targets.includes(column));
   const count = targets.length - selectedExcluded.length;
 

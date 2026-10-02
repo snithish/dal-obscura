@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,

@@ -2,19 +2,17 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.config_store.db import (
+from dal_obscura.policy.models import Principal
+from dal_obscura.sources.published import PublishedPolicy
+from dal_obscura.storage.database.db import (
     session_factory,
 )
-from dal_obscura.common.config_store.orm import (
+from dal_obscura.storage.database.orm import (
     AssetRecord,
     CatalogRecord,
     PolicyRuleRecord,
 )
-from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    LiveConfigAuthorizer,
-    LiveConfigStore,
-)
+from dal_obscura.storage.snapshots import LiveConfigStore
 from tests.support.live_config import seed_live_config
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
@@ -23,11 +21,11 @@ ICEBERG_CATALOG_ID = "iceberg.sql"
 def test_live_store_reads_current_policy_from_canonical_records(db_session: Session):
     (asset_id,) = seed_live_config(db_session)
     store = LiveConfigStore(session_factory(db_session.get_bind().engine))
-    authorizer = LiveConfigAuthorizer(store)
+    authorizer = PublishedPolicy(store.get_asset(catalog="analytics", target="default.users"))
     principal = Principal(id="user1", groups=[], attributes={})
 
     first = authorizer.authorize(principal, "default.users", "analytics", ["id"])
-    assert first.allowed_columns == ["id"]
+    assert first.allowed_columns == ("id",)
     assert first.asset_id == str(asset_id)
 
     rule = db_session.query(PolicyRuleRecord).filter_by(asset_id=asset_id).one()
@@ -37,8 +35,9 @@ def test_live_store_reads_current_policy_from_canonical_records(db_session: Sess
     asset.policy_revision += 1
     db_session.commit()
 
+    authorizer = PublishedPolicy(store.get_asset(catalog="analytics", target="default.users"))
     second = authorizer.authorize(principal, "default.users", "analytics", ["email"])
-    assert second.allowed_columns == ["email"]
+    assert second.allowed_columns == ("email",)
     assert second.policy_version != first.policy_version
 
 

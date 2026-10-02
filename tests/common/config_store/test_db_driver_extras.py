@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dal_obscura.common.config_store import db
+from dal_obscura.storage.database import db
 
 
 def test_missing_postgres_driver_error_points_to_postgres_extra(monkeypatch) -> None:

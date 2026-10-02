@@ -3,7 +3,7 @@
   "info": {
     "title": "dal-obscura control-plane API",
     "summary": "Configuration, catalog, asset, policy, and session API for dal-obscura.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/healthz": {
@@ -6917,8 +6917,7 @@
           },
           "schema_fields": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SchemaFieldResponse"
             },
             "type": "array",
             "title": "Schema Fields"
@@ -7344,8 +7343,7 @@
           },
           "fields": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SchemaFieldResponse"
             },
             "type": "array",
             "title": "Fields"
@@ -7409,8 +7407,7 @@
           },
           "fields": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SchemaNodeResponse"
             },
             "type": "array",
             "title": "Fields"
@@ -7911,6 +7908,115 @@
         "title": "DataPlaneObservationResponse",
         "description": "Explicit data-plane health observation state."
       },
+      "EvaluationMaskResponse": {
+        "properties": {
+          "column": {
+            "type": "string",
+            "title": "Column"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "null",
+              "redact",
+              "hash",
+              "email",
+              "keep_last",
+              "default"
+            ],
+            "title": "Type"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "column",
+          "type"
+        ],
+        "title": "EvaluationMaskResponse"
+      },
+      "FieldPathResponse": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 1,
+            "title": "Version"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPathSegmentResponse"
+            },
+            "type": "array",
+            "title": "Segments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "segments"
+        ],
+        "title": "FieldPathResponse"
+      },
+      "FieldPathSegmentResponse": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "field",
+              "list_element",
+              "map_key",
+              "map_value"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "field_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "FieldPathSegmentResponse"
+      },
       "IdentityAttributeResponse": {
         "properties": {
           "key": {
@@ -8338,8 +8444,7 @@
           },
           "masks": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/EvaluationMaskResponse"
             },
             "type": "array",
             "title": "Masks"
@@ -8830,6 +8935,118 @@
         ],
         "title": "RuntimeSettingsResponse",
         "description": "Authoritative runtime settings returned to management clients."
+      },
+      "SchemaFieldResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "nullable": {
+            "type": "boolean",
+            "title": "Nullable"
+          },
+          "field_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Id"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "nullable"
+        ],
+        "title": "SchemaFieldResponse",
+        "description": "Admitted flat field metadata used by the policy draft."
+      },
+      "SchemaNodeResponse": {
+        "properties": {
+          "field_id": {
+            "type": "integer",
+            "title": "Field Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "$ref": "#/components/schemas/FieldPathResponse"
+          },
+          "human_path": {
+            "type": "string",
+            "title": "Human Path"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "nullable": {
+            "type": "boolean",
+            "title": "Nullable"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "scalar",
+              "struct",
+              "list",
+              "map"
+            ],
+            "title": "Kind"
+          },
+          "children": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SchemaNodeResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_id",
+          "name",
+          "path",
+          "human_path",
+          "type",
+          "nullable",
+          "kind"
+        ],
+        "title": "SchemaNodeResponse",
+        "description": "Typed nested schema tree, shared with generated browser clients."
       },
       "SessionOptionsResponse": {
         "properties": {

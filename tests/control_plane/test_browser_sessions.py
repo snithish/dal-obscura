@@ -4,14 +4,14 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.identity.sessions import BrowserSessionStore
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.common.config_store.orm import BrowserSessionRecord, utcnow
-from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.infrastructure.session_store import BrowserSessionStore
+from dal_obscura.storage.database.orm import BrowserSessionRecord, utcnow
 
 
 def test_browser_session_is_opaque_and_revocable() -> None:
@@ -49,7 +49,7 @@ def test_browser_session_expiry_is_enforced(monkeypatch) -> None:
     factory = session_factory(engine)
     now = utcnow()
     monkeypatch.setattr(
-        "dal_obscura.control_plane.infrastructure.session_store.utcnow",
+        "dal_obscura.identity.sessions.utcnow",
         lambda: now,
     )
     with factory() as session:
@@ -57,7 +57,7 @@ def test_browser_session_expiry_is_enforced(monkeypatch) -> None:
         session.commit()
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.infrastructure.session_store.utcnow",
+        "dal_obscura.identity.sessions.utcnow",
         lambda: now + timedelta(seconds=2),
     )
     with factory() as session:

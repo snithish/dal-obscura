@@ -48,7 +48,7 @@ def test_runner_returns_machine_readable_passing_result():
 
     payload = result.to_dict()
     assert payload["status"] == "passed"
-    assert payload["core_version"] == "0.1.0"
+    assert payload["core_version"] == "0.2.0"
     assert payload["artifact_identity"] == "sha256:fixture"
     assert payload["capability_matrix"] == {"nested_schema": True, "splittable_scan": True}
     assert result.checks["bounded_plan"] == "passed"
@@ -229,11 +229,11 @@ def test_runner_checks_cancellation_before_requesting_more_output():
             def batches():
                 nonlocal requested
                 requested += 1
-                yield pa.RecordBatch.from_pylist([{"id": 1}], schema=task.arrow_schema)
+                yield pa.RecordBatch.from_pylist([{"id": 1}], schema=schema.arrow_schema)
                 requested += 1
-                yield pa.RecordBatch.from_pylist([{"id": 2}], schema=task.arrow_schema)
+                yield pa.RecordBatch.from_pylist([{"id": 2}], schema=schema.arrow_schema)
 
-            return task.arrow_schema, batches()
+            return schema.arrow_schema, batches()
 
     result = run_format_checks(
         cast(TableFormatPlugin, _CancelledOutput()),

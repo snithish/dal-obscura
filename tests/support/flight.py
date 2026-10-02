@@ -12,7 +12,10 @@ import pyarrow as pa
 import pyarrow.flight as flight
 from sqlalchemy.orm import Session
 
-from dal_obscura.common.access_control.models import (
+from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.interfaces.flight_contract import encode_plan_command_from_mapping
+from dal_obscura.policy.models import (
     AccessDecision,
     AccessRule,
     DatasetPolicy,
@@ -21,28 +24,19 @@ from dal_obscura.common.access_control.models import (
     Principal,
     PrincipalConditionValue,
 )
-from dal_obscura.common.access_control.policy_resolution import dataset_version, resolve_access
-from dal_obscura.common.catalog.ports import TableFormat
-from dal_obscura.common.config_store.db import session_factory
-from dal_obscura.common.flight_contract import encode_plan_command_from_mapping
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
-from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
-from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
-from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
-    DefaultMaskingAdapter,
+from dal_obscura.policy.policy_resolution import resolve_access
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.read.signing import HmacTicketCodecAdapter
+from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    LiveConfigAuthorizer,
-    LiveConfigCatalogRegistry,
-    LiveConfigStore,
-)
-from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
-from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.sources.contracts import TableFormat
+from dal_obscura.sources.planning import InputPartition, Plan, ScanTask
+from dal_obscura.sources.published import LiveConfigCatalogRegistry
+from dal_obscura.sources.task_codec import ScanTaskCodec
+from dal_obscura.storage.database.db import session_factory
+from dal_obscura.storage.snapshots import LiveConfigStore
+from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.use_cases import FakeTicketStore
 
 TEST_JWT_SECRET = "test-jwt-secret-32-characters-long"
@@ -148,16 +142,9 @@ class InMemoryPolicyAuthorizer:
             allowed_columns=allowed_columns,
             masks=masks,
             row_filter=row_filter,
-            policy_version=dataset_version(dataset),
+            policy_version=1,
             asset_id="00000000-0000-4000-8000-000000000001",
         )
-
-    def current_policy_version(
-        self,
-        target: str,
-        catalog: str | None,
-    ) -> int | None:
-        return dataset_version(self._dataset(target=target, catalog=catalog))
 
     def _dataset(self, *, target: str, catalog: str | None) -> DatasetPolicy:
         return DatasetPolicy(
@@ -223,6 +210,7 @@ def build_flight_service(
     ticket_ttl_seconds: int = 300,
     max_tickets: int = 1,
     max_ticket_exchanges: int = 1,
+    task_codec: ScanTaskCodec | None = None,
 ) -> DataAccessFlightService:
     live_config_requested = db_session is not None
     if live_config_requested and (table_format is not None or catalog_registry is not None):
@@ -233,7 +221,7 @@ def build_flight_service(
     if live_config_requested:
         config_store = LiveConfigStore(session_factory(cast(Session, db_session).get_bind().engine))
         resolved_registry = LiveConfigCatalogRegistry(config_store)
-        resolved_authorizer = LiveConfigAuthorizer(config_store)
+        resolved_authorizer = None
     else:
         resolved_registry = catalog_registry
         if table_format is not None:
@@ -245,51 +233,31 @@ def build_flight_service(
             rules_by_dataset=policy_rules_by_dataset,
         )
 
-    (
+    access_context = (
         resolved_registry
         if live_config_requested
         else StaticAccessContext(
-            authorizer=resolved_authorizer, catalog_registry=cast(Any, resolved_registry)
+            authorizer=cast(Any, resolved_authorizer), catalog_registry=cast(Any, resolved_registry)
         )
     )
 
     identity = TestJwtIdentity(jwt_secret)
-    masking = DefaultMaskingAdapter()
-    row_transform = DuckDBRowTransformAdapter(masking)
+
+    row_transform = DuckDBRowTransformAdapter()
     ticket_codec = HmacTicketCodecAdapter(ticket_secret)
     ticket_store = FakeTicketStore()
-    get_schema = GetSchemaUseCase(
+    reads = make_read_service(
         identity=identity,
-        access_context=StaticAccessContext(
-            authorizer=resolved_authorizer, catalog_registry=cast(Any, resolved_registry)
-        ),
-        masking=masking,
-    )
-    plan_access = PlanAccessUseCase(
-        identity=identity,
-        access_context=StaticAccessContext(
-            authorizer=resolved_authorizer, catalog_registry=cast(Any, resolved_registry)
-        ),
-        masking=masking,
+        access_context=access_context,
+        row_transform=row_transform,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
         ticket_ttl_seconds=ticket_ttl_seconds,
         max_tickets=max_tickets,
         max_ticket_exchanges=max_ticket_exchanges,
+        **({"task_codec": task_codec} if task_codec is not None else {}),
     )
-    fetch_stream = FetchStreamUseCase(
-        identity=identity,
-        masking=masking,
-        row_transform=row_transform,
-        ticket_codec=ticket_codec,
-        ticket_store=ticket_store,
-    )
-    return DataAccessFlightService(
-        location="grpc+tcp://127.0.0.1:0",
-        get_schema_use_case=get_schema,
-        plan_access_use_case=plan_access,
-        fetch_stream_use_case=fetch_stream,
-    )
+    return DataAccessFlightService(location="grpc+tcp://127.0.0.1:0", reads=reads)
 
 
 def start_server(server: DataAccessFlightService) -> threading.Thread:

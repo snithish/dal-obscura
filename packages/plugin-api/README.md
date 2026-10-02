@@ -12,7 +12,7 @@ uv build --wheel --out-dir dist
 
 All public adapters target this package and declare an explicit entry point
 in the admitted plugin lock. Service-side code under
-`src/dal_obscura/common/plugin_api` owns admission and lifecycle management; it
+`src/dal_obscura/sources/plugins` owns admission and lifecycle management; it
 does not define a second set of SDK contracts.
 
 `ExecutionContext` values are request scoped: deadlines must be timezone-aware,
@@ -48,10 +48,12 @@ same snapshot. Core rejects a missing or different snapshot before planning.
 
 ## Admission and contract compatibility
 
-The service supports one development contract at a time. Breaking changes
-update the SDK, fixtures, service, and database baseline together. Recreate
-disposable databases and issue new tickets when stored contracts change;
-historical ticket bytes, schema aliases, and migration chains are unsupported.
+Release 0.2 uses plugin API 2. Entry-point groups are
+`dal_obscura.catalogs.v2` and `dal_obscura.table_formats.v2`. Build plugins against
+`dal-obscura-plugin-api==0.2.0`, run the conformance kit, and regenerate the exact
+artifact lock. API 1 plugins and executable task encodings are not supported.
+Configuration migration preserves catalogs, policies, ownership and audit while
+invalidating old tickets; see the [cutover runbook](../../docs/core-cutover.md).
 
 The public SDK is the sole plugin contract. `PLUGIN_API_VERSION` defines the
 current API version. Admission checks the current API and
@@ -67,6 +69,9 @@ external catalog. The native Iceberg engine remains an implementation detail.
 
 SDK execution may return an iterable of Arrow batches so streaming never needs
 to materialize the full result. Core validates schemas, bounded tasks, deadlines,
-and each yielded batch. Only trusted internal tasks are serialized; client input
-is never deserialized with pickle. Path allowlists, authentication, and key
+and each yielded batch. Tasks must round-trip through bounded passive JSON: null, booleans, finite numbers,
+strings, lists and string-keyed mappings. Live resources, callbacks, arbitrary
+classes and executable serialization are rejected. Immutable mappings are accepted
+and encoded as JSON objects. Conformance executes JSON-round-tripped tasks. No
+production scan task uses pickle. Path allowlists, authentication, and key
 rotation remain operational security features, not version-compatibility shims.

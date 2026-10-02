@@ -13,21 +13,19 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import BooleanType, DoubleType, IntegerType, LongType, NestedField, StringType
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.control_plane.interfaces.api import create_app
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 ADMIN_TOKEN = "local-example-admin"
 CATALOG_NAME = "example_catalog"
 TENANT_SLUG = "default"
 TABLE_TARGET = "default.users"
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_MODULE = "dal_obscura.sources.catalogs.IcebergCatalog"
 
 TYPE_BUILDERS: dict[str, tuple[type, pa.DataType]] = {
     "string": (StringType, pa.string()),
@@ -343,7 +341,7 @@ def _auth_providers(auth_flow: str) -> list[dict[str, Any]]:
         raise ValueError("Only the keycloak-oidc example flow is supported")
     return [
         _provider(
-            "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider",
+            "dal_obscura.identity.oidc.OidcJwksIdentityProvider",
             {
                 "issuer": "http://keycloak:8080/realms/dal-obscura",
                 "audience": "dal-obscura",

@@ -8,7 +8,7 @@ from typing import cast
 import pytest
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.common.plugin_api.registry import PluginAdmissionError
+from dal_obscura.sources.plugins.registry import PluginAdmissionError
 from scripts.build_plugin_lock import build_document, parse_selection, write_lock
 
 
@@ -27,11 +27,11 @@ def test_build_document_uses_static_descriptor_and_sorts_rows(monkeypatch) -> No
     entries: list[tuple[PluginKind, metadata.EntryPoint]] = [
         (
             "catalog",
-            metadata.EntryPoint(name="zeta", value="pkg:zeta", group="dal_obscura.catalogs.v1"),
+            metadata.EntryPoint(name="zeta", value="pkg:zeta", group="dal_obscura.catalogs.v2"),
         ),
         (
             "catalog",
-            metadata.EntryPoint(name="alpha", value="pkg:alpha", group="dal_obscura.catalogs.v1"),
+            metadata.EntryPoint(name="alpha", value="pkg:alpha", group="dal_obscura.catalogs.v2"),
         ),
     ]
     for _kind, entry in entries:
@@ -41,7 +41,7 @@ def test_build_document_uses_static_descriptor_and_sorts_rows(monkeypatch) -> No
         lambda entry: SimpleNamespace(
             kind="catalog",
             plugin_id=str(entry.name),
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="fixture-dist",
             version="1.2.3",

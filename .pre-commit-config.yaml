@@ -3,26 +3,26 @@ repos:
     hooks:
     - id: ruff-format
       name: Ruff format
-      entry: uv run ruff format
+      entry: uv run --no-sync ruff format
       language: system
       types: [python]
       exclude: ^src/dal_obscura/flight/v1/.*_pb2\.py$
       args: ["--"]
     - id: ruff-check
       name: Ruff lint
-      entry: uv run ruff check
+      entry: uv run --no-sync ruff check
       language: system
       types: [python]
       args: ["--"]
     - id: ty
       name: Ty type check
-      entry: uv run ty check
+      entry: uv run --no-sync ty check
       language: system
       pass_filenames: false
       files: ^(src|packages)/.*\.py$
     - id: pytest
       name: Pytest non-heavy
-      entry: uv run pytest
+      entry: uv run --no-sync pytest
       language: system
       pass_filenames: false
       files: ^(src|packages|tests)/.*\.py$

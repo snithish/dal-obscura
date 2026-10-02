@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.sources.paths import PathRuleEnforcer
 
 
 def test_path_rule_enforcer_allows_configured_roots_and_descendants():

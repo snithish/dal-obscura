@@ -236,7 +236,7 @@ def test_get_schema_returns_masked_authorized_schema(tmp_path):
 def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     del tmp_path
     monkeypatch.setattr(
-        "dal_obscura.data_plane.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
+        "dal_obscura.read.transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
         2,
     )
     schema = id_region_schema()
@@ -611,8 +611,8 @@ def test_do_get_requires_authorization_header(tmp_path):
 def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_batch):
     from threading import Thread
 
-    from dal_obscura.data_plane.application.ports.row_transform import StreamResourceError
-    from dal_obscura.data_plane.interfaces.flight.streaming import make_stream
+    from dal_obscura.interfaces.flight.streaming import make_stream
+    from dal_obscura.read.transform_contracts import StreamResourceError
 
     closed = []
     schema = pa.schema([pa.field("id", pa.int64())])
@@ -646,7 +646,7 @@ def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_ba
 
 @pytest.mark.parametrize("operation", ["get_schema", "get_flight_info"])
 def test_provider_capacity_failure_returns_unavailable(operation):
-    from dal_obscura.data_plane.application.ports.access_context import AccessContextUnavailable
+    from dal_obscura.sources.access import AccessContextUnavailable
 
     class UnavailableAuthorizer:
         def authorize(self, *args, **kwargs):

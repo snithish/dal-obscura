@@ -8,8 +8,8 @@ import pytest
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR
 from dal_obscura_plugin_api import ExecutionContext, TableHandle, TableIdentifier
 
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.sources.plugin_runtime import (
     PublicPluginTableFormat,
 )
 from tests.support.public_plugins import _contract_format
@@ -230,7 +230,7 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
 
             return schema, batches()
 
-    from dal_obscura.data_plane.infrastructure.adapters import public_plugin_adapter
+    from dal_obscura.sources import plugin_runtime as public_plugin_adapter
 
     monkeypatch.setattr(
         public_plugin_adapter,
@@ -474,7 +474,7 @@ def test_format_without_current_descriptor_is_rejected_and_closed():
 
 
 def test_optional_filter_pushdown_keeps_full_filter_for_core():
-    from dal_obscura.common.access_control.filters import parse_row_filter
+    from dal_obscura.policy.filters import parse_row_filter
 
     schema = pa.schema([pa.field("id", pa.int64())])
     table, calls = _contract_format(schema)
@@ -521,7 +521,7 @@ def test_unstarted_execution_does_not_open_plugin_resources():
 
 
 def test_expired_batch_context_does_not_read_source():
-    from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+    from dal_obscura.sources.plugin_runtime import (
         _checked_plugin_batches,
     )
 
@@ -537,3 +537,27 @@ def test_expired_batch_context_does_not_read_source():
     with pytest.raises(ValueError, match="deadline"):
         list(_checked_plugin_batches(source(), pa.schema([pa.field("id", pa.int64())]), context))
     assert read == []
+
+
+def test_bound_source_acquires_plugin_and_schema_once():
+    from dataclasses import replace
+
+    schema = pa.schema([("id", pa.int64())])
+    base, calls = _contract_format(schema)
+
+    def factory(handle, context):
+        plugin = base.format_factory(handle, context)
+        original = plugin.schema
+
+        def read_schema(handle, context):
+            calls.append("schema")
+            return original(handle, context)
+
+        plugin.schema = read_schema
+        return plugin
+
+    table = replace(base, format_factory=factory)
+    with table.open() as bound:
+        assert bound.get_schema() == schema
+        bound.plan(PlanRequest(target="default.users", columns=["id"]), 1)
+    assert calls.count("open") == calls.count("schema") == calls.count("close") == 1

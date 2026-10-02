@@ -1,11 +1,11 @@
 import pytest
 
-from dal_obscura.control_plane.application.auth_provider_validation import (
+from dal_obscura.control.auth_provider_validation import (
     OIDC_IDENTITY_MODULE,
     redact_auth_provider,
     validate_auth_provider_payloads,
 )
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control.errors import ValidationFailure
 
 
 def test_auth_provider_redaction_hides_legacy_sensitive_values_and_scope_fields():
@@ -57,7 +57,7 @@ def test_auth_provider_endpoints_reject_query_data(field: str):
 def test_auth_provider_endpoints_normalize_malformed_uri_errors(field: str, value: str):
     args: dict[str, object] = {"issuer": "https://issuer.example/realm", field: value}
 
-    with pytest.raises(ValidationFailure, match="valid HTTP\(S\) URL"):
+    with pytest.raises(ValidationFailure, match=r"valid HTTP\(S\) URL"):
         validate_auth_provider_payloads(
             [{"ordinal": 1, "module": OIDC_IDENTITY_MODULE, "args": args, "enabled": True}]
         )

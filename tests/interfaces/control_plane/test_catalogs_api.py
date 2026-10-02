@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dal_obscura.common.config_store.db import (
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.sources.secrets import EnvSecretProvider
+from dal_obscura.storage.database.db import (
     session_factory,
 )
-from dal_obscura.control_plane.interfaces.api import create_app
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
@@ -75,9 +75,7 @@ def test_workspace_catalog_rejects_python_module_identity(client_factory):
     response = client.put(
         "/v1/catalogs/analytics",
         json={
-            "plugin_id": (
-                "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-            ),
+            "plugin_id": ("dal_obscura.sources.catalogs.IcebergCatalog"),
             "options": {"uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -313,7 +311,7 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
         headers=ADMIN_HEADERS,
     )
 
-    def fake_discover_catalog_tables(name, plugin_id, options):
+    def fake_discover_catalog_tables(name, plugin_id, options, **kwargs):
         assert name == "analytics"
         assert plugin_id == ICEBERG_CATALOG_ID
         assert options == {"type": "sql", "uri": "sqlite:///catalog.db"}
@@ -323,7 +321,7 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
         ]
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        "dal_obscura.control.catalog_service.discover_public_catalog_tables",
         fake_discover_catalog_tables,
     )
 
@@ -372,12 +370,12 @@ def test_workspace_catalog_discovery_resolves_secret_references(client_factory, 
     )
     received: dict[str, object] = {}
 
-    def fake_discover_catalog_tables(name, plugin_id, options):
+    def fake_discover_catalog_tables(name, plugin_id, options, **kwargs):
         received.update(options)
         return []
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        "dal_obscura.control.catalog_service.discover_public_catalog_tables",
         fake_discover_catalog_tables,
     )
 
@@ -395,13 +393,13 @@ def test_workspace_catalog_discovery_does_not_echo_provider_errors(client_factor
         headers=ADMIN_HEADERS,
     )
 
-    def failing_discovery(name, plugin_id, options):
+    def failing_discovery(name, plugin_id, options, **kwargs):
         raise ValueError(
             "failed to connect https://catalog-user:catalog-password@catalog.example/api"
         )
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        "dal_obscura.control.catalog_service.discover_public_catalog_tables",
         failing_discovery,
     )
 
@@ -427,7 +425,7 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, 
         headers=ADMIN_HEADERS,
     )
 
-    def fake_discover_catalog_tables(name, plugin_id, options):
+    def fake_discover_catalog_tables(name, plugin_id, options, **kwargs):
         assert name == "analytics"
         assert plugin_id == ICEBERG_CATALOG_ID
         assert options == {"type": "sql", "uri": "sqlite:///catalog.db"}
@@ -436,7 +434,7 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, 
         ]
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        "dal_obscura.control.catalog_service.discover_public_catalog_tables",
         fake_discover_catalog_tables,
     )
 
@@ -449,11 +447,11 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, 
     assert ready.json()["sample_tables"] == ["default.users"]
     assert "options" not in _keys_recursive(ready.json())
 
-    def failing_discover_catalog_tables(name, plugin_id, options):
+    def failing_discover_catalog_tables(name, plugin_id, options, **kwargs):
         raise RuntimeError("failed to connect with password=super-secret")
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        "dal_obscura.control.catalog_service.discover_public_catalog_tables",
         failing_discover_catalog_tables,
     )
     failed = client.get("/v1/catalogs/analytics/diagnostics", headers=ADMIN_HEADERS)

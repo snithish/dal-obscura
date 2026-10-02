@@ -1,7 +1,8 @@
 import pyarrow as pa
 import pytest
+from sqlglot import exp
 
-from dal_obscura.common.access_control.filters import (
+from dal_obscura.policy.filters import (
     RowFilter,
     deserialize_row_filter,
     extract_row_filter_dependencies,
@@ -35,6 +36,17 @@ def _schema() -> pa.Schema:
             ),
         ]
     )
+
+
+def test_filter_ast_cannot_change_the_validated_sql_or_dependencies():
+    row_filter = parse_row_filter("region = 'us'", _schema())
+    inspected = row_filter.expression
+    inspected.set("this", exp.column("active"))
+    inspected.set("expression", exp.Literal.string("eu"))
+
+    assert row_filter.sql == "region = 'us'"
+    assert row_filter.expression.sql(dialect="duckdb") == row_filter.sql
+    assert extract_row_filter_dependencies(row_filter) == ["region"]
 
 
 def test_parse_row_filter_accepts_function_and_computed_predicates():

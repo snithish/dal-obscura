@@ -1,18 +1,12 @@
 from typing import Any, cast
 
-from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
-from dal_obscura.common.catalog.ports import TableFormat
-from dal_obscura.common.ticket_delivery.models import TicketPayload
-from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
-from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
-from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
-    DefaultMaskingAdapter,
-    DuckDBRowTransformAdapter,
-)
-from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
+from dal_obscura.read.signing import HmacTicketCodecAdapter
+from dal_obscura.read.tickets import TicketPayload
+from dal_obscura.sources.contracts import TableFormat
 from tests.support.arrow import id_region_batch, id_region_schema
+from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
@@ -24,33 +18,26 @@ from tests.support.use_cases import (
 AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
 
 
-def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDecision):
+def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDecision, **options):
     ticket_codec = HmacTicketCodecAdapter("secret")
     ticket_store = FakeTicketStore()
-    masking = DefaultMaskingAdapter()
+
     authorizer = FakeAuthorizer(decision=decision, current_version=decision.policy_version)
     catalog_registry = FakeCatalogRegistry(table_format)
     principal = Principal(id="user1", groups=[], attributes={})
-    plan_access = PlanAccessUseCase(
+    plan_access = make_read_service(
         identity=FakeIdentity(principal=principal),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
         ),
-        masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
         ticket_ttl_seconds=300,
         max_tickets=1,
         max_ticket_exchanges=1,
+        **options,
     )
-    fetch_stream = FetchStreamUseCase(
-        identity=FakeIdentity(principal=principal),
-        masking=masking,
-        row_transform=DuckDBRowTransformAdapter(masking),
-        ticket_codec=ticket_codec,
-        ticket_store=ticket_store,
-    )
-    return plan_access, fetch_stream
+    return plan_access, plan_access
 
 
 def _build_use_case_dependencies():

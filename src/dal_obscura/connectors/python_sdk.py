@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 import pyarrow as pa
 import pyarrow.flight as flight
 
-from dal_obscura.common.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_plan_command
+from dal_obscura.interfaces.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_plan_command
 
 if TYPE_CHECKING:
     import duckdb

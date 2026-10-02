@@ -267,14 +267,16 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Build package
-        run: uv build
+        run: |
+          uv build
+          uv build --wheel --out-dir dist packages/plugin-api
 
       - name: Install and import default client wheel
         run: |
           client_env="$(mktemp -d)"
           uv venv "$client_env"
           wheel_path="$(ls dist/dal_obscura-*-py3-none-any.whl)"
-          uv pip install --python "$client_env/bin/python" "$wheel_path"
+          uv pip install --python "$client_env/bin/python" "$wheel_path" dist/dal_obscura_plugin_api-*.whl
           "$client_env/bin/python" -c 'from dal_obscura.connectors import DalObscuraClient; print(DalObscuraClient.__name__)'
 
       - name: Install server wheel with Postgres and verify commands
@@ -282,7 +284,7 @@ jobs:
           smoke_env="$(mktemp -d)"
           uv venv "$smoke_env"
           wheel_path="$(ls dist/dal_obscura-*-py3-none-any.whl)"
-          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[server,postgres]"
+          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[server,postgres]" dist/dal_obscura_plugin_api-*.whl
           PATH="$smoke_env/bin:$PATH"
           dal-obscura-control-plane --help
           dal-obscura-migrate upgrade --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
@@ -347,7 +349,7 @@ jobs:
             --plugin catalog:manifest \
             --plugin table_format:parquet.dataset
           PYTHONPATH=src "$RUNNER_TEMP/plugin-env/bin/python" -c \
-            'from dal_obscura.common.plugin_api import load_plugin_lock_file; assert len(load_plugin_lock_file("'$RUNNER_TEMP'/plugin-lock.json")) == 3'
+            'from dal_obscura.sources.plugins import load_plugin_lock_file; assert len(load_plugin_lock_file("'$RUNNER_TEMP'/plugin-lock.json")) == 3'
           echo "sha256=$(sha256sum \"$RUNNER_TEMP/plugin-lock.json\" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
   python-plugin-integration:

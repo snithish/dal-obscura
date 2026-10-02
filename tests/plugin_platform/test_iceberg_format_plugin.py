@@ -4,17 +4,17 @@ import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import TableHandle, TableIdentifier
 
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.common.table_format.ports import Plan, ScanTask
-from dal_obscura.data_plane.infrastructure.adapters import iceberg_format_plugin as module
-from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.sources import iceberg_plugin as module
+from dal_obscura.sources.builtins import (
     create_builtin_plugin_registry,
 )
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+from dal_obscura.sources.iceberg import IcebergInputPartition
+from dal_obscura.sources.paths import PathRuleEnforcer
+from dal_obscura.sources.planning import Plan, ScanTask
+from dal_obscura.sources.plugin_runtime import (
     PublicPluginTableFormat,
 )
-from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergInputPartition
 
 
 def handle(location="https://catalog.example/metadata.json"):
@@ -49,14 +49,16 @@ def test_registered_iceberg_uses_public_sdk_schema_plan_and_stream(monkeypatch):
                     ScanTask(
                         table_format=cast(Any, self),
                         schema=schema,
-                        partition=IcebergInputPartition(columns=["id"], tasks=[value]),
+                        partition=IcebergInputPartition(
+                            columns=["id"], tasks=[cast(dict[str, object], value)]
+                        ),
                     )
-                    for value in (b"one", b"two")
+                    for value in ({"file": "one"}, {"file": "two"})
                 ],
             )
 
         def execute(self, partition):
-            value = 1 if partition.tasks == [b"one"] else 2
+            value = 1 if partition.tasks == [{"file": "one"}] else 2
             return schema, iter([pa.record_batch([pa.array([value])], schema=schema)])
 
     monkeypatch.setattr(module, "IcebergTableFormat", Engine)
@@ -90,13 +92,15 @@ def test_iceberg_sdk_checks_storage_allowlist_before_io():
 
 
 @pytest.mark.parametrize(
-    "columns", [["id"], ["id", "email", "region"]], ids=["integers", "strings"]
+    "columns",
+    [["id"], ["id", "email", "region"], ["region", "id", "email"]],
+    ids=["integers", "strings", "reordered"],
 )
 def test_sdk_iceberg_reads_real_parallel_scan_tasks_after_ticket_round_trip(tmp_path, columns):
-    import pickle
-
     from pyiceberg.catalog import load_catalog
 
+    from dal_obscura.sources.builtins import create_builtin_plugin_registry
+    from dal_obscura.sources.task_codec import SourceTaskCodec
     from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
 
     identifier = create_iceberg_table(tmp_path, "sdk", "warehouse", append_batches=[[1, 2], [3, 4]])
@@ -115,8 +119,9 @@ def test_sdk_iceberg_reads_real_parallel_scan_tasks_after_ticket_round_trip(tmp_
     plan = adapter.plan(PlanRequest(target="default.events", columns=columns), max_tickets=2)
     assert len(plan.tasks) == 2
     batches = []
+    codec = SourceTaskCodec(create_builtin_plugin_registry())
     for task in plan.tasks:
-        restored = pickle.loads(pickle.dumps(task))
+        restored = codec.decode(codec.encode(task))
         schema, stream = restored.table_format.execute(restored.partition)
         assert schema.names == columns
         batches.extend(stream)

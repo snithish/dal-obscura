@@ -1,8 +1,8 @@
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.common.flight_contract import encode_plan_command
-from dal_obscura.data_plane.interfaces.flight.contracts import parse_descriptor
+from dal_obscura.interfaces.flight.contracts import parse_descriptor
+from dal_obscura.interfaces.flight_contract import encode_plan_command
 from tests.support.flight import (
     command_descriptor,
 )
@@ -45,7 +45,7 @@ def test_parse_descriptor_accepts_protobuf_protocol_version_one():
 
     assert request.catalog == "analytics"
     assert request.target == "test.table"
-    assert request.columns == ["id"]
+    assert request.columns == ("id",)
 
 
 def test_parse_descriptor_accepts_matching_typed_paths():
@@ -60,7 +60,7 @@ def test_parse_descriptor_accepts_matching_typed_paths():
 
     request = parse_descriptor(descriptor)
 
-    assert request.columns == ['["a.b"]']
+    assert request.columns == ('["a.b"]',)
 
 
 def test_parse_descriptor_rejects_typed_paths_that_do_not_match_columns():

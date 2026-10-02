@@ -1,19 +1,13 @@
 [project]
 name = "dal-obscura-plugin-conformance"
-version = "0.1.0"
+version = "0.2.0"
 description = "Conformance checks for Dal Obscura public plugin contracts"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "dal-obscura-plugin-api==0.1.0",
+  "dal-obscura-plugin-api==0.2.0",
   "pyarrow>=15.0.0",
 ]
 
 [build-system]
-requires = ["setuptools>=68.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

@@ -1,9 +1,3 @@
-"""dal-obscura: data access layer with masking and row filters."""
+"""Governed Arrow Flight reads and policy authoring."""
 
-__all__ = [
-    "application",
-    "connectors",
-    "domain",
-    "infrastructure",
-    "interfaces",
-]
+__version__ = "0.2.0"

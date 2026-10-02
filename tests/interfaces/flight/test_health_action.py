@@ -5,7 +5,7 @@ import logging
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.data_plane.interfaces.flight.server import _health_payload
+from dal_obscura.interfaces.flight.server import _health_payload
 from dal_obscura.observability import ServiceMetrics
 
 

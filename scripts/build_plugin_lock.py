@@ -15,7 +15,7 @@ from typing import cast
 
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.common.plugin_api.registry import (
+from dal_obscura.sources.plugins.registry import (
     ENTRY_POINT_GROUPS,
     PluginAdmissionError,
     build_plugin_lock,

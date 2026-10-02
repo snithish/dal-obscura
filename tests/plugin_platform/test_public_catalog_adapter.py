@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
 from typing import Any, cast
 
@@ -10,19 +9,20 @@ from dal_obscura_manifest_parquet.catalog import CATALOG_DESCRIPTOR, manifest_fa
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR, parquet_factory
 from dal_obscura_plugin_api import DiscoveryPage, ExecutionContext, TableHandle, TableIdentifier
 
-from dal_obscura.common.plugin_api import PluginRegistry
-from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
+from dal_obscura.read.request import PlanRequest
+from dal_obscura.sources.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
 )
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+from dal_obscura.sources.paths import PathRuleEnforcer
+from dal_obscura.sources.plugin_runtime import (
     PublicPluginCatalogAdapter,
     PublicPluginPartition,
     PublicPluginTableFormat,
 )
+from dal_obscura.sources.plugins import PluginRegistry
+from dal_obscura.sources.task_codec import SourceTaskCodec
 from tests.support.discovery import _unchecked_discovery_page
 from tests.support.public_plugins import _contract_format, _fixture
 
@@ -64,8 +64,9 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
     assert len(plan.tasks) == 2
     partition = cast(PublicPluginPartition, plan.tasks[0].partition)
     assert partition.handle.catalog_revision == 17
-    serialized = pickle.dumps(plan.tasks[0])
-    restored = pickle.loads(serialized)
+    codec = SourceTaskCodec(registry)
+    serialized = codec.encode(plan.tasks[0])
+    restored = codec.decode(serialized)
     output_schema, batches = restored.table_format.execute(restored.partition)
     assert output_schema == table.schema
     assert pa.Table.from_batches(list(batches)).to_pylist() == [{"id": 1}]
@@ -299,7 +300,7 @@ def test_public_catalog_adapter_rejects_oversized_page() -> None:
 
 
 def test_catalog_identifiers_round_trip_without_dotted_name_collisions():
-    from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+    from dal_obscura.sources.plugin_runtime import (
         _identifier_name,
         _table_identifier,
     )
@@ -316,7 +317,7 @@ def test_catalog_identifiers_round_trip_without_dotted_name_collisions():
 def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
     import hashlib
 
-    from dal_obscura.common.access_control.models import AccessDecision, MaskRule
+    from dal_obscura.policy.models import AccessDecision, MaskRule
     from tests.application.access_flow.helpers import (
         AUTHORIZATION_HEADER,
         _build_end_to_end_access_flow,
@@ -330,6 +331,12 @@ def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
         manifest_factory,
         lambda _: parquet_factory,
     )
+    registry = PluginRegistry(
+        builtins={
+            ("table_format", "parquet.dataset"): (FORMAT_DESCRIPTOR, parquet_factory),
+        }
+    )
+    registry.reload()
     try:
         table = catalog.resolve_table("default.users")
         planner, fetch = _build_end_to_end_access_flow(
@@ -340,13 +347,14 @@ def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
                 row_filter="id > 1",
                 policy_version=1,
             ),
+            task_codec=SourceTaskCodec(registry),
         )
-        plan = planner.execute(
+        plan = planner.plan(
             PlanRequest(catalog="fixture", target="default.users", columns=["id"]),
             AUTHORIZATION_HEADER,
         )
         assert len(plan.ticket_tokens) == 1
-        result = fetch.execute(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
+        result = fetch.fetch(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
         assert pa.Table.from_batches(result.result_batches).to_pylist() == [
             {"id": hashlib.sha256(b"2").hexdigest()}
         ]

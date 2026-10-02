@@ -9,22 +9,21 @@ import pyarrow as pa
 import pytest
 from sqlalchemy import event, select
 
-from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.config_store.db import (
+from dal_obscura.policy.models import Principal
+from dal_obscura.sources.published import LiveConfigCatalogRegistry
+from dal_obscura.storage.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.common.config_store.orm import (
+from dal_obscura.storage.database.orm import (
     AssetRecord,
     CatalogRecord,
     PolicyRuleRecord,
 )
-from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    LiveConfigCatalogRegistry,
-    LiveConfigStore,
-)
+from dal_obscura.storage.snapshots import LiveConfigStore
 from tests.support.live_config import seed_live_config
+from tests.support.reads import make_read_service
 from tests.support.use_cases import StubTableFormat
 
 
@@ -36,6 +35,36 @@ def _table():
         schema=pa.schema([("id", pa.int64()), ("email", pa.string())]),
         batches=(),
     )
+
+
+def test_schema_read_reuses_the_schema_admitted_with_the_source(setup, monkeypatch):
+    from dal_obscura.identity.contracts import AuthenticationRequest
+    from dal_obscura.read.request import PlanRequest
+    from tests.support.use_cases import FakeIdentity
+
+    _, _, store = setup
+    calls = 0
+    original = StubTableFormat.get_schema
+
+    def counted(self):
+        nonlocal calls
+        calls += 1
+        return original(self)
+
+    monkeypatch.setattr(StubTableFormat, "get_schema", counted)
+    registry = LiveConfigCatalogRegistry(store)
+    reader = make_read_service(
+        identity=FakeIdentity(Principal(id="user1", groups=[], attributes={})),
+        access_context=registry,
+    )
+    try:
+        reader.schema(
+            PlanRequest(catalog="analytics", target="default.users", columns=["id"]),
+            AuthenticationRequest(headers={}),
+        )
+    finally:
+        registry.close()
+    assert calls == 1
 
 
 class Provider:
@@ -66,9 +95,7 @@ def setup(tmp_path):
     with factory() as session:
         seed_live_config(session)
     Provider.created = []
-    with patch(
-        "dal_obscura.data_plane.infrastructure.adapters.live_config.CatalogRegistry", Provider
-    ):
+    with patch("dal_obscura.sources.published.CatalogRegistry", Provider):
         yield engine, factory, LiveConfigStore(factory)
     engine.dispose()
 
@@ -171,13 +198,8 @@ def test_many_concurrent_requests_share_one_provider(setup):
 
 @pytest.mark.parametrize("operation", ["schema", "plan"])
 def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypatch, operation):
-    from dal_obscura.common.query_planning.models import PlanRequest
-    from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
-    from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
-    from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
-    from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
-        DefaultMaskingAdapter,
-    )
+    from dal_obscura.identity.contracts import AuthenticationRequest
+    from dal_obscura.read.request import PlanRequest
     from tests.support.use_cases import FakeIdentity, FakeTicketCodec, FakeTicketStore
 
     engine, factory, store = setup
@@ -207,15 +229,14 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
     monkeypatch.setattr(Provider, "describe", describe)
     registry = LiveConfigCatalogRegistry(store)
     identity = FakeIdentity(Principal(id="user1", groups=[], attributes={}))
-    masking = DefaultMaskingAdapter()
+
     ticket_store = FakeTicketStore()
     if operation == "schema":
-        use_case = GetSchemaUseCase(identity=identity, access_context=registry, masking=masking)
+        use_case = make_read_service(identity=identity, access_context=registry)
     else:
-        use_case = PlanAccessUseCase(
+        use_case = make_read_service(
             identity=identity,
             access_context=registry,
-            masking=masking,
             ticket_codec=FakeTicketCodec(),
             ticket_store=ticket_store,
             ticket_ttl_seconds=300,
@@ -224,8 +245,8 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
         )
     request = PlanRequest(catalog="analytics", target="default.users", columns=["id", "email"])
     auth = AuthenticationRequest(headers={})
-    first = use_case.execute(request, auth)
-    second = use_case.execute(request, auth)
+    first = getattr(use_case, operation)(request, auth)
+    second = getattr(use_case, operation)(request, auth)
     assert first.policy_version == 4
     assert second.policy_version == 5
     if operation == "plan":
@@ -287,7 +308,7 @@ def test_factory_failure_releases_capacity_for_retry(setup, monkeypatch):
 
 
 def test_full_capacity_wait_is_bounded(setup):
-    from dal_obscura.data_plane.application.ports.access_context import AccessContextUnavailable
+    from dal_obscura.sources.access import AccessContextUnavailable
 
     _, factory, store = setup
     registry = LiveConfigCatalogRegistry(store, max_cached_providers=1, provider_wait_seconds=0.02)

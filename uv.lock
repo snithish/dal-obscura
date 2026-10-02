@@ -208,7 +208,7 @@ wheels = [
 
 [[package]]
 name = "dal-obscura"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "dal-obscura-plugin-api" },
@@ -309,7 +309,7 @@ dev = [
 
 [[package]]
 name = "dal-obscura-plugin-api"
-version = "0.1.0"
+version = "0.2.0"
 source = { directory = "packages/plugin-api" }
 dependencies = [
     { name = "pyarrow" },

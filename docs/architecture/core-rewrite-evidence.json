@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-02",
+  "baseline_commit": "e86f1a5c2891edaef5ef9018ea69ab64d0f6dc8c",
+  "core_python": {
+    "before_files": 120,
+    "before_lines": 20331,
+    "after_files": 122,
+    "after_lines": 19018,
+    "generated_protobuf_excluded": true
+  },
+  "qualification": {
+    "python": 992,
+    "python_skips": 0,
+    "ui_helpers": 59,
+    "ui_browser": 89,
+    "ui_component": 58,
+    "live_keycloak": 1,
+    "isolated_package": 76,
+    "isolated_source_routing": 35,
+    "jvm": "Maven verify BUILD SUCCESS; SparkReadIT six cases, no skips",
+    "python_quality": "ruff lint/format and ty pass",
+    "ui_quality": "TypeScript, generated OpenAPI/client checks and bundle budgets pass",
+    "release": "Five exact 0.2 wheels, plugin lock, packaged migrations, client-only install and SDK-containing sdist pass"
+  },
+  "memory": {
+    "input_rows": 35000000,
+    "output_rows": 35000000,
+    "large_probe_planned_files": 5,
+    "large_probe_rows_per_file": 5000000,
+    "large_probe_endpoint_count": 4,
+    "large_probe_stream_chunks": 3055,
+    "large_probe_max_chunk_rows": 8192,
+    "small_probe_rss_delta": 587202560,
+    "large_probe_rss_delta": 536772608,
+    "large_probe_rss_limit": 1073741824
+  },
+  "benchmarks": [
+    {
+      "name": "test_benchmark_row_filter_only",
+      "before_ms": 5.435728933662176,
+      "after_ms": 5.68672944791615,
+      "delta_percent": 4.617605427297655
+    },
+    {
+      "name": "test_benchmark_mask_only",
+      "before_ms": 12.849791441112757,
+      "after_ms": 13.104666024446487,
+      "delta_percent": 1.9834919850781674
+    },
+    {
+      "name": "test_benchmark_row_filter_and_top_level_masks",
+      "before_ms": 9.231625124812126,
+      "after_ms": 9.506875183433294,
+      "delta_percent": 2.981599175657279
+    },
+    {
+      "name": "test_benchmark_row_filter_and_nested_masks",
+      "before_ms": 8.706333115696907,
+      "after_ms": 9.124874835833907,
+      "delta_percent": 4.807324904469823
+    },
+    {
+      "name": "test_benchmark_iceberg_multifile_scan_baseline",
+      "before_ms": 3.763833548873663,
+      "after_ms": 4.832332953810692,
+      "delta_percent": 28.38859346627536
+    },
+    {
+      "name": "test_benchmark_ticket_to_response_complex_schema",
+      "before_ms": 16.861834097653627,
+      "after_ms": 16.739374957978725,
+      "delta_percent": -0.726250412414764
+    }
+  ],
+  "benchmark_method": "Same-host sequential runs, normalized real 512 DataFile metadata on both revisions. Fetch fixture rows kept outside tickets: current injected fixture task codec; archived baseline pickle reducer resolves the equivalent in-memory source. Production task restoration measured separately by multifile lane. First concurrent-browser final run discarded.",
+  "sso_harness": "Disposable real Keycloak realm and rewritten native control plane. Preview retains browser Host for Origin/CSRF checks. Remote Docker clock ran about two seconds ahead of Mac; harness waits three seconds before ID-token validation. Production validator unchanged; not a production clock-skew guarantee."
+}

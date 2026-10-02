@@ -17,7 +17,7 @@ const runtime: RuntimeSettings = {
 const providers: AuthProvider[] = [{
   id: "provider-main",
   ordinal: 1,
-  module: "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider",
+  module: "dal_obscura.identity.oidc.OidcJwksIdentityProvider",
   args: {
     issuer: "https://idp.example",
     subject_claim: "sub",

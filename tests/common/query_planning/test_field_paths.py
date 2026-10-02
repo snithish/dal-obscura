@@ -1,7 +1,7 @@
 import pyarrow as pa
 import pytest
 
-from dal_obscura.common.query_planning.field_paths import (
+from dal_obscura.policy.paths import (
     MAX_FIELD_PATH_SEGMENTS,
     FieldPath,
     FieldSegment,

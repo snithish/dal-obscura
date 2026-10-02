@@ -3,13 +3,12 @@ from __future__ import annotations
 import pytest
 from dal_obscura_plugin_api import DiscoveryPage, PluginDescriptor, TableIdentifier
 
-import dal_obscura.control_plane.application.catalog_service as catalog_service
-import dal_obscura.control_plane.infrastructure.catalog_discovery as discovery
-from dal_obscura.control_plane.infrastructure.catalog_discovery import (
-    discover_iceberg_tables,
+import dal_obscura.control.catalog_service as catalog_service
+import dal_obscura.sources.discovery as discovery
+from dal_obscura.sources.discovery import (
     discover_public_catalog_tables,
 )
-from tests.support.discovery import _unchecked_discovery_page
+from tests.support.discovery import _unchecked_discovery_page, discover_iceberg_tables
 
 
 class FakeIcebergCatalog:
@@ -132,7 +131,7 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
         descriptor = PluginDescriptor(
             kind="catalog",
             plugin_id="fixture.catalog",
-            api_version="1",
+            api_version="2",
             config_version=1,
             distribution="fixture",
             version="1.0.0",
@@ -408,7 +407,7 @@ def test_iceberg_discovery_honors_cancellation_and_deadline():
         def list_tables(self, namespace):
             return ()
 
-    with pytest.raises(RuntimeError, match="cancelled"):
+    with pytest.raises(ValueError, match="cancelled"):
         discover_iceberg_tables(
             "analytics",
             {},
@@ -416,7 +415,7 @@ def test_iceberg_discovery_honors_cancellation_and_deadline():
             cancel_check=lambda: True,
         )
 
-    with pytest.raises(TimeoutError, match="deadline"):
+    with pytest.raises(ValueError, match="deadline"):
         discover_iceberg_tables(
             "analytics", {}, load_catalog_fn=lambda name, **options: SlowCatalog(), deadline_at=0.0
         )
@@ -437,53 +436,6 @@ def test_iceberg_discovery_rejects_malformed_provider_identifier_segments():
         discover_iceberg_tables(
             "analytics", {}, load_catalog_fn=lambda name, **options: MalformedCatalog()
         )
-
-
-def test_iceberg_discovery_rejects_when_process_capacity_is_exhausted(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class OccupiedSlots:
-        def acquire(self, *, blocking: bool) -> bool:
-            assert blocking is False
-            return False
-
-        def release(self) -> None:
-            raise AssertionError("an unacquired slot must not be released")
-
-    monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", OccupiedSlots())
-
-    with pytest.raises(RuntimeError, match="capacity is exhausted"):
-        discover_iceberg_tables("analytics", {})
-
-
-def test_iceberg_discovery_releases_capacity_after_provider_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class Slots:
-        acquired = 0
-        released = 0
-
-        def acquire(self, *, blocking: bool) -> bool:
-            assert blocking is False
-            self.acquired += 1
-            return True
-
-        def release(self) -> None:
-            self.released += 1
-
-    slots = Slots()
-    monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", slots)
-
-    with pytest.raises(RuntimeError, match="provider failed"):
-        discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: (_ for _ in ()).throw(
-                RuntimeError("provider failed")
-            ),
-        )
-
-    assert (slots.acquired, slots.released) == (1, 1)
 
 
 def test_workspace_discovery_limits_each_authenticated_session(

@@ -19,13 +19,15 @@ from dal_obscura_manifest_parquet.catalog import CATALOG_DESCRIPTOR, manifest_fa
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR, parquet_factory
 from pyiceberg.catalog import load_catalog
 
-from dal_obscura.common.plugin_api import PluginRegistry
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
+from dal_obscura.sources.builtins import create_builtin_plugin_registry
+from dal_obscura.sources.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
 )
-from dal_obscura.data_plane.infrastructure.adapters.iceberg_format_plugin import IcebergFormatPlugin
+from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
+from dal_obscura.sources.plugins import PluginRegistry
+from dal_obscura.sources.task_codec import SourceTaskCodec
 from tests.support.arrow import metadata_schema
 from tests.support.flight import InMemoryPolicyAuthorizer, StubTableFormat, build_flight_service
 from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
@@ -74,7 +76,9 @@ def catalog_registry(options, *, plugin_id=None, plugins=None) -> CatalogRegistr
 
 
 @contextmanager
-def manifest_registry(directory: Path, table: pa.Table) -> Iterator[CatalogRegistry]:
+def manifest_registry(
+    directory: Path, table: pa.Table
+) -> Iterator[tuple[CatalogRegistry, PluginRegistry]]:
     root = directory / "dataset"
     root.mkdir()
     pq.write_table(table.slice(0, 1), root / "part-0.parquet", row_group_size=1)
@@ -106,25 +110,32 @@ def manifest_registry(directory: Path, table: pa.Table) -> Iterator[CatalogRegis
         {"root": str(root), "manifest_path": str(manifest)}, plugin_id="manifest", plugins=plugins
     )
     try:
-        yield registry
+        yield registry, plugins
     finally:
         registry.close()
 
 
 @contextmanager
-def sql_registry(directory: Path, table: pa.Table) -> Iterator[CatalogRegistry]:
+def sql_registry(
+    directory: Path, table: pa.Table
+) -> Iterator[tuple[CatalogRegistry, PluginRegistry]]:
     create_iceberg_table(
         directory, "analytics", "warehouse", arrow_schema=table.schema, append_tables=[table]
     )
-    registry = catalog_registry(iceberg_sql_catalog_options(directory, "analytics", "warehouse"))
+    plugins = create_builtin_plugin_registry()
+    registry = catalog_registry(
+        iceberg_sql_catalog_options(directory, "analytics", "warehouse"), plugins=plugins
+    )
     try:
-        yield registry
+        yield registry, plugins
     finally:
         registry.close()
 
 
 @contextmanager
-def rest_registry(directory: Path, table: pa.Table) -> Iterator[CatalogRegistry]:
+def rest_registry(
+    directory: Path, table: pa.Table
+) -> Iterator[tuple[CatalogRegistry, PluginRegistry]]:
     create_iceberg_table(
         directory, "analytics", "warehouse", arrow_schema=table.schema, append_tables=[table]
     )
@@ -175,7 +186,7 @@ def rest_registry(directory: Path, table: pa.Table) -> Iterator[CatalogRegistry]
             plugins=plugins,
         )
         try:
-            yield registry
+            yield registry, plugins
         finally:
             registry.close()
     finally:
@@ -212,11 +223,12 @@ def consumer_server(backend: str, directory: Path):
         "manifest.parquet": manifest_registry,
         "iceberg.rest": rest_registry,
     }[backend]
-    with factory(directory, table) as registry:
+    with factory(directory, table) as (registry, plugins):
         yield build_flight_service(
             catalog_registry=registry,
             authorizer=InMemoryPolicyAuthorizer(
                 catalog="analytics", target="default.users", rules=policy
             ),
             max_tickets=2,
+            task_codec=SourceTaskCodec(plugins),
         )

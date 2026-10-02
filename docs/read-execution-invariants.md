@@ -70,8 +70,10 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
 DuckDB uses one thread per admitted stream and transient in-memory connections.
 Queries consume Arrow batches, with no whole-result accumulation in production.
 Ticket fan-out provides file-level parallelism; clients must consume endpoints
-concurrently to realize it. File counts are balanced, not file bytes, so skewed
-files can leave workers unevenly loaded. Planning materializes file tasks and
+concurrently to realize it. Iceberg assigns largest estimated data plus delete-file
+byte costs first to the least-loaded ticket, with deterministic tie breaking.
+These estimates do not guarantee equal runtime for skewed predicates or deletes.
+Planning materializes file tasks and
 serialized tickets; planning memory therefore grows with file count. Delete-file
 memory is bounded by one data file's associated deletes, not a fixed byte cap.
 
