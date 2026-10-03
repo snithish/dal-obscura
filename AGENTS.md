@@ -97,6 +97,19 @@ See [architecture atlas](docs/architecture/architecture-atlas.md),
   results or copy batches unnecessarily. Enforce logical and retained-buffer
   limits; close streams, iterators, readers, providers, and connections on success,
   failure, cancellation, and early stop while preserving the primary error.
+- This is a distributed processing framework. Scan parallelism must produce
+  independent passive tasks executable across worker processes and machines,
+  including COW and MoR position/equality deletes. Threads within one DuckDB
+  connection do not satisfy distributed parallelism. Do not simulate distribution
+  by rescanning the whole table on every worker and filtering duplicate output.
+  Qualify disjoint work and exact row coverage across separate workers sharing
+  object storage; same-process thread-pool tests alone are insufficient evidence.
+- Known gap: the current DuckDB 1.5.4 Iceberg adapter collapses equality-delete
+  scans into one task because native filename output fails for that delete mode.
+  Its up-to-four native threads remain confined to one machine. This is an unmet
+  distributed-read requirement, not an acceptable completed MoR implementation.
+  Fix upstream split support or choose a maintained reader with independently
+  executable delete-aware scan units before claiming distributed MoR support.
 - Plan parallel tasks whenever files, fragments, partitions, or row groups are
   splittable. Cover work exactly once within the task budget, group excess work,
   and return zero tasks for an empty scan. Document any unsplittable backend's
