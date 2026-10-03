@@ -42,10 +42,10 @@ UUID so revocation has one unambiguous target; older tickets without that
 identity are unsupported. Revocation is audited and returns the number of
 affected tickets.
 
-The packaged Alembic history includes the current baseline and explicit upgrades.
-Core 0.2 migration preserves catalogs, policies, owners and audit while invalidating
-old executable scan tickets. Follow the [cutover runbook](core-cutover.md) with both
-planes stopped; API 1 plugins and mixed old/new workers are unsupported.
+The packaged Alembic history contains one fresh-schema baseline. Earlier databases
+and tickets are unsupported; no data-conversion or alteration migrations are
+shipped. Follow the [fresh deployment guide](core-cutover.md) with a new database.
+API 1 plugins and mixed old/new workers are unsupported.
 
 Tickets now contain bounded passive JSON scan envelopes tied to admitted plugin
 artifacts. Browser sessions retain CSRF protection, owner authorization and the
@@ -73,10 +73,9 @@ scan execution and ticket fan-out remain independent. Provider factory/close and
 backend calls need their own IO timeouts: the provider-pool timeout bounds waiting
 for a slot or another constructor, not arbitrary blocking plugin IO.
 
-The packaged baseline is `20260930_0001`; `20260930_0002` upgrades nested schema
-types to unrestricted text. Run the migration upgrade before starting services.
-Recreate databases from before this baseline;
-there is no migration bridge for the removed global counter. Runtime/auth/path
+The sole packaged baseline is `20261003_0001`, including nested types as text.
+Initialize a fresh database before starting services; earlier schemas are unsupported.
+No alteration or data-conversion migrations are shipped. Runtime/auth/path
 settings require worker restart. Run the PostgreSQL regressions with
 `DAL_OBSCURA_POSTGRES_TEST_URL` pointing to a disposable PostgreSQL database;
 each test creates and cleans up a unique schema instead of touching existing

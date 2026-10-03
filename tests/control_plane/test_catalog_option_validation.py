@@ -16,8 +16,8 @@ def test_catalog_options_reject_non_finite_numbers() -> None:
         validate_catalog_options({"properties": {"timeout": float("nan")}})
 
 
-def test_catalog_options_reject_retired_catalog_name_alias() -> None:
-    with pytest.raises(ValidationFailure, match=r"catalog_name.*provider_catalog_name"):
+def test_catalog_options_reject_unsupported_catalog_option() -> None:
+    with pytest.raises(ValidationFailure, match="Unsupported catalog option: catalog_name"):
         validate_catalog_options({"catalog_name": "provider-name"})
 
 

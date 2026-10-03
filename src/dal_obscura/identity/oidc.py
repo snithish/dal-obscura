@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -173,6 +174,8 @@ class _JwksCache:
         self._max_keys = max_keys
         self._clock = clock
         self._last_refresh_at: float | None = None
+        self._refresh_failed = False
+        self._lock = Lock()
         self._keys_by_kid: dict[str, Any] = {}
         if static_jwks is not None:
             self._refresh_from_jwks(static_jwks)
@@ -182,19 +185,31 @@ class _JwksCache:
         kid = str(header.get("kid") or "")
         if not kid:
             raise jwt.InvalidTokenError("JWT header is missing kid")
-        if kid not in self._keys_by_kid and self._static_jwks is None and self._refresh_due():
-            self._refresh()
-        key = self._keys_by_kid.get(kid)
+        with self._lock:
+            if self._static_jwks is None and self._refresh_due():
+                self._refresh()
+            if self._refresh_failed:
+                raise jwt.InvalidTokenError("Unable to refresh signing keys")
+            key = self._keys_by_kid.get(kid)
         if key is None:
             raise jwt.InvalidTokenError(f"Unknown signing key id {kid!r}")
         return key
 
     def _refresh(self) -> None:
-        if not self._jwks_url:
-            raise jwt.InvalidTokenError("JWKS URL is not configured")
-        jwks = self._fetcher(self._jwks_url)
-        self._refresh_from_jwks(jwks)
-        self._last_refresh_at = self._clock()
+        # Called under the cache lock. Bound failed attempts too, without
+        # silently trusting keys beyond their refresh interval.
+        try:
+            if not self._jwks_url:
+                raise jwt.InvalidTokenError("JWKS URL is not configured")
+            jwks = self._fetcher(self._jwks_url)
+            self._refresh_from_jwks(jwks)
+        except Exception as exc:
+            self._refresh_failed = True
+            raise jwt.InvalidTokenError("Unable to refresh signing keys") from exc
+        else:
+            self._refresh_failed = False
+        finally:
+            self._last_refresh_at = self._clock()
 
     def _refresh_due(self) -> bool:
         if self._last_refresh_at is None:

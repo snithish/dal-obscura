@@ -390,3 +390,61 @@ def test_rejects_jwks_response_above_configured_key_limit():
 
     with pytest.raises(PermissionError, match="Invalid token"):
         provider.authenticate(_auth_request(_token(private_key, kid="kid-1")))
+
+
+@pytest.mark.parametrize("replacement", [False, True], ids=["removed", "same-kid-rotation"])
+def test_refresh_interval_retires_cached_signing_keys(replacement):
+    old_key, old_jwk = _rsa_key_pair("signing-key")
+    new_key, new_jwk = _rsa_key_pair("signing-key")
+    responses = [{"keys": [old_jwk]}, {"keys": [new_jwk] if replacement else []}]
+    now = [0.0]
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url=f"{ISSUER}/certs",
+        jwks_fetcher=lambda url: responses.pop(0),
+        clock=lambda: now[0],
+    )
+    old_request = _auth_request(_token(old_key, kid="signing-key"))
+    assert provider.authenticate(old_request).id == "user-123"
+    now[0] = 29.0
+    assert provider.authenticate(old_request).id == "user-123"
+    now[0] = 30.0
+    with pytest.raises(PermissionError, match="Invalid token"):
+        provider.authenticate(old_request)
+    if replacement:
+        assert provider.authenticate(_auth_request(_token(new_key, kid="signing-key"))).id == (
+            "user-123"
+        )
+    assert responses == []
+
+
+def test_failed_refresh_denies_stale_keys_and_rate_limits_retries_until_recovery():
+    private_key, jwk = _rsa_key_pair("signing-key")
+    now = [0.0]
+    calls = []
+
+    def fetcher(url):
+        calls.append(now[0])
+        if now[0] == 30.0:
+            raise OSError("provider unavailable")
+        return {"keys": [jwk]}
+
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url=f"{ISSUER}/certs",
+        jwks_fetcher=fetcher,
+        clock=lambda: now[0],
+    )
+    request = _auth_request(_token(private_key, kid="signing-key"))
+    assert provider.authenticate(request).id == "user-123"
+    now[0] = 30.0
+    with pytest.raises(PermissionError, match="Invalid token"):
+        provider.authenticate(request)
+    now[0] = 31.0
+    with pytest.raises(PermissionError, match="Invalid token"):
+        provider.authenticate(request)
+    now[0] = 60.0
+    assert provider.authenticate(request).id == "user-123"
+    assert calls == [0.0, 30.0, 60.0]

@@ -109,7 +109,7 @@ separated, in `DAL_OBSCURA_TICKET_PREVIOUS_SECRETS`. Workers sign only with the
 new key while accepting existing tickets signed by the retired keys. Keep the
 old keys only until the maximum ticket lifetime and exchange window have
 elapsed, then remove them and restart all workers. This rotation is additive:
-ticket payloads and the trusted pickle task boundary are unchanged. If a
+passive JSON ticket envelopes remain bound to their captured plugin artifacts. If a
 rotation must be rolled back, restore the prior key as the active secret and
 keep the newer key in the previous-key list for the same bounded window.
 

@@ -535,8 +535,6 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
             raise ValueError("Schema field id must be text")
         field_id = raw_field_id.strip()
         _validate_schema_text(field_id, "Schema field id", max_length=128)
-        if field_id.startswith("legacy:"):
-            raise ValueError("Legacy schema field ids are unsupported")
         if not field_id.startswith("synthetic:"):
             field_id = canonical_provider_field_id(field_id)
         if not field_id:

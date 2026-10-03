@@ -94,10 +94,10 @@ permissions. Unexpected network/backend errors fail the check. Browser checks
 cover real HTTPS SSO, secure session cookies, CSRF rejection, reload, and logout.
 Read expectations assume the fixture policies; intentional edits may change them.
 
-`up` does not build, migrate, seed, or provision. Rerun `init` after source changes
-or when applying migrations; saved policies (including deny-all), owners,
-settings, and table edits remain intact. `./run` is a compatibility alias for
-`./demo`.
+`up` does not build, migrate, seed, or provision. Use `./demo init` when preparing
+an empty profile. This release has a new schema baseline and requires a fresh
+profile/database; it does not upgrade earlier saved policies or tickets. Keep an
+existing demo profile separate if its edits need to be retained for reference.
 
 ## State, ports, and recovery
 

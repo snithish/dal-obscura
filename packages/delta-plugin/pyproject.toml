@@ -1,0 +1,20 @@
+[project]
+name = "dal-obscura-delta"
+version = "0.2.0"
+description = "Snapshot-pinned, parallel Delta Lake catalog and format plugin"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "dal-obscura-plugin-api==0.2.0",
+  "deltalake==1.5.0",
+  "pyarrow>=16.0.0",
+]
+
+[project.entry-points."dal_obscura.catalogs.v2"]
+"delta.directory" = "dal_obscura_delta.catalog:delta_catalog_factory"
+
+[project.entry-points."dal_obscura.table_formats.v2"]
+delta = "dal_obscura_delta.format:delta_format_factory"
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

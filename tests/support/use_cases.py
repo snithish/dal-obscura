@@ -7,7 +7,6 @@ from dataclasses import dataclass, replace
 from typing import cast
 
 import pyarrow as pa
-from dal_obscura_plugin_api import ScanTask as PluginScanTask
 
 from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.policy.filters import deserialize_row_filter
@@ -20,8 +19,8 @@ from dal_obscura.read.tickets import (
     TicketReference,
     ticket_payload_hash,
 )
-from dal_obscura.sources.contracts import TableFormat
-from dal_obscura.sources.planning import InputPartition, Plan, ScanTask
+from dal_obscura.sources.contracts import Source
+from dal_obscura.sources.planning import Plan, ScanTask
 
 
 def scan_payload() -> ScanPayload:
@@ -33,13 +32,20 @@ def scan_payload() -> ScanPayload:
     }
 
 
+@dataclass(frozen=True, kw_only=True)
+class FixtureSource:
+    catalog_name: str
+    table_name: str
+    format: str
+
+
 @dataclass(frozen=True)
-class StubInputPartition(InputPartition):
+class StubInputPartition:
     payload: bytes
 
 
 @dataclass(frozen=True, kw_only=True)
-class StubTableFormat(TableFormat):
+class StubTableFormat(FixtureSource):
     schema: pa.Schema
     batches: tuple[pa.RecordBatch, ...]
 
@@ -62,14 +68,14 @@ class StubTableFormat(TableFormat):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("StubTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
 
 
 @dataclass(frozen=True, kw_only=True)
-class TrackingTableFormat(TableFormat):
+class TrackingTableFormat(FixtureSource):
     schema: pa.Schema
     planned_columns: list[list[str]]
 
@@ -93,14 +99,14 @@ class TrackingTableFormat(TableFormat):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("TrackingTableFormat requires a StubInputPartition")
         return self.schema, iter(())
 
 
 @dataclass(frozen=True, kw_only=True)
-class PretendPushdownTableFormat(TableFormat):
+class PretendPushdownTableFormat(FixtureSource):
     schema: pa.Schema
     batches: tuple[pa.RecordBatch, ...]
     backend_pushdown_sql: str | None = None
@@ -129,7 +135,7 @@ class PretendPushdownTableFormat(TableFormat):
             else deserialize_row_filter(self.residual_sql),
         )
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("PretendPushdownTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
@@ -169,14 +175,14 @@ class FakeAuthorizer:
 
 
 class FakeCatalogRegistry:
-    def __init__(self, table_format: TableFormat) -> None:
+    def __init__(self, table_format: Source) -> None:
         self._table_format = table_format
 
     def describe(
         self,
         catalog: str | None,
         target: str,
-    ) -> TableFormat:
+    ) -> Source:
         del catalog, target
         return self._table_format
 
@@ -286,7 +292,7 @@ class FixtureTaskCodec:
         ):
             if task.table_format.__class__.__module__ == "tests.support.flight":
                 return self._fixture(task)
-            return self._production().encode(public_native_scan(task))
+            return self._production().encode(task)
         return self._fixture(task)
 
     def _fixture(self, task: ScanTask) -> str:
@@ -324,55 +330,8 @@ class FixtureTaskCodec:
         return SourceTaskCodec(create_builtin_plugin_registry())
 
 
-def encode_scan_task(table_format: TableFormat, schema: pa.Schema) -> str:
+def encode_scan_task(table_format: Source, schema: pa.Schema) -> str:
     task = ScanTask(
         table_format=table_format, schema=schema, partition=StubInputPartition(payload=b"payload")
     )
     return FixtureTaskCodec().encode(task)
-
-
-def public_native_scan(task: ScanTask) -> ScanTask:
-    """Native executor fixtures enter the same SDK envelope as production sources."""
-    from dal_obscura_plugin_api import TableHandle
-
-    from dal_obscura.sources.iceberg import IcebergInputPartition, IcebergTableFormat
-    from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
-    from dal_obscura.sources.plugin_runtime import (
-        PublicPluginPartition,
-        PublicPluginTableFormat,
-        _projected_schema,
-        _table_identifier,
-    )
-
-    table, partition = task.table_format, task.partition
-    if not isinstance(table, IcebergTableFormat) or not isinstance(
-        partition, IcebergInputPartition
-    ):
-        return task
-    handle = TableHandle(
-        catalog_plugin_id="iceberg.sql",
-        catalog_instance_id=table.catalog_name,
-        catalog_revision=0,
-        identifier=_table_identifier(table.table_name),
-        format_plugin_id="iceberg",
-        handle_version=1,
-        metadata={"metadata_location": table.metadata_location, "io_options": table.io_options},
-    )
-    source = PublicPluginTableFormat(
-        catalog_name=table.catalog_name,
-        table_name=table.table_name,
-        format="iceberg",
-        handle=handle,
-        format_factory=IcebergFormatPlugin,
-        path_roots=() if table.path_enforcer is None else table.path_enforcer.roots,
-    )
-    return ScanTask(
-        source,
-        task.schema,
-        PublicPluginPartition(
-            task=PluginScanTask(IcebergFormatPlugin._encode_partition(partition)),
-            handle=handle,
-            format_factory=IcebergFormatPlugin,
-            schema=_projected_schema(task.schema, partition.columns),
-        ),
-    )

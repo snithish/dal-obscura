@@ -12,9 +12,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.sources.catalogs import (
-    CatalogType,
-)
 from dal_obscura.storage.database.orm import (
     AssetRecord,
     AssetSchemaFieldRecord,
@@ -152,7 +149,6 @@ class LiveConfigStore:
         catalog_plugin_id = catalog_record.plugin_id
         compiled_config: dict[str, Any] = {
             "catalog": {
-                "type": "iceberg" if catalog_plugin_id == "iceberg.sql" else "plugin",
                 "plugin_id": catalog_plugin_id,
                 "options": dict(catalog_record.options_json),
                 "revision": catalog_record.revision,
@@ -271,16 +267,3 @@ def _mapping(value: object) -> dict[str, Any]:
     if isinstance(value, dict):
         return cast(dict[str, Any], value).copy()
     return {}
-
-
-def _catalog_type(config: dict[str, Any]) -> CatalogType:
-    raw_type = config.get("type")
-    if raw_type is None:
-        raise ValueError("Live catalog config type is missing")
-    return _known_catalog_type(str(raw_type))
-
-
-def _known_catalog_type(value: str) -> CatalogType:
-    if value in {"iceberg", "plugin"}:
-        return value
-    raise ValueError(f"Unsupported catalog type: {value}")

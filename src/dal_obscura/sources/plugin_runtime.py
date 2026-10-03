@@ -7,7 +7,7 @@ process memory; scan envelopes capture only handles, schemas and inert task data
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -41,10 +41,9 @@ from dal_obscura.policy.paths import (
 from dal_obscura.policy.schema_bounds import validate_arrow_schema_bounds
 from dal_obscura.policy.schema_identity import schema_has_stable_ids
 from dal_obscura.read.request import PlanRequest
-from dal_obscura.sources.contracts import CatalogPlugin as GovernedCatalogPlugin
-from dal_obscura.sources.contracts import CatalogTableListing, TableFormat
+from dal_obscura.sources.contracts import CatalogTableListing, Source
 from dal_obscura.sources.paths import PathRuleEnforcer
-from dal_obscura.sources.planning import InputPartition, Plan, ScanTask
+from dal_obscura.sources.planning import Plan, ScanTask
 
 MAX_PLUGIN_BATCH_BYTES = 16 * 1024 * 1024
 MAX_PLUGIN_DISCOVERY_PAGES = 128
@@ -54,19 +53,19 @@ PLUGIN_OPERATION_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True, kw_only=True)
-class PublicPluginPartition(InputPartition):
-    """In-process task with a handle; tickets serialize only passive envelope data."""
+class PublicPluginPartition:
+    """In-process SDK task and exact output schema; the source owns its handle."""
 
     task: PluginScanTask
-    handle: TableHandle
-    format_factory: TableFormatFactory
     schema: pa.Schema
 
 
 @dataclass(frozen=True, kw_only=True)
-class PublicPluginTableFormat(TableFormat):
-    """Executes one public SDK format through the unchanged core ScanTask path."""
+class PublicPluginTableFormat(Source):
+    """Executes one public SDK format through the governed core ScanTask path."""
 
+    catalog_name: str
+    table_name: str
     format_factory: TableFormatFactory
     handle: TableHandle
     format: str
@@ -116,8 +115,9 @@ class PublicPluginTableFormat(TableFormat):
         output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
         planned = plugin.plan(ScanRequest(output_schema, max_tickets, row_filter), context)
         tasks: list[PluginScanTask] = []
-        iterator = iter(planned)
+        iterator = None
         try:
+            iterator = iter(planned)
             while True:
                 context.check_active()
                 try:
@@ -132,7 +132,7 @@ class PublicPluginTableFormat(TableFormat):
                     raise ValueError("Plugin returned more tasks than requested")
         finally:
             try:
-                if iterator is not planned:
+                if iterator is not None and iterator is not planned:
                     _close_plugin_preserving_error(iterator)
             finally:
                 _close_plugin_preserving_error(planned)
@@ -140,8 +140,6 @@ class PublicPluginTableFormat(TableFormat):
         partitions = [
             PublicPluginPartition(
                 task=task,
-                handle=self.handle,
-                format_factory=self.format_factory,
                 schema=output_schema,
             )
             for task in tasks
@@ -158,11 +156,9 @@ class PublicPluginTableFormat(TableFormat):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, PublicPluginPartition):
             raise TypeError("Public plugin format requires a PublicPluginPartition")
-        if partition.handle != self.handle or partition.format_factory != self.format_factory:
-            raise ValueError("Public plugin partition does not match its format")
 
         def execute_batches() -> Iterable[pa.RecordBatch]:
             context = _context()
@@ -206,9 +202,12 @@ class PublicPluginTableFormat(TableFormat):
 
 
 @dataclass(frozen=True, kw_only=True)
-class _BoundSource(TableFormat):
+class _BoundSource(Source):
     """An admitted provider and descriptor owned by one planning context."""
 
+    catalog_name: str
+    table_name: str
+    format: str
     source: PublicPluginTableFormat
     plugin: TableFormatPlugin
     descriptor: SchemaDescriptor
@@ -220,11 +219,11 @@ class _BoundSource(TableFormat):
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         return self.source._plan(self.plugin, self.descriptor, self.context, request, max_tickets)
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         return self.source.execute(partition)
 
 
-class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
+class PublicPluginCatalogAdapter:
     """Adapts one public catalog factory to the existing governed catalog port."""
 
     def __init__(
@@ -276,7 +275,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
     def name(self) -> str:
         return self._name
 
-    def resolve_table(self, target: str) -> TableFormat:
+    def resolve_table(self, target: str) -> Source:
         self._ensure_open()
         identifier = _table_identifier(target)
         context = _context()
@@ -298,10 +297,6 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
         ):
             raise ValueError("Public catalog returned an undeclared table-format handle")
         if self._path_enforcer is not None:
-            from dal_obscura.sources.catalogs import (
-                _nested_strings,
-            )
-
             for location in _nested_strings(dict(handle.metadata)):
                 if "://" in location or location.startswith("/"):
                     self._path_enforcer.check(location)
@@ -474,3 +469,14 @@ def _checked_plugin_batches(
                 _close_plugin_preserving_error(iterator)
 
     return checked()
+
+
+def _nested_strings(value: object):
+    if isinstance(value, Mapping):
+        for item in value.values():
+            yield from _nested_strings(item)
+    elif isinstance(value, list | tuple):
+        for item in value:
+            yield from _nested_strings(item)
+    elif isinstance(value, str):
+        yield value

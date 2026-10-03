@@ -581,3 +581,29 @@ def test_runtime_closes_lazy_plans_before_closing_the_plugin(invalid_task):
     with pytest.raises(ValueError, match=r"immutable ScanTask|more tasks"):
         table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
     assert closed == ["plan", "plugin"]
+
+
+def test_runtime_closes_plan_when_iterator_construction_and_cleanup_fail():
+    from dataclasses import replace
+
+    base, _ = _contract_format(pa.schema([("id", pa.int64())]))
+    closed = []
+
+    class BrokenPlan:
+        def __iter__(self):
+            raise ValueError("cannot start planning")
+
+        def close(self):
+            closed.append("plan")
+            raise RuntimeError("plan close failed")
+
+    def factory(handle, context):
+        plugin = base.format_factory(handle, context)
+        plugin.plan = lambda request, context: BrokenPlan()
+        plugin.close = lambda: closed.append("plugin")
+        return plugin
+
+    table = replace(base, format_factory=factory)
+    with pytest.raises(ValueError, match="cannot start planning"):
+        table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
+    assert closed == ["plan", "plugin"]

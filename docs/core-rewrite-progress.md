@@ -1,3 +1,8 @@
+> Historical qualification report for the earlier 0.2 cutover. Current native
+> execution and fresh-schema contracts are in [cloud formats](cloud-formats.md)
+> and [deployment](core-cutover.md); the old task codec and migration 0003 below
+> have since been removed. Counts below are historical, not current evidence.
+
 # Core rewrite execution ledger
 
 Approved 2026-10-02. Preserve supported behavior while replacing duplicated

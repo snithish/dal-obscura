@@ -182,6 +182,28 @@ def test_close_defers_in_flight_provider_and_rejects_new_requests(setup):
     assert provider.closed
 
 
+@pytest.mark.parametrize("request_fails", [False, True], ids=["close-error", "primary-error"])
+def test_shutdown_cleanup_preserves_request_failure_and_releases_capacity(
+    setup, monkeypatch, request_fails
+):
+    _, _, store = setup
+    registry = LiveConfigCatalogRegistry(store)
+
+    def failing_close(self):
+        self.closed = True
+        raise RuntimeError("close failed")
+
+    monkeypatch.setattr(Provider, "close", failing_close)
+    error = ValueError if request_fails else RuntimeError
+    message = "request failed" if request_fails else "close failed"
+    with pytest.raises(error, match=message), registry.open("analytics", "default.users"):
+        registry.close()
+        if request_fails:
+            raise ValueError("request failed")
+    assert Provider.created[0].closed
+    registry.close()
+
+
 def test_many_concurrent_requests_share_one_provider(setup):
     _, _, store = setup
     registry = LiveConfigCatalogRegistry(store)

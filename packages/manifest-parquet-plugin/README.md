@@ -1,32 +1,31 @@
-# Dal Obscura manifest/Parquet plugin
+# Manifest/Parquet plugin
 
-This is an independently buildable proof distribution for the public
-`dal-obscura-plugin-api`. It registers a `manifest` catalog and a
-`parquet.dataset` table format without importing the Dal Obscura service.
+This independent API 2 package registers `manifest` and `parquet.dataset` without
+importing service internals. Arrow owns filesystem and Parquet reads.
 
-The catalog accepts only an operator supplied JSON manifest and a configured
-filesystem root. Each table entry pins a revision, Arrow schema IPC payload,
-top-level field IDs, and an immutable list of files. Nested descendants receive
-deterministic schema-scoped synthetic identities anchored to those top-level IDs.
-Every member is resolved under the root with symlink-aware checks. The Parquet
-format validates each file against the pinned schema and groups row-group scans into at most the requested number of independently
-executable tasks, then streams bounded batches from each group; it rejects row-filter pushdown, unsupported tasks, changed membership,
-and schema drift.
+Catalog options are `root` and `manifest_path`, using local paths/file URIs or
+AWS S3 URIs. Storage uses the worker AWS credential chain. Operator startup
+`AWS_REGION` and `AWS_ENDPOINT_URL_S3` configure private/test endpoints; handles
+and tickets contain no storage credentials.
 
-Run its local fixture lane from the repository checkout:
+A manifest contains `revision` and a `tables` object. Each entry contains only
+`namespace` (array), `name`, `files` (root-relative paths), and `schema_ipc`
+(base64 Arrow schema). Object keys are labels; structured namespace/name define
+identity. Core derives schema identities from Arrow metadata; no duplicate
+field-ID list is supplied. The manifest and schema are pinned in the handle.
 
-```sh
-PYTHONPATH=packages/manifest-parquet-plugin/src:packages/plugin-api/src \
-  uv run --no-sync pytest packages/manifest-parquet-plugin/tests -q
+Members remain under the admitted root; local symlinks are rejected. Each file
+must match the pinned schema. Row groups are balanced into at most the requested
+number of independently executable tasks, streaming bounded Arrow batches.
+Cancellation, changed membership, schema drift and unsupported tasks fail closed.
+Plain Parquet has immutable-file semantics: replacement files require a new
+manifest revision. It does not interpret table-format delete logs.
+
+```bash
+uv run --no-sync pytest packages/manifest-parquet-plugin/tests
+uv run --no-sync pytest tests/plugin_platform/test_cloud_formats.py
 ```
 
-The package is a qualification fixture, not a hostile-code sandbox. Imported
-Python plugins remain trusted operator code and must be admitted by the registry
-lock before use.
-
-
-The rebuilt 0.2.0 adapter targets plugin API 2. Configuration is validated on
-construction; deadlines and cancellation use `context.check_active()`. Formats
-bind their handle in the factory and accept an exact `ScanRequest` schema,
-returning immutable `ScanTask` JSON objects. See the
-[SDK contract](../plugin-api/README.md) and [conformance kit](../plugin-conformance/README.md).
+See the [SDK](../plugin-api/README.md) and
+[conformance kit](../plugin-conformance/README.md). Imported plugins are trusted
+operator code; artifact locks are admission controls, not a hostile-code sandbox.

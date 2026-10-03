@@ -63,12 +63,29 @@ def test_record_batch_validation_closes_provider_output_on_failure() -> None:
     assert batches.closed is True
 
 
-def test_record_batch_validation_enforces_per_batch_byte_budget():
-    schema = pa.schema([pa.field("payload", pa.binary())])
-    batch = pa.RecordBatch.from_pylist([{"payload": b"secret"}], schema=schema)
-
+@pytest.mark.parametrize("retained", [False, True], ids=["logical-bytes", "retained-buffer"])
+def test_record_batch_validation_enforces_per_batch_byte_budget(retained):
+    batch = pa.record_batch([pa.array(range(100))], names=["id"])
+    if retained:
+        batch = batch.slice(0, 1)
     with pytest.raises(ValueError, match="batch byte budget"):
-        check_record_batches(schema, [batch], max_batch_bytes=1)
+        check_record_batches(batch.schema, [batch], max_batch_bytes=16)
+
+
+def test_record_batch_validation_closes_output_when_iterator_construction_fails():
+    closed = []
+
+    class BrokenBatches:
+        def __iter__(self):
+            raise ValueError("cannot start output")
+
+        def close(self):
+            closed.append(True)
+            raise RuntimeError("close failed")
+
+    with pytest.raises(ValueError, match="cannot start output"):
+        check_record_batches(pa.schema([]), BrokenBatches())
+    assert closed == [True]
 
 
 def test_schema_validation_enforces_nested_depth_budget():

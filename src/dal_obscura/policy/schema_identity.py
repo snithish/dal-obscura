@@ -74,7 +74,7 @@ def _provider_field_id(field: pa.Field) -> str | None:
                 value
                 and len(value) <= MAX_PROVIDER_FIELD_ID_LENGTH
                 and not any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
-                and not value.startswith((SYNTHETIC_ID_PREFIX, "legacy:"))
+                and not value.startswith(SYNTHETIC_ID_PREFIX)
             ):
                 return canonical_provider_field_id(value)
     return None

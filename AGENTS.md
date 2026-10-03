@@ -53,7 +53,7 @@ names do not define the production architecture.
 - `src/dal_obscura/identity/`: JWT/JWKS/OIDC validation, normalized claims,
   browser sessions, and local/federated logout.
 - `src/dal_obscura/storage/`: feature-owned SQL queries, atomic snapshots,
-  revisions, audit, session/ticket records, and explicit database migrations.
+  revisions, audit, session/ticket records, and a single fresh-schema baseline.
 - `src/dal_obscura/control/`: authorized administrative commands, policy
   publication, schema admission, evaluation, and identity-attribute management.
 - `src/dal_obscura/interfaces/`: Flight, HTTP, and CLI translation/composition.
@@ -97,6 +97,9 @@ See [architecture atlas](docs/architecture/architecture-atlas.md),
   results or copy batches unnecessarily. Enforce logical and retained-buffer
   limits; close streams, iterators, readers, providers, and connections on success,
   failure, cancellation, and early stop while preserving the primary error.
+- Use maintained libraries for COW/MoR, snapshot and delete interpretation; document
+  any missing upstream API requiring custom bridging. Target AWS S3 with worker
+  credentials, never credentials in passive handles or tickets.
 - This is a distributed processing framework. Scan parallelism must produce
   independent passive tasks executable across worker processes and machines,
   including COW and MoR position/equality deletes. Threads within one DuckDB
@@ -251,6 +254,7 @@ uv run --no-sync ruff format --check .
 uv run --no-sync ty check
 uv run --no-sync pytest tests/domain/access_control/test_row_filters.py tests/interfaces/flight/test_descriptors.py tests/infrastructure/adapters/test_duckdb_filters.py
 uv run --no-sync pytest tests/plugin_platform packages/plugin-conformance/tests packages/manifest-parquet-plugin/tests packages/iceberg-rest-plugin/tests
+uv run --no-sync python -m pytest packages/delta-plugin/tests
 uv run --no-sync pre-commit run --all-files
 ```
 
@@ -291,6 +295,7 @@ uv build --wheel --out-dir dist/plugins-0.2.0 packages/plugin-api
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/plugin-conformance
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/manifest-parquet-plugin
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/iceberg-rest-plugin
+uv build --wheel --out-dir dist/plugins-0.2.0 packages/delta-plugin
 ```
 
 The complete benchmark lane includes large subprocess RSS probes; select focused

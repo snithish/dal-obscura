@@ -4,46 +4,49 @@ from dataclasses import replace
 import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import ScanTask as PluginScanTask
-from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
-from pyiceberg.table import FileScanTask
-from pyiceberg.typedef import Record
+from dal_obscura_plugin_api import TableHandle, TableIdentifier
 
 from dal_obscura.sources.builtins import (
     create_builtin_plugin_registry,
 )
-from dal_obscura.sources.iceberg import (
-    IcebergInputPartition,
-    IcebergTableFormat,
-)
-from dal_obscura.sources.iceberg_tasks import encode_scan_task
-from dal_obscura.sources.paths import PathRuleEnforcer
+from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
 from dal_obscura.sources.planning import ScanTask
+from dal_obscura.sources.plugin_runtime import PublicPluginPartition, PublicPluginTableFormat
 from dal_obscura.sources.task_codec import SourceTaskCodec
-from tests.support.use_cases import public_native_scan
 
 
 def envelope():
-    file = DataFile.from_args(
-        content=DataFileContent.DATA,
-        file_path="/warehouse/a.parquet",
-        file_format=FileFormat.PARQUET,
-        partition=Record(),
-        record_count=10,
-        file_size_in_bytes=100,
-    )
-    file.spec_id = 0
-    table = IcebergTableFormat(
-        catalog_name="warehouse",
-        table_name="default.users",
-        metadata_location="/warehouse/metadata.json",
-        io_options={},
-        path_enforcer=PathRuleEnforcer([{"root": "/warehouse"}]),
+    handle = TableHandle(
+        "iceberg.sql",
+        "warehouse",
+        0,
+        TableIdentifier(("default",), "users"),
+        "iceberg",
+        1,
+        "123",
+        {"metadata_location": "/warehouse/metadata.json"},
     )
     schema = pa.schema([("id", pa.int64())])
-    partition = IcebergInputPartition(columns=["id"], tasks=[encode_scan_task(FileScanTask(file))])
-    return SourceTaskCodec(create_builtin_plugin_registry()), public_native_scan(
-        ScanTask(table, schema, partition)
+    source = PublicPluginTableFormat(
+        catalog_name="warehouse",
+        table_name="default.users",
+        format="iceberg",
+        handle=handle,
+        format_factory=IcebergFormatPlugin,
+        path_roots=("/warehouse",),
     )
+    partition = PublicPluginPartition(
+        task=PluginScanTask(
+            {
+                "columns": ["id"],
+                "files": ["/warehouse/a.parquet"],
+                "parallelism": 1,
+                "row_filter": None,
+            }
+        ),
+        schema=schema,
+    )
+    return SourceTaskCodec(create_builtin_plugin_registry()), ScanTask(source, schema, partition)
 
 
 def test_scan_envelope_preserves_schema_native_tasks_and_storage_bounds():
@@ -51,7 +54,7 @@ def test_scan_envelope_preserves_schema_native_tasks_and_storage_bounds():
     encoded = codec.encode(task)
     restored = codec.decode(encoded)
     assert restored.schema.equals(task.schema, check_metadata=True)
-    assert restored.partition.task.to_json()["tasks"] == task.partition.task.to_json()["tasks"]
+    assert restored.partition.task.to_json() == task.partition.task.to_json()
     assert restored.table_format.path_roots == ("/warehouse",)
     assert "format_factory" not in encoded
 
@@ -78,6 +81,15 @@ def test_scan_envelope_rejects_duplicate_json_fields():
         codec.decode('{"version":99,' + encoded[1:])
 
 
+def test_scan_envelope_rejects_excessive_json_nesting():
+    import sys
+
+    codec, _ = envelope()
+    depth = max(10_000, sys.getrecursionlimit() * 2)
+    with pytest.raises(ValueError, match="Invalid read payload"):
+        codec.decode("[" * depth + "0" + "]" * depth)
+
+
 def test_scan_envelope_can_cover_a_large_splittable_table():
     codec, task = envelope()
     task = replace(
@@ -87,12 +99,12 @@ def test_scan_envelope_can_cover_a_large_splittable_table():
             task=PluginScanTask(
                 {
                     **task.partition.task.to_json(),
-                    "tasks": task.partition.task.to_json()["tasks"] * 512,
+                    "files": [f"/warehouse/{index}.parquet" for index in range(512)],
                 }
             ),
         ),
     )
-    assert len(codec.decode(codec.encode(task)).partition.task.to_json()["tasks"]) == 512
+    assert len(codec.decode(codec.encode(task)).partition.task.to_json()["files"]) == 512
 
 
 @pytest.mark.parametrize(

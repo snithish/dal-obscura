@@ -32,9 +32,9 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
   `test_duckdb_transform_filters_on_hidden_execution_column`, and
   `test_duckdb_transform_filters_original_masked_values_before_output_mask`.
 - **Preserve SQL NULL semantics.** Only rows for which WHERE evaluates TRUE may
-  leave the transform. NULL comparison/IN literals remain in DuckDB; IS NULL and
-  IS NOT NULL have explicit Iceberg translations. Evidence:
-  `test_iceberg_keeps_null_literal_predicates_in_core` and domain row-filter tests.
+  leave the transform. NULL comparison/IN literals and IS NULL/IS NOT NULL use DuckDB SQL at both
+  native hints and the mandatory core filter. Evidence: domain row-filter tests
+  and `test_native_filter_hint_retains_hidden_delete_keys`.
 - **Ancestor masks dominate descendant projections.** Selecting a deeper child
   cannot bypass a mask on its parent, including within lists and map values.
   Whole-container selection must enforce all descendant masks. Hidden map keys
@@ -59,23 +59,34 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
   close readers, sources, and DuckDB connections on success, error, or cancellation;
   release admission slots on failures. Evidence: DuckDB adapter admission, slice
   buffer, OOM, subprocess memory, cancellation, and first-output tests.
-- **Pin and split scans.** Iceberg tasks carry immutable metadata locations and
-  file tasks, preserve native delete semantics, and distribute files across
-  tickets. Read one file's deletes at a time. Evidence:
-  `test_iceberg_native_plan_is_split_and_pinned_to_its_metadata_snapshot`, native
-  conformance tests, and `test_iceberg_stream_reads_one_batch_and_one_files_deletes_at_a_time`.
+- **Pin and split scans.** SDK handles pin metadata locations or table versions.
+  Native libraries interpret deletes. COW and position-delete Iceberg use disjoint
+  file groups; equality deletes use one native scan with bounded internal threads.
+  Delta and Parquet split row groups. Evidence: owning native-format tests,
+  cloud-format tests and installed-wheel qualification. See [cloud execution](cloud-formats.md).
 
 ## Performance scope and limits
+
+The independent [Delta plugin](../packages/delta-plugin/README.md) pins table UUID
+and version, splits row groups, and carries kernel-produced deletion masks in
+passive JSON. Inline/UUID/absolute DVs and copy-on-write or merge-on-read updates
+retain exact row coverage across restored parallel tasks. Its public reader
+materializes snapshot-wide DV masks, so DV-enabled snapshots have an explicit
+16-million-physical-row planning cap. Delta retention must exceed ticket lifetime.
+Tests in `packages/delta-plugin/tests` and the real Delta Flight consumer lane
+qualify these contracts; see the package guide for supported features and budgets.
 
 DuckDB uses one thread per admitted stream and transient in-memory connections.
 Queries consume Arrow batches, with no whole-result accumulation in production.
 Ticket fan-out provides file-level parallelism; clients must consume endpoints
-concurrently to realize it. Iceberg assigns largest estimated data plus delete-file
-byte costs first to the least-loaded ticket, with deterministic tie breaking.
-These estimates do not guarantee equal runtime for skewed predicates or deletes.
-Planning materializes file tasks and
-serialized tickets; planning memory therefore grows with file count. Delete-file
-memory is bounded by one data file's associated deletes, not a fixed byte cap.
+concurrently to realize it. Iceberg COW/position tasks assign largest data-file byte costs first to the
+least-loaded ticket, with deterministic ties. Equality-delete tasks use up to four
+native threads instead of distributed fan-out. Native reads retain all schema
+fields to preserve hidden equality keys. These choices have documented IO and
+parallelism costs; no production speedup is claimed. Planning materializes bounded
+file membership and tickets, and upstream metadata APIs may materialize manifests.
+Planning memory therefore grows with file count; native delete buffers are owned
+by DuckDB's execution engine, not a custom per-file Python loader.
 
 Admission and DuckDB memory limits are per process. Arrow allocations and backend
 buffers are not all charged to DuckDB's memory limit. Input/output checks reject
@@ -89,8 +100,8 @@ The masking benchmarks verify output while timing scalar/nested transforms; the
 multi-file and ticket-to-response benchmarks cover adjacent costs. These establish
 local regression evidence, not cluster capacity or a production throughput SLA.
 Use representative file skew, delete density, wide nested rows, and concurrent
-clients for deployment sizing. PyIceberg private scan APIs require native
-conformance checks on dependency upgrades.
+clients for deployment sizing. Native engine/extension upgrades require delete, nested schema and installed-wheel
+conformance checks.
 
 ## Verification
 

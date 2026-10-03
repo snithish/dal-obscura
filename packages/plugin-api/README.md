@@ -94,8 +94,8 @@ Release 0.2 uses plugin API 2. Entry-point groups are
 `dal_obscura.catalogs.v2` and `dal_obscura.table_formats.v2`. Build plugins against
 `dal-obscura-plugin-api==0.2.0`, run the conformance kit, and regenerate the exact
 artifact lock. API 1 plugins and executable task encodings are not supported.
-Configuration migration preserves catalogs, policies, ownership and audit while
-invalidating old tickets; see the [cutover runbook](../../docs/core-cutover.md).
+Initialize a fresh database; older configuration schemas and tickets are unsupported.
+See the [deployment guide](../../docs/core-cutover.md).
 
 The public SDK is the sole plugin contract. `PLUGIN_API_VERSION` defines the
 current API version. Admission checks the current API and
@@ -120,3 +120,12 @@ classes and executable serialization are rejected. Conformance executes tasks
 after a real JSON round trip. No
 production scan task uses pickle. Path allowlists, authentication, and key
 rotation remain operational security features, not version-compatibility shims.
+
+## Storage locations
+
+`dal_obscura_plugin_api.storage.StorageRoot` provides contained local/file-URI or
+AWS S3 roots using maintained Arrow filesystems. It owns path admission and bounded
+metadata reads, not table-format semantics. The runtime filesystem stays inside
+the opened plugin; handles/tasks carry locations only. Credentials come from the
+worker AWS chain; endpoint and region are operator startup configuration.
+See [cloud execution](../../docs/cloud-formats.md) for backend limits.

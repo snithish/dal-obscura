@@ -37,9 +37,13 @@ from dal_obscura.sources.catalogs import (
     CatalogRegistry,
     ServiceConfig,
 )
-from dal_obscura.sources.contracts import TableFormat
+from dal_obscura.sources.contracts import Source
 from dal_obscura.sources.paths import PathRuleEnforcer
-from dal_obscura.sources.plugin_runtime import PublicPluginTableFormat, _BoundSource
+from dal_obscura.sources.plugin_runtime import (
+    PublicPluginTableFormat,
+    _BoundSource,
+    _close_plugin_preserving_error,
+)
 from dal_obscura.sources.plugins import PluginRegistry
 from dal_obscura.sources.secrets import (
     SecretProvider,
@@ -50,7 +54,6 @@ from dal_obscura.storage.snapshots import (
     LiveAsset,
     LiveCatalog,
     LiveConfigStore,
-    _catalog_type,
     _mapping,
 )
 
@@ -165,7 +168,6 @@ class LiveConfigCatalogRegistry:
         if self._secret_provider is not None:
             config = CatalogConfig(
                 name=config.name,
-                type=config.type,
                 options=cast(
                     dict[str, Any],
                     resolve_secret_refs(
@@ -184,7 +186,6 @@ class LiveConfigCatalogRegistry:
             json.dumps(
                 {
                     "name": config.name,
-                    "type": config.type,
                     "plugin_id": config.plugin_id,
                     "revision": config.revision,
                     "options": config.options,
@@ -209,7 +210,7 @@ class LiveConfigCatalogRegistry:
         finally:
             self._release(key, entry)
 
-    def describe(self, catalog: str | None, target: str) -> TableFormat:
+    def describe(self, catalog: str | None, target: str) -> Source:
         """Resolve a detached table format for direct catalog consumers."""
         with self.open(catalog, target) as context:
             source = context.table_format
@@ -287,7 +288,7 @@ class LiveConfigCatalogRegistry:
             self._condition.notify_all()
         if close:
             assert entry.registry is not None
-            entry.registry.close()
+            _close_plugin_preserving_error(entry.registry)
 
 
 def _effective_policy_version(asset: LiveAsset) -> int:
@@ -306,11 +307,9 @@ def _catalog_config_from_live_catalog(
     path_enforcer: PathRuleEnforcer | None = None,
 ) -> CatalogConfig:
     config = _mapping(catalog.config)
-    if "module" in config:
-        raise ValueError("Catalog config uses a retired module identity")
+    if set(config) - {"plugin_id", "options", "revision"}:
+        raise ValueError("Catalog config contains unsupported fields")
     options = dict(_mapping(config.get("options")))
-    if "provider_modules" in options:
-        raise ValueError("Catalog config uses a retired provider_modules option")
     raw_revision = config.get("revision")
     revision = (
         raw_revision
@@ -323,7 +322,6 @@ def _catalog_config_from_live_catalog(
     )
     return CatalogConfig(
         name=catalog.catalog,
-        type=_catalog_type(config),
         options=options,
         path_enforcer=path_enforcer,
         plugin_id=plugin_id,

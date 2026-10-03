@@ -9,7 +9,7 @@ from typing import cast
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from dal_obscura_manifest_parquet.catalog import ManifestCatalog, _schema_identities
+from dal_obscura_manifest_parquet.catalog import ManifestCatalog
 from dal_obscura_manifest_parquet.format import ParquetDatasetFormat
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, ScanRequest, TableIdentifier
 
@@ -49,7 +49,6 @@ def _write_fixture(tmp_path):
                         "name": "users",
                         "files": ["part-0.parquet", "part-1.parquet"],
                         "schema_ipc": schema_ipc,
-                        "field_ids": ["id", "profile"],
                     }
                 },
             }
@@ -101,9 +100,6 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     output_schema, batches = format_plugin.execute(tasks[0], context)
     assert output_schema.names == ["profile"]
     assert pa.Table.from_batches(batches).to_pylist() == [{"profile": {"email": "a@example.com"}}]
-    identities = dict(cast(tuple[tuple[str, str], ...], handle.metadata["schema_identities"]))
-    assert identities["id"] == "iceberg:id"
-    assert identities["profile.email"].startswith("synthetic:")
 
 
 def test_manifest_rejects_noncanonical_base64_schema_payload(tmp_path):
@@ -126,7 +122,7 @@ def test_manifest_rejects_duplicate_document_keys(tmp_path):
     manifest = root / "manifest.json"
     manifest.write_text(
         '{"revision":"one","revision":"two","tables":{"default.users":'
-        '{"files":["part-0.parquet"],"schema_ipc":"invalid","field_ids":[]}}}'
+        '{"files":["part-0.parquet"],"schema_ipc":"invalid"}}}'
     )
 
     with pytest.raises(ValueError, match="manifest is invalid JSON"):
@@ -179,8 +175,8 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
     real_parquet_file = pq.ParquetFile
 
     class TrackingParquetFile:
-        def __init__(self, path):
-            self._inner = real_parquet_file(path)
+        def __init__(self, path, **kwargs):
+            self._inner = real_parquet_file(path, **kwargs)
             self.schema_arrow = self._inner.schema_arrow
 
         @property
@@ -215,22 +211,6 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
         _, batches = format_plugin.execute(task, context)
         list(batches)
     assert closed
-
-
-def test_manifest_schema_identities_preserve_nested_provider_ids() -> None:
-    schema = pa.schema(
-        [
-            pa.field(
-                "profile",
-                pa.struct([pa.field("email", pa.string(), metadata={b"PARQUET:field_id": b"17"})]),
-            )
-        ]
-    )
-
-    identities = dict(_schema_identities(schema, ("profile",)))
-
-    assert identities["profile"] == "iceberg:profile"
-    assert identities["profile.email"] == "iceberg:17"
 
 
 def test_manifest_catalog_exposes_namespace_and_config_lifecycle(tmp_path):
@@ -293,7 +273,7 @@ def test_manifest_catalog_accepts_structured_dotted_table_names(tmp_path):
     assert page.entries == (TableIdentifier(namespace=("default",), name="users.with.dot"),)
 
 
-def test_manifest_catalog_rejects_legacy_dotted_identifier_entries(tmp_path):
+def test_manifest_catalog_requires_structured_identifiers(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     payload = json.loads(manifest.read_text())
     payload["tables"]["default.users"].pop("namespace")
@@ -302,41 +282,6 @@ def test_manifest_catalog_rejects_legacy_dotted_identifier_entries(tmp_path):
 
     with pytest.raises(ValueError, match="structured namespace and name"):
         ManifestCatalog(_config_for_manifest(root, manifest), _context())
-
-
-def test_manifest_identity_paths_use_core_collection_markers(tmp_path):
-    schema = pa.schema(
-        [
-            pa.field("tags", pa.large_list(pa.field("item", pa.string()))),
-            pa.field("attributes", pa.map_(pa.string(), pa.int64())),
-            pa.field("fixed", pa.list_(pa.field("item", pa.bool_()), 2)),
-        ]
-    )
-    identities = dict(_schema_identities(schema, ("tags", "attributes", "fixed")))
-    assert "tags.$element" in identities
-    assert "attributes.$key" in identities
-    assert "attributes.$value" in identities
-    assert "fixed.$element" in identities
-
-
-def test_parquet_format_rejects_forged_schema_identity_metadata(tmp_path):
-    root, manifest, _table = _write_fixture(tmp_path)
-    context = _context()
-    catalog = ManifestCatalog(
-        CatalogConfig(
-            plugin_id="manifest",
-            instance_id="fixture",
-            revision=1,
-            options={"root": str(root), "manifest_path": str(manifest)},
-        ),
-        context,
-    )
-    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
-    metadata = dict(handle.metadata)
-    metadata["schema_identities"] = (("id", "id"),)
-    forged = replace(handle, metadata=metadata)
-    with pytest.raises(ValueError, match="schema identities"):
-        ParquetDatasetFormat(forged, context)
 
 
 def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
@@ -358,25 +303,6 @@ def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
         assert "escapes" in str(exc)
     else:
         raise AssertionError("expected manifest member escape rejection")
-
-
-@pytest.mark.parametrize("field_id", ["bad\nvalue", "x" * 129])
-def test_manifest_rejects_unsafe_provider_field_ids(tmp_path, field_id):
-    _root, manifest, _table = _write_fixture(tmp_path)
-    payload = json.loads(manifest.read_text())
-    payload["tables"]["default.users"]["field_ids"][0] = field_id
-    manifest.write_text(json.dumps(payload))
-
-    with pytest.raises(ValueError, match="field IDs"):
-        ManifestCatalog(
-            CatalogConfig(
-                plugin_id="manifest",
-                instance_id="fixture",
-                revision=1,
-                options={"root": str(tmp_path / "dataset"), "manifest_path": str(manifest)},
-            ),
-            _context(),
-        )
 
 
 def test_manifest_rejects_symlinked_member(tmp_path):
@@ -576,7 +502,6 @@ def test_parquet_reads_literal_dotted_column_without_nested_sibling(tmp_path):
     entry.update(
         files=["literal.parquet"],
         schema_ipc=base64.b64encode(table.schema.serialize().to_pybytes()).decode("ascii"),
-        field_ids=["literal", "nested"],
     )
     manifest.write_text(json.dumps(payload))
     context = _context()
@@ -605,3 +530,20 @@ def test_parquet_reads_literal_dotted_column_without_nested_sibling(tmp_path):
     schema, batches = plugin.execute(task, context)
     assert schema.names == ["profile.email"]
     assert pa.Table.from_batches(batches).to_pylist() == [{"profile.email": "literal"}]
+
+
+def test_manifest_rejects_unknown_table_fields(tmp_path):
+    root, manifest, _ = _write_fixture(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"]["unused"] = ["id"]
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="unsupported fields"):
+        ManifestCatalog(
+            CatalogConfig(
+                plugin_id="manifest",
+                instance_id="fixture",
+                revision=1,
+                options={"root": str(root), "manifest_path": str(manifest)},
+            ),
+            _context(),
+        )

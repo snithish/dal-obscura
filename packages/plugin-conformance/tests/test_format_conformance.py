@@ -262,3 +262,30 @@ def test_runner_checks_partial_projection_with_metadata_and_closes_overbudget_pl
     )
     assert any("more tasks" in reason for reason in failed.failures)
     assert closed == ["plan", "plan"]
+
+
+def test_runner_closes_plan_when_iterator_construction_and_cleanup_fail():
+    closed = []
+
+    class BrokenPlan:
+        def __iter__(self):
+            raise ValueError("cannot start planning")
+
+        def close(self):
+            closed.append("plan")
+            raise RuntimeError("plan close failed")
+
+    class BrokenFormat(_ConformingFormat):
+        def plan(self, request, context):
+            return BrokenPlan()
+
+        def close(self):
+            closed.append("plugin")
+
+    result = run_format_checks(
+        cast(TableFormatPlugin, BrokenFormat()),
+        ScanRequest(pa.schema([("id", pa.int64())]), 1),
+        _context(),
+    )
+    assert any("cannot start planning" in reason for reason in result.failures)
+    assert closed == ["plan", "plugin"]

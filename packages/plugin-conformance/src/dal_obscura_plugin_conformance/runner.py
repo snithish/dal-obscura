@@ -175,9 +175,10 @@ def check_record_batches(
         raise ValueError("output budgets must be positive")
     row_count = 0
 
-    iterator = iter(batches)
+    iterator = None
     index = 0
     try:
+        iterator = iter(batches)
         while True:
             if context is not None:
                 context.check_active()
@@ -191,7 +192,7 @@ def check_record_batches(
                 raise ValueError(f"batch {index} is not an Arrow record batch")
             if not batch.schema.equals(schema, check_metadata=True):
                 raise ValueError(f"batch {index} schema differs from the declared output schema")
-            if batch.nbytes > max_batch_bytes:
+            if max(batch.nbytes, batch.get_total_buffer_size()) > max_batch_bytes:
                 raise ValueError(
                     f"batch {index} exceeds the {max_batch_bytes}-byte batch byte budget"
                 )
@@ -201,7 +202,7 @@ def check_record_batches(
             index += 1
     finally:
         try:
-            if iterator is not batches:
+            if iterator is not None and iterator is not batches:
                 _close_iterable_preserving_error(iterator)
         finally:
             _close_iterable_preserving_error(batches)
@@ -363,8 +364,9 @@ def run_format_checks(
             raise ValueError("scan request differs from the bound table schema")
         planned = plugin.plan(request, context)
         tasks: list[ScanTask] = []
-        iterator = iter(planned)
+        iterator = None
         try:
+            iterator = iter(planned)
             while len(tasks) <= request.max_tasks:
                 context.check_active()
                 try:
@@ -379,7 +381,7 @@ def run_format_checks(
                 raise ValueError("format returned more tasks than requested")
         finally:
             try:
-                if iterator is not planned:
+                if iterator is not None and iterator is not planned:
                     _close_iterable_preserving_error(iterator)
             finally:
                 _close_iterable_preserving_error(planned)

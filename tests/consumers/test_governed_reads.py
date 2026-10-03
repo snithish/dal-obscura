@@ -12,7 +12,9 @@ from tests.support.flight import make_jwt, running_flight_client
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(params=["memory", "iceberg.sql", "manifest.parquet", "iceberg.rest"])
+@pytest.fixture(
+    params=["memory", "iceberg.sql", "manifest.parquet", "iceberg.rest", "delta.directory"]
+)
 def governed_server(request, tmp_path):
     if os.getenv("DAL_OBSCURA_RUN_CONSUMER_TESTS") != "1":
         pytest.skip("set DAL_OBSCURA_RUN_CONSUMER_TESTS=1 for the loopback consumer lane")

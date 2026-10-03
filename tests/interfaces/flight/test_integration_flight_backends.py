@@ -50,7 +50,6 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -58,7 +57,6 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
                     },
                 },
                 "ice_two": {
-                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_two.db'}",
@@ -139,7 +137,6 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -203,7 +200,6 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -267,7 +263,6 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",

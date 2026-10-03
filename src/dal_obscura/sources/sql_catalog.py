@@ -16,11 +16,6 @@ from dal_obscura_plugin_api import (
 )
 
 from dal_obscura import __version__
-from dal_obscura.sources.catalogs import (
-    _catalog_options,
-    _load_iceberg_catalog,
-    _provider_catalog_name,
-)
 from dal_obscura.sources.discovery import (
     DEFAULT_MAX_NAMESPACES,
     DEFAULT_MAX_TABLES,
@@ -30,7 +25,7 @@ from dal_obscura.sources.discovery import (
     _namespace_tuple,
     _walk_namespaces,
 )
-from dal_obscura.sources.plugin_runtime import _table_identifier
+from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error, _table_identifier
 
 _ICEBERG_CATALOG_ID = "iceberg.sql"
 _ICEBERG_FORMAT_ID = "iceberg"
@@ -69,21 +64,26 @@ class SqlCatalog:
 
     def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
         self.config = config
-        self._catalog: Any | None = None
         self._closed = False
         self._listing_context: ExecutionContext | None = None
         self._listing: tuple[str, ...] = ()
         context.check_active()
+        if config.plugin_id != self.descriptor.plugin_id:
+            raise ValueError("SQL catalog received an incompatible plugin ID")
+        options = dict(config.options)
+        self._catalog = _load_iceberg_catalog(
+            _provider_catalog_name(config.instance_id, options), _catalog_options(options)
+        )
+        try:
+            context.check_active()
+        except BaseException:
+            _close_plugin_preserving_error(self)
+            raise
 
     def _provider(self, context: ExecutionContext):
         context.check_active()
         if self._closed:
             raise ValueError("SQL catalog is closed")
-        if self._catalog is None:
-            options = dict(self.config.options)
-            self._catalog = _load_iceberg_catalog(
-                _provider_catalog_name(self.config.instance_id, options), _catalog_options(options)
-            )
         return self._catalog
 
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
@@ -101,7 +101,7 @@ class SqlCatalog:
             format_plugin_id="iceberg",
             handle_version=1,
             snapshot_id=None if snapshot is None else str(snapshot),
-            metadata={"metadata_location": location, "io_options": dict(table.io.properties)},
+            metadata={"metadata_location": location},
         )
 
     def list_namespaces(self, context: ExecutionContext, *, namespace=()):
@@ -169,3 +169,25 @@ class SqlCatalog:
 
 def _deadline_at(context: ExecutionContext) -> float:
     return monotonic() + (context.deadline - datetime.now(timezone.utc)).total_seconds()
+
+
+def _provider_catalog_name(logical_name: str, options: dict[str, Any]) -> str:
+    if "catalog_name" in options:
+        raise ValueError("Unsupported catalog option: catalog_name")
+    provider_name = options.get("provider_catalog_name")
+    return str(provider_name) if provider_name else logical_name
+
+
+def _catalog_options(options: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(options)
+    cleaned.pop("provider_catalog_name", None)
+    return cleaned
+
+
+def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) -> Any:
+    from pyiceberg.catalog import load_catalog
+
+    try:
+        return load_catalog(catalog_name, **catalog_options)
+    except Exception as exc:
+        raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc

@@ -99,8 +99,8 @@ sequenceDiagram
 
 Native SQL Iceberg and external catalogs use the same SDK lifecycle. Catalog
 pagination reuses one bounded listing within its operation; later operations
-refresh. Iceberg grouping balances estimated data plus delete bytes and preserves
-every task exactly once. Literal dotted field/table names remain distinct.
+refresh. Iceberg COW/position scans balance data-file bytes across disjoint tasks;
+equality deletes use one native scan with bounded internal parallelism. Literal dotted field/table names remain distinct.
 
 ## Fetching and streaming
 
@@ -144,9 +144,10 @@ remains advisory; the complete restriction is enforced against original values.
 
 Input/output byte limits, DuckDB memory budgets and stream admission are per
 worker, not a global RSS cap. Deadline checks stop late output but cannot interrupt
-all blocking backend IO. Planning memory grows with file count and delete buffers
-are bounded by associated files, not a hard aggregate byte limit. Deployments must
+all blocking backend IO. Planning memory grows with file count; native delete
+buffers are engine-owned and Arrow allocations are outside DuckDB limits. Deployments must
 measure concurrent readers, skew and delete density separately.
 
 See [execution invariants](../read-execution-invariants.md),
-[cutover runbook](../core-cutover.md), and [qualification report](core-rewrite-review.html).
+[follow-up edge-case review](edge-case-review.md),
+[cutover runbook](../core-cutover.md), [cloud execution](../cloud-formats.md), and [historical rewrite report](core-rewrite-review.html).

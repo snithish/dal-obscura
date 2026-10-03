@@ -67,8 +67,6 @@ class PathRuleEnforcer:
 
 
 def _path_rule(raw: Mapping[str, object]) -> PathRule:
-    if "glob" in raw:
-        raise ValueError("Path rule glob patterns are no longer supported; use root")
     if set(raw) != {"root"}:
         raise ValueError("Path rule contains unsupported fields")
     root = _normalize_path(raw.get("root"))

@@ -11,8 +11,9 @@ current catalog, row, column, and mask configuration on new reads. Issued
 tickets retain the access they captured until expiry unless an asset owner
 revokes them.
 
-dal-obscura supports governed Iceberg assets, DuckDB row filters, column masks,
-and JVM/Python connector surfaces.
+dal-obscura supports governed Iceberg assets, optional
+[parallel Delta Lake scans](packages/delta-plugin/README.md), DuckDB row filters,
+column masks, and JVM/Python connector surfaces.
 
 **Production status:** the governance UI and administrative backend include the
 normal authenticated workspace, OIDC/PKCE login, local bootstrap login for
@@ -239,9 +240,9 @@ before/after artifact for planner, masking, filtering, and table-format changes.
 Each configuration database represents one deployment. Catalog names are globally
 unique, assets are keyed by catalog and target, and runtime settings are shared by
 all connected data-plane processes. There are no cell or tenant routing IDs.
-The baseline schema is `20260930_0001`, with nested schema type storage upgraded
-in `20260930_0002`. Run `dal-obscura-migrate upgrade` before starting services.
-Database schemas and stored tickets from before this baseline are unsupported.
+The sole schema baseline is `20261003_0001`. Initialize a fresh database with
+`dal-obscura-migrate upgrade` before starting services. Earlier databases are
+unsupported; there is no in-place upgrade or compatibility migration.
 
 The [read execution invariants](docs/read-execution-invariants.md) map correctness
 requirements to tests and document streaming, planning, and scaling limits.
@@ -249,11 +250,11 @@ requirements to tests and document streaming, planning, and scaling limits.
 - Row filters and masks are DuckDB SQL expressions.
 - Catalogs resolve governed targets into executable table formats.
 - Standalone path reads are not a public discovery path.
-- Iceberg pushdown is conservative; residual filtering is reapplied in DuckDB.
+- Iceberg uses native DuckDB snapshot/delete reads; full governance filters are reapplied.
 - ABAC conditions currently support exact principal-attribute matches and
   explicit allowed-value lists.
-- Tickets persist trusted internal Python scan tasks server-side, so the DB
-  ticket payload format is tied to Python internals.
+- Tickets persist bounded passive JSON scan envelopes server-side; decoding cannot
+  import classes or execute serialized Python objects.
 
 ### NULL-default policy authoring
 

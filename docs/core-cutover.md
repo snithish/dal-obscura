@@ -5,31 +5,30 @@ storage/control owners, uses plugin API 2, and removes executable scan tickets.
 Flight protobuf v1 and HTTP `/v1` remain unchanged. Supported Python, DuckDB,
 Polars, Java and Spark 3 client behavior is preserved; internal imports are breaking.
 
-## Upgrade sequence
+## Fresh deployment
 
-1. Back up the configuration database using the established maintenance workflow.
-   Preserve the deployment's runtime secrets and the previous plugin lock/artifacts.
-2. Stop both planes and all workers before migration. This is a coordinated cutover;
-   mixed 0.1/0.2 workers and rolling compatibility are unsupported.
-3. Build/install all five 0.2.0 wheels: server, plugin API, conformance kit,
-   manifest/Parquet and Iceberg REST. All bundled adapters use the rebuilt API 2
-   contract. Native SQL/Iceberg adapters ship inside the server wheel. Format
-   factories bind a handle once; subsequent calls use `schema(context)`,
-   `plan(ScanRequest, context)` and `execute(ScanTask, context)`. Tasks are immutable
-   bounded JSON objects. Entry-point groups remain `dal_obscura.catalogs.v2` /
-   `dal_obscura.table_formats.v2`. See the [SDK contract](../packages/plugin-api/README.md).
-4. Regenerate the admitted plugin lock from the exact installed wheels. Mount the
-   same immutable lock and artifacts in both planes; do not reuse API 1 entries.
-5. Run `dal-obscura-migrate upgrade`, then `dal-obscura-migrate check` with the
-   deployment database URL. Migration `20261002_0003` changes the moved built-in
-   OIDC selector and deletes outstanding executable tickets. It retains catalogs,
-   asset/policy revisions, rules, owners and audit. Clients must plan fresh tickets.
-6. Start both planes, verify readiness, then exercise sign-in, allowed/denied reads,
-   schema discovery, policy save/preview, explicit revocation and SSO sign-out.
+There are no deployed consumers requiring compatibility. Earlier databases,
+handles, tickets, catalog type discriminators and plugin artifacts are unsupported.
+Do not run this release against an existing demo database. Existing user demos
+are deliberately left untouched during qualification.
 
-Do not downgrade a migrated database into old workers. Restore the backup with
-matching prior artifacts if rollback is necessary. Database schemas are checked
-at startup; services do not migrate automatically.
+1. Build/install all six 0.2.0 wheels: service, SDK, conformance, manifest/Parquet,
+   REST Iceberg and Delta. Native SQL catalog/Iceberg ship in the service wheel.
+2. Generate the artifact lock from those exact installed wheels and deploy the
+   same immutable artifacts/lock to both planes. The SDK is the sole factory/task
+   contract; handles and tasks contain bounded passive JSON.
+3. Configure a fresh database and run `dal-obscura-migrate upgrade`, then `check`.
+   The sole revision `20261003_0001` creates the current schema directly. There
+   are no ALTER, data translation or old-ticket cleanup migrations.
+4. Publish catalogs, policies, identities and runtime configuration using current
+   contracts. Storage credentials belong to worker identity; never put them into
+   published table handles or tickets.
+5. Start both planes and verify readiness, authentication, allowed/denied reads,
+   schema discovery, save/preview, revocation and provider SSO sign-out.
+
+Services check the schema and never migrate at startup. See
+[plugin qualification](plugin-rebuild.md) for installed-wheel checks and
+[cloud format execution](cloud-formats.md) for native engine boundaries.
 
 ## Resource and correctness boundaries
 
@@ -41,8 +40,9 @@ stream deadline and revocation. Streams close on exhaustion, failure and early s
 
 DuckDB receives Arrow batches and applies the full SQL filter before masking.
 The same projection compiler declares and emits nested output types. Provider
-pushdown is advisory. Iceberg preserves pinned metadata, file/delete tasks and
-projection order; deterministic task grouping balances estimated byte costs.
+pushdown is advisory. Iceberg preserves pinned metadata and projection order; DuckDB owns delete
+interpretation. Copy-on-write and position-delete tasks balance file bytes.
+Equality deletes use one native scan with bounded intra-query parallelism.
 
 Limits are per worker. Backend blocking IO cannot always be interrupted by deadline
 checks. Planning memory grows with file count; associated delete buffers are not

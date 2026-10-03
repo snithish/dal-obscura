@@ -15,20 +15,7 @@ from dataclasses import dataclass
 import pyarrow as pa
 
 from dal_obscura.policy.filters import RowFilter
-from dal_obscura.sources.contracts import TableFormat
-
-
-@dataclass(frozen=True, kw_only=True)
-class InputPartition:
-    """A strictly typed unit of work planned by a TableFormat.
-
-    Example:
-        ```python
-        @dataclass(frozen=True, kw_only=True)
-        class FilePartition(InputPartition):
-            uri: str
-        ```
-    """
+from dal_obscura.sources.contracts import Source
 
 
 @dataclass(frozen=True)
@@ -41,9 +28,9 @@ class ScanTask:
         ```
     """
 
-    table_format: TableFormat
+    table_format: Source
     schema: pa.Schema
-    partition: InputPartition
+    partition: object
 
 
 @dataclass(frozen=True)

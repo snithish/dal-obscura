@@ -1,211 +1,258 @@
+"""Pinned native reads through the public SDK, with independent delete fixtures."""
+
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from typing import Any, cast
 
 import pyarrow as pa
 import pytest
-from dal_obscura_plugin_api import ExecutionContext, TableHandle, TableIdentifier
-from dal_obscura_plugin_api import ScanTask as PluginScanTask
-
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.sources import iceberg_plugin as module
-from dal_obscura.sources.builtins import (
-    create_builtin_plugin_registry,
+from dal_obscura_plugin_api import (
+    ExecutionContext,
+    ScanRequest,
+    ScanTask,
+    TableHandle,
+    TableIdentifier,
 )
-from dal_obscura.sources.iceberg import IcebergInputPartition
+from pyiceberg.catalog import load_catalog
+from pyiceberg.types import StringType
+
+from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
 from dal_obscura.sources.paths import PathRuleEnforcer
-from dal_obscura.sources.planning import Plan, ScanTask
-from dal_obscura.sources.plugin_runtime import (
-    PublicPluginTableFormat,
+from tests.support.iceberg import (
+    create_iceberg_table,
+    iceberg_sql_catalog_options,
+    install_delete_file,
 )
 
 
-def handle(location="https://catalog.example/metadata.json"):
+def context():
+    return ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "iceberg-test")
+
+
+def handle(table):
+    snapshot = table.current_snapshot()
     return TableHandle(
-        catalog_plugin_id="iceberg.rest",
-        catalog_instance_id="analytics",
-        catalog_revision=2,
-        identifier=TableIdentifier(namespace=("default",), name="events"),
-        format_plugin_id="iceberg",
-        handle_version=1,
-        metadata={"metadata_location": location},
+        "iceberg.sql",
+        "fixture",
+        1,
+        TableIdentifier(("default",), "users"),
+        "iceberg",
+        1,
+        str(snapshot.snapshot_id) if snapshot else None,
+        {"metadata_location": table.metadata_location},
     )
-
-
-def test_registered_iceberg_uses_public_sdk_schema_plan_and_stream(monkeypatch):
-    schema = pa.schema([pa.field("id", pa.int64())])
-    received = []
-
-    class Engine:
-        def __init__(self, **kwargs):
-            received.append(kwargs)
-            self.table_name = kwargs["table_name"]
-
-        def get_schema(self):
-            return schema
-
-        def plan(self, request, max_tasks):
-            assert max_tasks == 2
-            return Plan(
-                schema=schema,
-                tasks=[
-                    ScanTask(
-                        table_format=cast(Any, self),
-                        schema=schema,
-                        partition=IcebergInputPartition(
-                            columns=["id"], tasks=[cast(dict[str, object], value)]
-                        ),
-                    )
-                    for value in ({"file": "one"}, {"file": "two"})
-                ],
-            )
-
-        def execute(self, partition):
-            value = 1 if partition.tasks == [{"file": "one"}] else 2
-            return schema, iter([pa.record_batch([pa.array([value])], schema=schema)])
-
-    monkeypatch.setattr(module, "IcebergTableFormat", Engine)
-    registry = create_builtin_plugin_registry()
-    factory = registry.load("table_format", "iceberg")
-    adapter = PublicPluginTableFormat(
-        catalog_name="analytics",
-        table_name="default.events",
-        format="iceberg",
-        handle=handle(),
-        format_factory=cast(Any, factory),
-    )
-    assert adapter.get_schema() == schema
-    plan = adapter.plan(PlanRequest(target="default.events", columns=["id"]), max_tickets=2)
-    assert len(plan.tasks) == 2
-    batches = [batch for task in plan.tasks for batch in adapter.execute(task.partition)[1]]
-    assert pa.Table.from_batches(batches).column("id").to_pylist() == [1, 2]
-    assert all(
-        item["metadata_location"] == "https://catalog.example/metadata.json" for item in received
-    )
-
-
-def test_iceberg_sdk_checks_storage_allowlist_before_io():
-    plugin = module.IcebergFormatPlugin(
-        handle("https://blocked.example/metadata.json"),
-        _context(),
-        path_enforcer=PathRuleEnforcer([{"root": "https://allowed.example/"}]),
-    )
-    with pytest.raises(PermissionError):
-        plugin.schema(_context())
-
-
-@pytest.mark.parametrize(
-    "columns",
-    [["id"], ["id", "email", "region"], ["region", "id", "email"]],
-    ids=["integers", "strings", "reordered"],
-)
-def test_sdk_iceberg_reads_real_parallel_scan_tasks_after_ticket_round_trip(tmp_path, columns):
-    from pyiceberg.catalog import load_catalog
-
-    from dal_obscura.sources.builtins import create_builtin_plugin_registry
-    from dal_obscura.sources.task_codec import SourceTaskCodec
-    from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
-
-    identifier = create_iceberg_table(tmp_path, "sdk", "warehouse", append_batches=[[1, 2], [3, 4]])
-    catalog = load_catalog(
-        "sdk", **cast(dict[str, str], iceberg_sql_catalog_options(tmp_path, "sdk", "warehouse"))
-    )
-    location = catalog.load_table(identifier).metadata_location
-    resolved = handle(location)
-    adapter = PublicPluginTableFormat(
-        catalog_name="analytics",
-        table_name="default.events",
-        format="iceberg",
-        handle=resolved,
-        format_factory=module.IcebergFormatPlugin,
-    )
-    plan = adapter.plan(PlanRequest(target="default.events", columns=columns), max_tickets=2)
-    assert len(plan.tasks) == 2
-    batches = []
-    codec = SourceTaskCodec(create_builtin_plugin_registry())
-    for task in plan.tasks:
-        restored = codec.decode(codec.encode(task))
-        schema, stream = restored.table_format.execute(restored.partition)
-        assert schema.names == columns
-        batches.extend(stream)
-    assert sorted(pa.Table.from_batches(batches).column("id").to_pylist()) == [1, 2, 3, 4]
-    assert all(batch.schema.equals(schema, check_metadata=True) for batch in batches)
 
 
 @pytest.fixture
-def native_plugin(monkeypatch):
-    def create(schema, batches):
-        class Engine:
-            def __init__(self, **kwargs):
-                pass
-
-            def execute(self, partition):
-                return schema, batches
-
-        monkeypatch.setattr(module, "IcebergTableFormat", Engine)
-        return module.IcebergFormatPlugin(handle(), _context())
-
-    return create
-
-
-def test_native_iceberg_keeps_matching_arrow_buffers_and_closes_abandoned_reader(native_plugin):
-    batch = pa.record_batch([pa.array([1])], names=["id"])
-    closed = []
-
-    def source():
-        try:
-            yield batch
-            raise AssertionError("Early stop must not read the next batch")
-        finally:
-            closed.append(True)
-
-    plugin = native_plugin(batch.schema, source())
-    _, stream = plugin.execute(
-        PluginScanTask({"columns": ["id"], "tasks": [], "row_filter": None}), _context()
+def table(tmp_path):
+    identifier = create_iceberg_table(
+        tmp_path, "sdk", "warehouse", append_batches=[[0, 1, 2], [3, 4, 5]]
     )
-    iterator = iter(stream)
-
-    assert next(iterator) is batch
-    iterator.close()
-    assert closed == [True]
-
-
-def test_native_iceberg_closes_reader_when_schema_normalization_fails(native_plugin):
-    closed = []
-
-    def source():
-        try:
-            yield pa.record_batch([pa.array([1])], names=["wrong-column"])
-        finally:
-            closed.append(True)
-
-    plugin = native_plugin(pa.schema([pa.field("id", pa.int64())]), source())
-    _, stream = plugin.execute(
-        PluginScanTask({"columns": ["id"], "tasks": [], "row_filter": None}), _context()
-    )
-
-    with pytest.raises(ValueError, match="names"):
-        next(iter(stream))
-    assert closed == [True]
-
-
-def _context():
-    return ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=1), "native-test")
-
-
-def test_empty_iceberg_table_does_not_issue_a_synthetic_scan_task(tmp_path):
-    from pyiceberg.catalog import load_catalog
-    from pyiceberg.schema import Schema
-    from pyiceberg.types import LongType, NestedField
-
-    from tests.support.iceberg import iceberg_sql_catalog_options
-
     catalog = load_catalog(
-        "empty", **cast(dict[str, str], iceberg_sql_catalog_options(tmp_path, "empty", "warehouse"))
+        "sdk",
+        **{
+            key: str(value)
+            for key, value in iceberg_sql_catalog_options(tmp_path, "sdk", "warehouse").items()
+        },
     )
-    catalog.create_namespace("default")
-    table = catalog.create_table("default.events", Schema(NestedField(1, "id", LongType())))
-    plugin = module.IcebergFormatPlugin(handle(table.metadata_location), _context())
-    from dal_obscura_plugin_api import ScanRequest
+    return catalog.load_table(identifier)
 
-    tasks = list(plugin.plan(ScanRequest(plugin.schema(_context()).arrow_schema, 4), _context()))
-    assert tasks == []
+
+@pytest.mark.parametrize("mode", ["copy-on-write", "position", "equality"])
+@pytest.mark.parametrize(
+    "columns",
+    [["id"], ["region", "id", "email"], ["email"]],
+    ids=["key", "reordered", "hidden-delete-key"],
+)
+def test_native_parallel_reads_pin_cow_and_mor_updates(table, mode, columns):
+    from tests.support.plugin_scans import parallel_rows
+
+    # Deletes old id 1, then inserts its replacement. Equality deletes must not
+    # remove the newer replacement with the same key.
+    if mode == "copy-on-write":
+        table.delete("id == 1")
+    else:
+        install_delete_file(table, kind=mode, ids=[1])
+    table.append(
+        pa.table(
+            {"id": [1], "email": ["updated@example.com"], "region": ["eu"]},
+            schema=table.schema().as_arrow(),
+        )
+    )
+    captured = handle(table)
+    plugin = IcebergFormatPlugin(captured, context())
+    schema = plugin.schema(context()).arrow_schema
+    projected = pa.schema([schema.field(name) for name in columns], metadata=schema.metadata)
+    tasks = plugin.plan(ScanRequest(projected, 3), context())
+    plugin.close()
+    assert len(tasks) == (1 if mode == "equality" else 3)
+    assert all(task.to_json()["parallelism"] == (3 if mode == "equality" else 1) for task in tasks)
+    table.append(
+        pa.table(
+            {"id": [99], "email": ["later@example.com"], "region": ["us"]},
+            schema=table.schema().as_arrow(),
+        )
+    )
+    rows = parallel_rows(IcebergFormatPlugin, captured, tasks, context())
+    expected = [
+        {
+            key: value
+            for key, value in {
+                "id": i,
+                "email": "updated@example.com" if i == 1 else f"user{i}@example.com",
+                "region": "us" if i % 2 == 0 else "eu",
+            }.items()
+            if key in columns
+        }
+        for i in range(6)
+    ]
+    assert sorted(rows, key=lambda row: sorted(row.items())) == sorted(
+        expected, key=lambda row: sorted(row.items())
+    )
+
+
+def test_native_task_rejects_files_outside_snapshot(table):
+    plugin = IcebergFormatPlugin(handle(table), context())
+    with pytest.raises(ValueError, match="outside its pinned snapshot"):
+        plugin.execute(
+            ScanTask(
+                {
+                    "columns": ["id"],
+                    "files": ["/other/file.parquet"],
+                    "parallelism": 1,
+                    "row_filter": None,
+                }
+            ),
+            context(),
+        )
+
+
+def test_storage_allowlist_rejects_metadata_before_io(table):
+    plugin = IcebergFormatPlugin(
+        handle(table), context(), path_enforcer=PathRuleEnforcer([{"root": "/unrelated"}])
+    )
+    with pytest.raises(PermissionError):
+        plugin.schema(context())
+
+
+def test_iceberg_rejects_changed_snapshot_identity(table):
+    plugin = IcebergFormatPlugin(replace(handle(table), snapshot_id="123"), context())
+    with pytest.raises(ValueError, match="snapshot identity changed"):
+        plugin.schema(context())
+
+
+def test_empty_snapshot_has_no_tasks(tmp_path):
+    create_iceberg_table(tmp_path, "empty", "empty-warehouse", append_tables=[])
+    catalog = load_catalog(
+        "empty", **iceberg_sql_catalog_options(tmp_path, "empty", "empty-warehouse")
+    )
+    plugin = IcebergFormatPlugin(handle(catalog.load_table("default.users")), context())
+    assert plugin.plan(ScanRequest(plugin.schema(context()).arrow_schema, 4), context()) == []
+
+
+def test_nested_schema_and_evolution_preserve_values_and_metadata(tmp_path):
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("literal.name", pa.string()),
+            pa.field("profile", pa.struct([pa.field("tags", pa.list_(pa.string()))])),
+            pa.field("attributes", pa.map_(pa.string(), pa.int64())),
+        ]
+    )
+    rows = [
+        {"id": 1, "literal.name": "a", "profile": {"tags": ["x", None]}, "attributes": [("k", 2)]},
+        {"id": 2, "literal.name": None, "profile": None, "attributes": []},
+    ]
+    create_iceberg_table(
+        tmp_path,
+        "nested",
+        "nested-warehouse",
+        arrow_schema=schema,
+        append_tables=[pa.Table.from_pylist(rows, schema=schema)],
+    )
+    catalog = load_catalog(
+        "nested", **iceberg_sql_catalog_options(tmp_path, "nested", "nested-warehouse")
+    )
+    table = catalog.load_table("default.users")
+    with table.update_schema() as update:
+        update.add_column("new_field", StringType())
+    plugin = IcebergFormatPlugin(handle(table), context())
+    expected_schema = plugin.schema(context()).arrow_schema
+    tasks = plugin.plan(ScanRequest(expected_schema, 2), context())
+    output_schema, batches = plugin.execute(tasks[0], context())
+    output = pa.Table.from_batches(batches, schema=output_schema)
+    assert output.schema.equals(expected_schema, check_metadata=True)
+    assert output.to_pylist() == [dict(row, new_field=None) for row in rows]
+
+
+@pytest.mark.parametrize("mode", ["position", "equality"])
+def test_native_filter_hint_retains_hidden_delete_keys(table, mode):
+    install_delete_file(table, kind=mode, ids=[1])
+    plugin = IcebergFormatPlugin(handle(table), context())
+    schema = plugin.schema(context()).arrow_schema
+    projected = pa.schema([schema.field("email")], metadata=schema.metadata)
+    tasks = plugin.plan(ScanRequest(projected, 2, '"id" < 3 AND "region" IS NOT NULL'), context())
+    from tests.support.plugin_scans import parallel_rows
+
+    assert sorted(
+        row["email"] for row in parallel_rows(IcebergFormatPlugin, handle(table), tasks, context())
+    ) == ["user0@example.com", "user2@example.com"]
+
+
+@pytest.mark.parametrize("stop", ["exhaustion", "early-close", "cancel", "failure"])
+def test_native_stream_owns_reader_and_connection(table, monkeypatch, stop):
+    from threading import Event
+
+    import dal_obscura.sources.iceberg_plugin as native
+
+    cancelled = Event()
+    operation = replace(context(), cancel_check=cancelled.is_set)
+    plugin = IcebergFormatPlugin(handle(table), operation)
+    task = plugin.plan(ScanRequest(plugin.schema(operation).arrow_schema, 1), operation)[0]
+    schema = table.schema().as_arrow()
+    batch = pa.RecordBatch.from_pylist([{"id": 0, "email": "a", "region": "us"}], schema=schema)
+
+    from tests.support.iceberg import NativeConnectionStub
+
+    connection = NativeConnectionStub(batch, fail=stop == "failure")
+    monkeypatch.setattr(native, "_connection", lambda *args: connection)
+    _, batches = plugin.execute(task, operation)
+    if stop == "failure":
+        with pytest.raises(RuntimeError, match="native read failed"):
+            next(batches)
+    elif stop == "exhaustion":
+        assert sum(item.num_rows for item in batches) == 2
+    else:
+        assert next(batches).to_pylist() == batch.to_pylist()
+        if stop == "cancel":
+            cancelled.set()
+            with pytest.raises(InterruptedError):
+                next(batches)
+        else:
+            batches.close()
+    assert connection.closed == ["reader", "connection"]
+
+
+@pytest.mark.parametrize("location", ["historical-metadata", "manifest-list", "delete-file"])
+def test_native_storage_allowlist_checks_all_provider_locations(table, tmp_path, location):
+    import json
+    from pathlib import Path
+    from urllib.parse import unquote, urlsplit
+
+    outside = str(tmp_path / "outside.parquet")
+    if location == "delete-file":
+        install_delete_file(table, kind="equality", ids=[1], delete_path=outside)
+    else:
+        path = Path(unquote(urlsplit(table.metadata_location).path))
+        metadata = json.loads(path.read_text())
+        if location == "historical-metadata":
+            metadata["metadata-log"].append({"timestamp-ms": 0, "metadata-file": outside})
+        else:
+            metadata["snapshots"][-1]["manifest-list"] = outside
+        path.write_text(json.dumps(metadata))
+    plugin = IcebergFormatPlugin(
+        handle(table),
+        context(),
+        path_enforcer=PathRuleEnforcer([{"root": table.metadata.location}]),
+    )
+    with pytest.raises(PermissionError):
+        plugin.plan(ScanRequest(table.schema().as_arrow(), 2), context())

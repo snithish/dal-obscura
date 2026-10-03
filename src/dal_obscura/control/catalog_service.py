@@ -259,9 +259,9 @@ def validate_admitted_catalog_options(
 ) -> None:
     """Validate persisted external catalog options before provider use.
 
-    Catalog rows can predate descriptor validation or be restored from an
-    older deployment. Every discovery and schema path therefore repeats the
-    admitted descriptor check before resolving secrets or loading a factory.
+    Stored configuration crosses a trust boundary. Discovery and schema
+    operations validate the admitted descriptor before resolving secrets or
+    loading a factory.
     Built-in Iceberg options use the PyIceberg configuration contract and are
     validated by ``validate_catalog_options``.
     """
@@ -324,9 +324,7 @@ def validate_catalog_options(
     """
 
     if "catalog_name" in options:
-        raise ValidationFailure(
-            "Catalog option 'catalog_name' is retired; use 'provider_catalog_name'"
-        )
+        raise ValidationFailure("Unsupported catalog option: catalog_name")
     _validate_option_shape(options)
     normalized_allowlist = {item.strip().lower().rstrip(".") for item in egress_allowlist}
     _reject_dynamic_loader_options(options)

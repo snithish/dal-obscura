@@ -20,13 +20,6 @@ from dal_obscura.sources.plugin_runtime import PublicPluginCatalogAdapter
 from dal_obscura.sources.sql_catalog import SqlCatalog
 
 
-def test_catalog_registry_rejects_removed_file_catalog_type(tmp_path):
-    with pytest.raises(ValueError, match="Unsupported catalog type: files"):
-        CatalogConfig(
-            name="local", type="files", options={"location": str(tmp_path / "users.parquet")}
-        )
-
-
 def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch) -> None:
     closed: list[str] = []
 
@@ -47,8 +40,8 @@ def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch
     registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
-                "first": CatalogConfig(name="first", type="iceberg", options={}),
-                "second": CatalogConfig(name="second", type="iceberg", options={}),
+                "first": CatalogConfig(name="first", options={}),
+                "second": CatalogConfig(name="second", options={}),
             }
         )
     )
@@ -63,7 +56,6 @@ def test_catalog_config_requires_logical_name():
     try:
         CatalogConfig(
             name=" ",
-            type="iceberg",
             options={},
         )
     except ValueError as exc:
@@ -72,7 +64,7 @@ def test_catalog_config_requires_logical_name():
         raise AssertionError("expected blank catalog name rejection")
 
     with pytest.raises(ValueError, match="revision cannot be negative"):
-        CatalogConfig(name="analytics", type="iceberg", revision=-1)
+        CatalogConfig(name="analytics", revision=-1)
 
 
 def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
@@ -106,11 +98,9 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
     assert descriptor.identifier == TableIdentifier(namespace=("default",), name="users")
 
 
-def test_iceberg_catalog_rejects_retired_catalog_name_option() -> None:
-    catalog = _source_catalog(name="analytics", options={"catalog_name": "old-provider-name"})
-
-    with pytest.raises(ValueError, match=r"catalog_name.*provider_catalog_name"):
-        catalog.list_tables()
+def test_iceberg_catalog_rejects_unsupported_catalog_option() -> None:
+    with pytest.raises(ValueError, match="Unsupported catalog option: catalog_name"):
+        _source_catalog(name="analytics", options={"catalog_name": "old-provider-name"})
 
 
 def test_iceberg_registry_rejects_root_only_table_listing(monkeypatch):
@@ -273,13 +263,12 @@ class FakePyIcebergTable:
         properties: ClassVar[dict[str, str]] = {"warehouse": "s3://warehouse"}
 
 
-def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory():
+def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory(tmp_path):
     config = ServiceConfig(
         catalogs={
             "analytics": CatalogConfig(
                 name="analytics",
-                type="iceberg",
-                options={"uri": "sqlite:///warehouse.db"},
+                options={"uri": f"sqlite:///{tmp_path}/warehouse.db"},
             )
         }
     )
@@ -309,9 +298,7 @@ def test_catalog_registry_close_releases_adapters_and_rejects_reuse(monkeypatch)
         lambda *_args, **_kwargs: ClosableCatalog(),
     )
     registry = CatalogRegistry(
-        ServiceConfig(
-            catalogs={"analytics": CatalogConfig(name="analytics", type="iceberg", options={})}
-        )
+        ServiceConfig(catalogs={"analytics": CatalogConfig(name="analytics", options={})})
     )
 
     registry.close()
@@ -348,8 +335,8 @@ def test_catalog_registry_construction_closes_partially_built_generation(monkeyp
         CatalogRegistry(
             ServiceConfig(
                 catalogs={
-                    "analytics": CatalogConfig(name="analytics", type="iceberg", options={}),
-                    "replacement": CatalogConfig(name="replacement", type="iceberg", options={}),
+                    "analytics": CatalogConfig(name="analytics", options={}),
+                    "replacement": CatalogConfig(name="replacement", options={}),
                 }
             )
         )
@@ -375,8 +362,8 @@ def test_catalog_registry_construction_preserves_build_failure_when_cleanup_fail
         CatalogRegistry(
             ServiceConfig(
                 catalogs={
-                    "analytics": CatalogConfig(name="analytics", type="iceberg", options={}),
-                    "replacement": CatalogConfig(name="replacement", type="iceberg", options={}),
+                    "analytics": CatalogConfig(name="analytics", options={}),
+                    "replacement": CatalogConfig(name="replacement", options={}),
                 }
             )
         )
@@ -405,27 +392,23 @@ def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roo
         ).resolve_table("default.users")
 
 
-def test_catalog_registry_rejects_provider_returned_local_storage_path_outside_roots(monkeypatch):
-    class SafeMetadataTable:
+def test_catalog_handle_never_copies_provider_credentials_or_redirect_properties(monkeypatch):
+    class Table:
         metadata_location = "s3://analytics-demo/warehouse/metadata.json"
 
         class io:
-            properties: ClassVar[dict[str, str]] = {"warehouse": "/outside/warehouse"}
+            properties: ClassVar[dict[str, str]] = {
+                "warehouse": "/outside/warehouse",
+                "s3.secret-access-key": "private-value",
+            }
 
     class Catalog:
-        def load_table(self, identifier: str) -> SafeMetadataTable:
-            del identifier
-            return SafeMetadataTable()
+        def load_table(self, identifier):
+            return Table()
 
     monkeypatch.setattr(sql_catalog, "_load_iceberg_catalog", lambda *args: Catalog())
-    with pytest.raises(PermissionError, match="Path is not allowed"):
-        _source_catalog(
-            name="analytics",
-            options={},
-            path_enforcer=registry_module.PathRuleEnforcer(
-                [{"root": "s3://analytics-demo/warehouse"}]
-            ),
-        ).resolve_table("default.users")
+    source = _source_catalog(name="analytics", options={}).resolve_table("default.users")
+    assert dict(source.handle.metadata) == {"metadata_location": Table.metadata_location}
 
 
 def _source_catalog(*, name, options, path_enforcer=None):

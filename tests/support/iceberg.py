@@ -100,9 +100,159 @@ def iceberg_sql_catalog_options(
     tmp_path: Path,
     catalog_name: str,
     warehouse_name: str,
-) -> dict[str, object]:
+) -> dict[str, str]:
     return {
         "type": "sql",
         "uri": f"sqlite:///{tmp_path / f'{catalog_name}.db'}",
         "warehouse": str(tmp_path / warehouse_name),
     }
+
+
+def install_delete_file(table, *, kind, ids, delete_path=None):
+    """Write a v2 MoR fixture with upstream Avro writers, never production readers.
+
+    PyIceberg has no public MoR writer. This fixture supplies explicit delete
+    records and commits a snapshot; DuckDB independently interprets its semantics.
+    """
+    import uuid
+
+    import pyarrow.parquet as pq
+    from pyiceberg.manifest import (
+        DataFile,
+        DataFileContent,
+        FileFormat,
+        ManifestContent,
+        ManifestEntry,
+        ManifestEntryStatus,
+        ManifestWriterV2,
+        write_manifest_list,
+    )
+    from pyiceberg.table.snapshots import Operation, Snapshot, Summary
+    from pyiceberg.table.update import AddSnapshotUpdate, SetSnapshotRefUpdate
+    from pyiceberg.typedef import Record
+
+    snapshot = table.current_snapshot()
+    snapshot_id = uuid.uuid4().int & ((1 << 63) - 1)
+    sequence = table.metadata.last_sequence_number + 1
+    stem = table.metadata.location + "/metadata/delete-" + uuid.uuid4().hex
+    delete_path = delete_path or stem + ".parquet"
+    if kind == "equality":
+        schema = pa.schema([pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})])
+        records = [{"id": i} for i in ids]
+        content = DataFileContent.EQUALITY_DELETES
+    else:
+        schema = pa.schema(
+            [
+                pa.field("file_path", pa.string(), metadata={b"PARQUET:field_id": b"2147483546"}),
+                pa.field("pos", pa.int64(), metadata={b"PARQUET:field_id": b"2147483545"}),
+            ]
+        )
+        records = []
+        for task in table.scan().plan_files():
+            with table.io.new_input(task.file.file_path).open() as stream:
+                rows = pq.read_table(stream).to_pylist()
+            records += [
+                {"file_path": task.file.file_path, "pos": position}
+                for position, row in enumerate(rows)
+                if row["id"] in ids
+            ]
+        content = DataFileContent.POSITION_DELETES
+    with table.io.new_output(delete_path).create() as output:
+        pq.write_table(pa.Table.from_pylist(records, schema=schema), output)
+    file = DataFile.from_args(
+        content=content,
+        file_path=delete_path,
+        file_format=FileFormat.PARQUET,
+        partition=Record(),
+        record_count=len(records),
+        file_size_in_bytes=len(table.io.new_input(delete_path)),
+        equality_ids=[1] if kind == "equality" else None,
+    )
+    file.spec_id = 0
+
+    class DeleteManifestWriter(ManifestWriterV2):
+        def content(self):
+            return ManifestContent.DELETES
+
+        @property
+        def _meta(self):
+            return {**super()._meta, "content": "deletes"}
+
+    with DeleteManifestWriter(
+        table.spec(), table.schema(), table.io.new_output(stem + ".avro"), snapshot_id, "null"
+    ) as writer:
+        writer.add(
+            ManifestEntry.from_args(
+                status=ManifestEntryStatus.ADDED,
+                snapshot_id=snapshot_id,
+                sequence_number=sequence,
+                file_sequence_number=sequence,
+                data_file=file,
+            )
+        )
+    manifest = writer.to_manifest_file()
+    manifest_list = stem + "-list.avro"
+    with write_manifest_list(
+        2, table.io.new_output(manifest_list), snapshot_id, snapshot.snapshot_id, sequence, "null"
+    ) as writer:
+        writer.add_manifests([*snapshot.manifests(table.io), manifest])
+    updated = Snapshot.model_validate(
+        {
+            "snapshot-id": snapshot_id,
+            "parent-snapshot-id": snapshot.snapshot_id,
+            "sequence-number": sequence,
+            "manifest-list": manifest_list,
+            "summary": Summary(operation=Operation.OVERWRITE),
+            "schema-id": table.schema().schema_id,
+        }
+    )
+    with table.transaction() as transaction:
+        transaction._apply(
+            (
+                AddSnapshotUpdate(snapshot=updated),
+                SetSnapshotRefUpdate.model_validate(
+                    {"ref-name": "main", "type": "branch", "snapshot-id": snapshot_id}
+                ),
+            )
+        )
+    return table
+
+
+class NativeConnectionStub:
+    """Native stream boundary fake with explicit failure and cleanup ownership."""
+
+    def __init__(self, batch, *, fail=False):
+        self.closed = []
+        self.fail = fail
+        self.reader = NativeReaderStub(batch, self.closed, fail=fail)
+
+    def execute(self, sql, parameters):
+        return self
+
+    def to_arrow_reader(self, rows):
+        return self.reader
+
+    def close(self):
+        self.closed.append("connection")
+        if self.fail:
+            raise ValueError("connection cleanup failed")
+
+
+class NativeReaderStub:
+    def __init__(self, batch, closed, *, fail=False):
+        self.remaining = iter([batch, batch])
+        self.closed = closed
+        self.fail = fail
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.fail:
+            raise RuntimeError("native read failed")
+        return next(self.remaining)
+
+    def close(self):
+        self.closed.append("reader")
+        if self.fail:
+            raise ValueError("reader cleanup failed")

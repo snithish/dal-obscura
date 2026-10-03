@@ -43,8 +43,8 @@ stream data.
 
 Tickets persist bounded passive JSON scan envelopes server-side. Envelopes bind
 the admitted plugin artifact, immutable handle, schema and task data; decoding
-cannot import a module selected by the payload. Native Iceberg tasks explicitly
-encode file/delete metadata, partitions and residual expressions. No runtime
+cannot import a module selected by the payload. Native Iceberg tasks capture admitted file membership, projected columns,
+bounded parallelism and an optional validated SQL hint; native libraries own deletes. No runtime
 ticket path uses pickle. The stored envelope is internal, outside the connector
 wire contract; payload integrity, identity binding and revocation still apply.
 
@@ -57,10 +57,15 @@ wire contract; payload integrity, identity binding and revocation still apply.
 The gateway accepts one configured OIDC/JWKS provider. API keys, trusted headers,
 mTLS identity mapping, shared-secret JWTs, and composite auth are unsupported.
 Remote JWKS refreshes are rate-limited (30 seconds by default) and accept at
-most 256 usable signing keys. A newly rotated key becomes usable after that
-interval; unknown key IDs fail closed without causing one network request per
-authentication attempt. Operators can tighten both limits in the provider
-configuration when their IdP rotation policy requires it.
+most 256 usable signing keys. The next authentication after that interval refreshes
+the complete key set, including known key IDs, so removed keys stop being trusted
+and replacements using the same ID take effect. Concurrent requests share one
+refresh. A failed refresh denies authentication until a successful retry; failed
+attempts and unknown key IDs cannot trigger one network request per authentication.
+The retry interval starts when the refresh attempt completes. This intentionally
+trades availability during an IdP outage for bounded key freshness. Inline/file
+JWKS configurations are static and require reconfiguration to rotate keys.
+Operators can tighten both limits when their IdP rotation policy requires it.
 
 Browser sign-out revokes the local session and expires both session and CSRF
 cookies before navigating to the provider's RP-initiated logout endpoint. The

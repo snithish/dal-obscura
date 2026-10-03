@@ -252,9 +252,7 @@ class PluginRegistry:
                 if self._descriptor_loader is not None:
                     descriptor = self._descriptor_loader(entry)
                 else:
-                    # The static descriptor is the only factory-free source of
-                    # plugin metadata.  The former three-part fallback was
-                    # removed because it fabricated capabilities and config.
+                    # Static metadata is read without executing the factory.
                     descriptor = load_static_plugin_descriptor(entry)
                 if (
                     descriptor.kind != kind

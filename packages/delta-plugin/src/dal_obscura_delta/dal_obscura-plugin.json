@@ -1,0 +1,58 @@
+{
+  "descriptors": [
+    {
+      "kind": "catalog",
+      "plugin_id": "delta.directory",
+      "api_version": "2",
+      "config_version": 1,
+      "capabilities": [
+        "cancellation",
+        "delete_files",
+        "nested_schema",
+        "snapshot_reads",
+        "splittable_scan"
+      ],
+      "output_formats": [
+        "delta"
+      ],
+      "handle_versions": [
+        1
+      ],
+      "config_schema": {
+        "fields": [
+          {
+            "name": "root",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "tables_path",
+            "type": "string",
+            "required": true
+          }
+        ]
+      },
+      "display_name": "Delta table directory"
+    },
+    {
+      "kind": "table_format",
+      "plugin_id": "delta",
+      "api_version": "2",
+      "config_version": 1,
+      "capabilities": [
+        "cancellation",
+        "delete_files",
+        "nested_schema",
+        "projection_pushdown",
+        "snapshot_reads",
+        "splittable_scan"
+      ],
+      "output_formats": [],
+      "handle_versions": [
+        1
+      ],
+      "config_schema": {},
+      "display_name": "Delta Lake snapshot format"
+    }
+  ]
+}

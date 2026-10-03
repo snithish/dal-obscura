@@ -30,7 +30,6 @@ def _fixture(tmp_path: Path) -> tuple[Path, pa.Table]:
                         "name": "users",
                         "files": ["part.parquet"],
                         "schema_ipc": schema_ipc,
-                        "field_ids": ["id"],
                     }
                 },
             }

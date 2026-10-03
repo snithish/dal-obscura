@@ -1,5 +1,0 @@
-#!/usr/bin/env sh
-# Compatibility entry point; ./demo is the documented launcher.
-set -eu
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec "$ROOT/demo" "$@"

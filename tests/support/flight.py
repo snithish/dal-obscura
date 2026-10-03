@@ -30,8 +30,8 @@ from dal_obscura.read.signing import HmacTicketCodecAdapter
 from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.sources.contracts import TableFormat
-from dal_obscura.sources.planning import InputPartition, Plan, ScanTask
+from dal_obscura.sources.contracts import Source
+from dal_obscura.sources.planning import Plan, ScanTask
 from dal_obscura.sources.published import LiveConfigCatalogRegistry
 from dal_obscura.sources.task_codec import ScanTaskCodec
 from dal_obscura.storage.database.db import session_factory
@@ -71,12 +71,19 @@ class TestJwtIdentity:
 
 
 @dataclass(frozen=True, kw_only=True)
-class StubInputPartition(InputPartition):
+class FixtureSource:
+    catalog_name: str
+    table_name: str
+    format: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class StubInputPartition:
     payload: bytes = b"payload"
 
 
 @dataclass(frozen=True, kw_only=True)
-class StubTableFormat(TableFormat):
+class StubTableFormat(FixtureSource):
     schema: pa.Schema
     batches: tuple[pa.RecordBatch, ...]
 
@@ -93,21 +100,21 @@ class StubTableFormat(TableFormat):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
+    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[Any]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("StubTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
 
 
 class StubCatalogRegistry:
-    def __init__(self, table_format: TableFormat) -> None:
+    def __init__(self, table_format: Source) -> None:
         self._table_format = table_format
 
     def describe(
         self,
         catalog: str | None,
         target: str,
-    ) -> TableFormat:
+    ) -> Source:
         del catalog, target
         return self._table_format
 
@@ -199,7 +206,7 @@ def command_descriptor(payload: dict[str, object]) -> flight.FlightDescriptor:
 
 def build_flight_service(
     *,
-    table_format: TableFormat | None = None,
+    table_format: Source | None = None,
     catalog_registry: Any | None = None,
     db_session: Session | None = None,
     policy_rules: list[dict[str, object]] | None = None,

@@ -26,7 +26,7 @@ def test_path_rule_enforcer_allows_configured_roots_and_descendants():
 
 
 def test_path_rule_enforcer_rejects_glob_rules_and_wildcard_roots():
-    with pytest.raises(ValueError, match="glob patterns are no longer supported"):
+    with pytest.raises(ValueError, match="unsupported fields"):
         PathRuleEnforcer([{"glob": "s3://warehouse/*", "allow": True}])
 
     with pytest.raises(ValueError, match="wildcards are not supported"):

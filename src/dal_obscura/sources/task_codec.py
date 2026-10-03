@@ -83,12 +83,10 @@ class SourceTaskCodec:
             )
             partition = PublicPluginPartition(
                 task=task,
-                handle=handle,
-                format_factory=table.format_factory,
                 schema=output_schema,
             )
             return ScanTask(table, schema, partition)
-        except (ValueError, TypeError, KeyError, OverflowError) as exc:
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:
             raise ValueError("Invalid read payload in ticket") from exc
 
 

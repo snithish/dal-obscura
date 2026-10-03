@@ -66,7 +66,7 @@ def test_live_config_rejects_tampered_plugin_binding():
     )
     catalog = LiveCatalog(
         catalog="analytics",
-        config={"type": "iceberg", "options": {}},
+        config={"options": {}},
     )
 
     with pytest.raises(ValueError, match="unsupported without an admitted registry"):
@@ -86,7 +86,7 @@ def test_live_config_passes_runtime_path_enforcer_to_catalog():
     )
     catalog = LiveCatalog(
         catalog="analytics",
-        config={"type": "iceberg", "options": {}},
+        config={"options": {}},
     )
     enforcer = PathRuleEnforcer([{"root": "s3://warehouse"}])
 
@@ -116,7 +116,7 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
     )
     catalog = LiveCatalog(
         catalog="analytics",
-        config={"type": "iceberg", "options": {}},
+        config={"options": {}},
     )
 
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
@@ -131,7 +131,7 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
             ("catalog", "iceberg.sql"), ("table_format", "iceberg")
         ),
     )
-    assert resolved.type == "iceberg"
+    assert resolved.plugin_id == "iceberg.sql"
 
     retired = replace(
         asset,
@@ -166,7 +166,7 @@ def test_live_config_preserves_external_plugin_identity():
     )
     catalog = LiveCatalog(
         catalog="analytics",
-        config={"type": "plugin", "plugin_id": "manifest", "options": {"root": "/srv/data"}},
+        config={"plugin_id": "manifest", "options": {"root": "/srv/data"}},
     )
     resolved = _catalog_config_for_asset(
         catalog,
@@ -192,7 +192,7 @@ def test_live_config_preserves_catalog_plugin_revision():
     )
     catalog = LiveCatalog(
         catalog="analytics",
-        config={"type": "iceberg", "options": {"root": "/srv/data"}},
+        config={"options": {"root": "/srv/data"}},
         plugin_id="manifest",
         plugin_revision=17,
     )
@@ -494,7 +494,6 @@ def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
         {b"iceberg.field.id": b"x" * 129},
         {b"PARQUET:field_id": b"\xff"},
         {b"PARQUET:field_id": b"synthetic:forged"},
-        {b"iceberg.field.id": b"legacy:forged"},
     ],
 )
 def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: dict[bytes, bytes]):

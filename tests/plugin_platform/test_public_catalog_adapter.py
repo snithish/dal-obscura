@@ -18,7 +18,6 @@ from dal_obscura.sources.catalogs import (
 from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.sources.plugin_runtime import (
     PublicPluginCatalogAdapter,
-    PublicPluginPartition,
     PublicPluginTableFormat,
 )
 from dal_obscura.sources.plugins import PluginRegistry
@@ -46,7 +45,6 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
             catalogs={
                 "datasets": CatalogConfig(
                     name="datasets",
-                    type=cast(Any, "iceberg"),
                     plugin_id="manifest",
                     revision=17,
                     options={"root": str(root), "manifest_path": "manifest.json"},
@@ -62,8 +60,7 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
     assert table_format.get_schema() == table.schema
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=4)
     assert len(plan.tasks) == 2
-    partition = cast(PublicPluginPartition, plan.tasks[0].partition)
-    assert partition.handle.catalog_revision == 17
+    assert table_format.handle.catalog_revision == 17
     codec = SourceTaskCodec(registry)
     serialized = codec.encode(plan.tasks[0])
     restored = codec.decode(serialized)
@@ -357,3 +354,18 @@ def test_schema_must_match_catalog_pinned_snapshot():
         table.get_schema()
     with pytest.raises(ValueError, match="snapshot"):
         table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
+
+
+def test_native_catalog_validates_provider_config_during_construction():
+    from datetime import datetime, timedelta, timezone
+
+    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
+
+    from dal_obscura.sources.sql_catalog import SqlCatalog
+
+    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=1), "config")
+    with pytest.raises(ValueError, match="Failed to load catalog"):
+        SqlCatalog(
+            CatalogConfig("iceberg.sql", "invalid", 1, {"type": "sql", "uri": "invalid-url"}),
+            context,
+        )

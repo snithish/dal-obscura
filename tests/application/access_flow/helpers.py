@@ -4,7 +4,7 @@ from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
 from dal_obscura.read.signing import HmacTicketCodecAdapter
 from dal_obscura.read.tickets import TicketPayload
-from dal_obscura.sources.contracts import TableFormat
+from dal_obscura.sources.contracts import Source
 from tests.support.arrow import id_region_batch, id_region_schema
 from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.use_cases import (
@@ -18,7 +18,7 @@ from tests.support.use_cases import (
 AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
 
 
-def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDecision, **options):
+def _build_end_to_end_access_flow(table_format: Source, decision: AccessDecision, **options):
     ticket_codec = HmacTicketCodecAdapter("secret")
     ticket_store = FakeTicketStore()
 
