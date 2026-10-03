@@ -45,8 +45,19 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
       - name: Install dependencies
         run: uv sync --dev --extra server --extra postgres --frozen
+
+      - name: Check native binding
+        run: |
+          cargo fmt --manifest-path packages/iceberg-reader/Cargo.toml --check
+          cargo clippy --locked --manifest-path packages/iceberg-reader/Cargo.toml -- -D warnings
 
       - name: Check formatting
         run: uv run ruff format --check .
@@ -84,6 +95,12 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
 
       - name: Install dependencies
         run: uv sync --dev --extra server --extra postgres --frozen
@@ -179,6 +196,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
       - name: Install dependencies
         run: uv sync --dev --extra server --extra postgres --frozen
 
@@ -232,6 +255,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
       - name: Install PostgreSQL test dependencies
         run: uv sync --dev --extra server --extra postgres --frozen
 
@@ -267,10 +296,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
       - name: Build package
         run: |
           uv build
           uv build --wheel --out-dir dist packages/plugin-api
+          uv build --wheel --out-dir dist packages/iceberg-reader
 
       - name: Install and import default client wheel
         run: |
@@ -285,7 +321,7 @@ jobs:
           smoke_env="$(mktemp -d)"
           uv venv "$smoke_env"
           wheel_path="$(ls dist/dal_obscura-*-py3-none-any.whl)"
-          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[server,postgres]" dist/dal_obscura_plugin_api-*.whl
+          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[server,postgres]" dist/dal_obscura_plugin_api-*.whl dist/dal_obscura_iceberg_reader-*.whl
           PATH="$smoke_env/bin:$PATH"
           dal-obscura-control-plane --help
           dal-obscura-migrate upgrade --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
@@ -378,6 +414,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
+
       - name: Build exact server and plugin wheels
         run: |
           mkdir -p "$RUNNER_TEMP/integration-dist"
@@ -387,6 +429,7 @@ jobs:
           uv build --wheel --out-dir "$RUNNER_TEMP/integration-dist" packages/manifest-parquet-plugin
           uv build --wheel --out-dir "$RUNNER_TEMP/integration-dist" packages/iceberg-rest-plugin
           uv build --wheel --out-dir "$RUNNER_TEMP/integration-dist" packages/delta-plugin
+          uv build --wheel --out-dir "$RUNNER_TEMP/integration-dist" packages/iceberg-reader
 
       - name: Install exact wheels and exercise core routing
         run: |
@@ -397,7 +440,8 @@ jobs:
             "$RUNNER_TEMP/integration-dist"/dal_obscura_plugin_api-*.whl \
             "$RUNNER_TEMP/integration-dist"/dal_obscura_manifest_parquet-*.whl \
             "$RUNNER_TEMP/integration-dist"/dal_obscura_iceberg_rest-*.whl \
-            "$RUNNER_TEMP/integration-dist"/dal_obscura_delta-*.whl
+            "$RUNNER_TEMP/integration-dist"/dal_obscura_delta-*.whl \
+            "$RUNNER_TEMP/integration-dist"/dal_obscura_iceberg_reader-*.whl
           PYTHONPATH= "$RUNNER_TEMP/integration-env/bin/python" -m pytest -o pythonpath= \
             tests/plugin_platform/test_public_catalog_adapter.py \
             tests/plugin_platform/test_public_format_adapter.py \
@@ -426,6 +470,12 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+
+      - name: Set up native Iceberg toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.94.0
+          components: rustfmt, clippy
 
       - name: Install native scan dependencies
         run: uv sync --dev --extra server --frozen

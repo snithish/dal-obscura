@@ -1,13 +1,13 @@
-"""SDK-native Iceberg scans; DuckDB owns snapshot and delete interpretation."""
+"""Passive distributed Iceberg scans backed by Apache Iceberg native file readers."""
 
 from __future__ import annotations
 
 import heapq
 import os
 from collections.abc import Iterator
-from importlib import resources
+from datetime import datetime, timezone
+from itertools import pairwise
 
-import duckdb
 import pyarrow as pa
 from dal_obscura_plugin_api import (
     ExecutionContext,
@@ -17,18 +17,18 @@ from dal_obscura_plugin_api import (
     SchemaDescriptor,
     TableHandle,
 )
+from pyiceberg.io.pyarrow import ArrowAccessor, ArrowProjectionVisitor, pyarrow_to_schema
 from pyiceberg.manifest import DataFileContent
+from pyiceberg.schema import visit_with_partner
 from pyiceberg.table import StaticTable
 
 from dal_obscura import __version__
-from dal_obscura.policy.filters import deserialize_row_filter
 from dal_obscura.policy.schema_bounds import validate_arrow_schema_bounds
 from dal_obscura.policy.schema_identity import schema_has_stable_ids
 from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
 
 _MAX_FILES = 10_000
-_BATCH_ROWS = 8192
 
 
 class IcebergFormatPlugin:
@@ -47,7 +47,6 @@ class IcebergFormatPlugin:
                 "splittable_scan",
                 "delete_files",
                 "cancellation",
-                "filter_pushdown",
             }
         ),
         handle_versions=frozenset({1}),
@@ -73,7 +72,7 @@ class IcebergFormatPlugin:
         self._enforcer = path_enforcer
         self._table = None
         self._files = None
-        self._equality_deletes = False
+        self._reader = None
 
     def _check_path(self, location):
         if self._enforcer is not None:
@@ -123,7 +122,6 @@ class IcebergFormatPlugin:
             snapshot = table.current_snapshot()
             files = {}
             count = 0
-            equality_deletes = False
             if snapshot is not None:
                 for manifest in snapshot.manifests(table.io):
                     context.check_active()
@@ -135,18 +133,27 @@ class IcebergFormatPlugin:
                             raise ValueError("Iceberg snapshot exceeds the file budget")
                         data = entry.data_file
                         self._check_path(data.file_path)
-                        if data.content == DataFileContent.EQUALITY_DELETES:
-                            equality_deletes = True
                         if data.content == DataFileContent.DATA:
                             if data.file_path in files:
                                 raise ValueError("Duplicate Iceberg data file")
-                            files[data.file_path] = max(1, data.file_size_in_bytes)
+                            size = max(1, data.file_size_in_bytes)
+                            offsets = tuple(data.split_offsets or ())
+                            if (
+                                len(offsets) > _MAX_FILES
+                                or any(
+                                    type(offset) is not int or not 0 <= offset < size
+                                    for offset in offsets
+                                )
+                                or tuple(sorted(set(offsets))) != offsets
+                            ):
+                                raise ValueError("Invalid Iceberg split offsets")
+                            files[data.file_path] = (size, offsets)
             self._files = files
-            self._equality_deletes = equality_deletes
         return self._files
 
     def plan(self, request: ScanRequest, context: ExecutionContext) -> list[ScanTask]:
-        row_filter = _filter(request.row_filter)
+        if request.row_filter is not None:
+            raise ValueError("Iceberg does not support SQL filter pushdown")
         schema = self.schema(context).arrow_schema
         projected = _projection(schema, request.columns)
         if not projected.equals(request.schema, check_metadata=True):
@@ -154,31 +161,21 @@ class IcebergFormatPlugin:
         files = self._members(context)
         if not files:
             return []
-        if self._equality_deletes:
-            return [
-                ScanTask(
-                    {
-                        "columns": list(request.columns),
-                        "files": sorted(files),
-                        "parallelism": min(request.max_tasks, len(files), 4),
-                        "row_filter": row_filter,
-                    }
-                )
-            ]
-        groups = [[] for _ in range(min(request.max_tasks, len(files)))]
+        self._native(context)
+        units = _split_work(files, request.max_tasks)
+        groups = [[] for _ in range(min(request.max_tasks, len(units)))]
         loads = [(0, index) for index in range(len(groups))]
         heapq.heapify(loads)
-        for path, size in sorted(files.items(), key=lambda item: (-item[1], item[0])):
+        for path, start, size in sorted(units, key=lambda item: (-item[2], item[0], item[1])):
             total, index = heapq.heappop(loads)
-            groups[index].append(path)
+            groups[index].append((path, start, size))
             heapq.heappush(loads, (total + size, index))
         return [
             ScanTask(
                 {
                     "columns": list(request.columns),
-                    "files": group,
-                    "parallelism": 1,
-                    "row_filter": row_filter,
+                    "files": [path for path, _, _ in group],
+                    "ranges": [[start, size] for _, start, size in group],
                 }
             )
             for group in groups
@@ -188,55 +185,84 @@ class IcebergFormatPlugin:
         context.check_active()
         payload = task.to_json()
         if (
-            set(payload) != {"columns", "files", "parallelism", "row_filter"}
+            set(payload) != {"columns", "files", "ranges"}
             or not isinstance(payload["columns"], list)
             or not isinstance(payload["files"], list)
             or not payload["files"]
             or any(not isinstance(path, str) for path in payload["files"])
-            or len(set(payload["files"])) != len(payload["files"])
-            or type(payload["parallelism"]) is not int
-            or not 1 <= payload["parallelism"] <= 4
+            or not isinstance(payload["ranges"], list)
+            or len(payload["ranges"]) != len(payload["files"])
         ):
             raise ValueError("Invalid Iceberg task")
-        _filter(payload["row_filter"])
         schema = _projection(self.schema(context).arrow_schema, payload["columns"])
         members = self._members(context)
         if any(path not in members for path in payload["files"]):
             raise ValueError("Iceberg task is outside its pinned snapshot")
-        if self._equality_deletes and set(payload["files"]) != set(members):
-            raise ValueError("Equality-delete scans require complete native snapshot ownership")
+        intervals = {}
+        for path, pair in zip(payload["files"], payload["ranges"], strict=True):
+            if (
+                not isinstance(pair, list)
+                or len(pair) != 2
+                or any(type(value) is not int for value in pair)
+                or pair[0] < 0
+                or pair[1] <= 0
+                or sum(pair) > members[path][0]
+            ):
+                raise ValueError("Invalid Iceberg task range")
+            intervals.setdefault(path, []).append((pair[0], sum(pair)))
+        for ranges in intervals.values():
+            ranges.sort()
+            if any(left[1] > right[0] for left, right in pairwise(ranges)):
+                raise ValueError("Overlapping Iceberg task ranges")
         return schema, self._batches(payload, schema, context)
 
-    def _batches(self, payload, schema, context) -> Iterator[pa.RecordBatch]:
-        # Read all schema fields at the native boundary. This keeps equality
-        # delete keys present even when callers project them away. Python selects
-        # requested buffers afterwards; no custom equality-delete implementation.
-        virtual = "__dal_source_file"
-        while virtual in self._load(context).schema().as_arrow().names:
-            virtual += "_"
-        connection = _connection(self._location, payload["parallelism"])
-        reader = None
-        try:
+    def _native(self, context):
+        if self._reader is None:
+            from dal_obscura_iceberg_reader import Reader
+
+            members = self._members(context)
+            table = self._load(context)
+            snapshot = table.current_snapshot()
+            if snapshot is None:
+                raise ValueError("Cannot execute an empty Iceberg snapshot")
             context.check_active()
-            placeholders = ",".join("?" for _ in payload["files"])
-            if self._equality_deletes:
-                sql, parameters = "SELECT * FROM iceberg_scan(?)", [self._location]
-            else:
-                sql = (
-                    f"SELECT * FROM iceberg_scan(?, filename={_literal(virtual)}) "
-                    f"WHERE {_identifier(virtual)} IN ({placeholders})"
-                )
-                parameters = [self._location, *payload["files"]]
-            if payload["row_filter"] is not None:
-                sql += " WHERE " if self._equality_deletes else " AND "
-                sql += "(" + _filter(payload["row_filter"]) + ")"
-            reader = connection.execute(sql, parameters).to_arrow_reader(_BATCH_ROWS)
+            reader = Reader(
+                self._location, snapshot.snapshot_id, _storage_options(), _remaining(context)
+            )
+            context.check_active()
+            planned = reader.files()
+            if len(planned) != len(members) or {path for path, _ in planned} != set(members):
+                raise ValueError("Native Iceberg plan differs from admitted snapshot")
+            self._reader = reader
+        return self._reader
+
+    def _batches(self, payload, schema, context) -> Iterator[pa.RecordBatch]:
+        context.check_active()
+        reader = self._native(context).start(
+            [(path, *pair) for path, pair in zip(payload["files"], payload["ranges"], strict=True)]
+        )
+        try:
             while True:
                 context.check_active()
-                batch = next(reader, None)
+                batch = reader.next(_remaining(context))
+                context.check_active()
                 if batch is None:
                     break
-                context.check_active()
+                table = self._load(context)
+                source_schema = pyarrow_to_schema(batch.schema)
+                # Rust scans use the snapshot's historical schema. Upstream's
+                # field-ID visitor evolves it to the captured metadata schema,
+                # after deletes, so renamed/dropped delete keys remain available.
+                batch = pa.RecordBatch.from_struct_array(
+                    visit_with_partner(
+                        table.schema(),
+                        batch,
+                        ArrowProjectionVisitor(source_schema, include_field_ids=True),
+                        ArrowAccessor(source_schema),
+                    )
+                )
+                # Upstream reads all fields, including hidden equality-delete keys.
+                # Select buffers only after native deletes; preserve exact SDK metadata.
                 batch = batch.select(schema.names)
                 yield (
                     batch
@@ -244,24 +270,12 @@ class IcebergFormatPlugin:
                     else batch.cast(schema)
                 )
         finally:
-            try:
-                if reader is not None:
-                    _close_plugin_preserving_error(reader)
-            finally:
-                _close_plugin_preserving_error(connection)
+            _close_plugin_preserving_error(reader)
 
     def close(self):
         self._table = None
         self._files = None
-        self._equality_deletes = False
-
-
-def _filter(value):
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("Invalid Iceberg filter hint")
-    return deserialize_row_filter(value).expression.sql(dialect="duckdb")
+        self._reader = None
 
 
 def _projection(schema, columns):
@@ -272,58 +286,52 @@ def _projection(schema, columns):
     return pa.schema([schema.field(name) for name in columns], metadata=schema.metadata)
 
 
-def _identifier(value):
-    return '"' + value.replace('"', '""') + '"'
+def _remaining(context):
+    context.check_active()
+    return (context.deadline - datetime.now(timezone.utc)).total_seconds()
 
 
-def _literal(value):
-    return "'" + value.replace("'", "''") + "'"
+def _split_work(files, budget):
+    units = [(path, 0, size) for path, (size, _) in files.items()]
+    while len(units) < budget:
+        candidates = []
+        for index, (path, start, size) in enumerate(units):
+            points = [point for point in files[path][1][1:] if start < point < start + size]
+            if points:
+                boundary = min(points, key=lambda point: (abs(point - start - size / 2), point))
+                candidates.append((-size, path, start, index, boundary))
+        if not candidates:
+            break
+        _, path, start, index, boundary = min(candidates)
+        size = units[index][2]
+        units[index : index + 1] = [
+            (path, start, boundary - start),
+            (path, boundary, start + size - boundary),
+        ]
+    return units
 
 
-def _connection(location, threads=1):
-    connection = duckdb.connect(
-        config={
-            "threads": threads,
-            "arrow_large_buffer_size": True,
-            "memory_limit": "256MB",
-            "temp_directory": "",
-            "autoload_known_extensions": False,
-            "autoinstall_known_extensions": False,
-        }
-    )
-    try:
-        for name in ("httpfs", "aws", "avro", "iceberg"):
-            path = resources.files("duckdb_extension_" + name).joinpath(
-                "extensions", "v1.5.4", name + ".duckdb_extension"
-            )
-            connection.execute("LOAD " + _literal(str(path)))
-        if location.startswith("s3:"):
-            properties = ["TYPE S3", "PROVIDER CREDENTIAL_CHAIN", "REFRESH auto"]
-            region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
-            if region:
-                properties.append("REGION " + _literal(region))
-            endpoint = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
-            if endpoint:
-                from urllib.parse import urlsplit
+def _storage_options():
+    # OpenDAL obtains credentials from each worker's native AWS provider chain.
+    options = {}
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    endpoint = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
+    if region:
+        options["s3.region"] = region
+    if endpoint:
+        from urllib.parse import urlsplit
 
-                parsed = urlsplit(endpoint)
-                if (
-                    parsed.scheme not in {"http", "https"}
-                    or not parsed.netloc
-                    or parsed.username
-                    or parsed.password
-                    or parsed.query
-                    or parsed.fragment
-                    or parsed.path not in {"", "/"}
-                ):
-                    raise ValueError("Invalid operator S3 endpoint")
-                properties += [
-                    "ENDPOINT " + _literal(parsed.netloc),
-                    "URL_STYLE " + _literal("path"),
-                    "USE_SSL " + ("true" if parsed.scheme == "https" else "false"),
-                ]
-            connection.execute("CREATE SECRET (" + ",".join(properties) + ")")
-        return connection
-    except BaseException:
-        _close_plugin_preserving_error(connection)
-        raise
+        parsed = urlsplit(endpoint)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError("Invalid operator S3 endpoint")
+        options["s3.endpoint"] = endpoint
+        options["s3.path-style-access"] = "true"
+    return options

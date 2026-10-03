@@ -8,7 +8,7 @@ second protocol implementation was added.
 
 ## Storage and credentials
 
-Arrow S3FileSystem, delta-rs and DuckDB own storage IO and their native AWS
+Arrow S3FileSystem, delta-rs and Apache OpenDAL own storage IO and their native AWS
 credential chains. Workers supply workload identity or standard AWS environment
 credentials. No storage credential, endpoint override, callback or live provider
 is captured in a handle/ticket. Operator startup AWS_REGION/AWS_DEFAULT_REGION
@@ -32,45 +32,52 @@ Iceberg applies configured allowlists to metadata, manifests, data and deletes.
   and the public kernel scan has no independent row-group task API. Both COW and
   MoR replacements retain exactly one copy of surviving rows. Tasks pin masks and
   versions; later append/delete does not change issued work.
-- **Iceberg v2:** PyIceberg owns metadata/manifest discovery. DuckDB 1.5.4's native
-  Iceberg extension owns COW, position deletes and equality deletes. PyIceberg's
-  public reader rejects equality deletes, so it cannot satisfy this contract.
-  Native extensions are pinned wheel artifacts; runtime downloading is disabled.
-  COW/position scans use deterministic disjoint file groups (native filename
-  predicate), one native thread per task. Equality-delete scans use one task and
-  up to four native threads: the native filename column currently fails with
-  equality deletes. Using it would corrupt/fail reads; rerunning the entire table
-  in multiple tasks would duplicate work. This backend limit prevents distributed
-  equality-delete fan-out in this release.
+- **Iceberg v2:** PyIceberg owns admission/schema discovery. Apache Iceberg Rust
+  0.10.0 with Apache's merged [NULL fix](https://github.com/apache/iceberg-rust/pull/2781)
+  plans native delete-aware file tasks and owns COW, position/equality
+  deletes, partition matching and sequence applicability. Its official Python
+  binding has no file-task reader API; a small [native binding](../packages/iceberg-reader/README.md)
+  exposes the maintained Rust planner/Arrow reader. Every mode uses deterministic,
+  disjoint file groups. When file count is below task budget, manifest row-group
+  offsets split the largest eligible range; absent offsets fall back to file granularity.
+  Workers reconstruct native plans from pinned metadata,
+  then execute only their assigned files/row groups; no whole-table data rescan or
+  thread-only fallback remains. Metadata and delete files may be shared.
 - **Manifest/Parquet:** Arrow owns immutable file reads; row groups are balanced
   across disjoint tasks. Replacement files require a new manifest revision.
   It is not a transactional table format and has no independent MoR semantics.
 
-Iceberg native reads retain all table fields before Arrow projection so equality
-keys remain available even when omitted from caller output. This costs extra IO;
-it avoids the upstream equality-delete projection defect. Native filter hints
-are validated SQL and advisory; core always enforces the complete governance
-filter on original values before masking. No custom SQL-to-Iceberg expression
-translator, delete matcher or serialized DataFile codec remains.
+Iceberg reads retain snapshot fields and required historical equality keys before
+field-ID projection to the captured metadata schema. This preserves dropped or
+renamed delete keys, including a different column reusing the old name. Native
+schema history/pruning and PyIceberg's projection visitor own type/default
+behavior. Reading hidden fields costs IO. The format no longer advertises SQL
+pushdown; core enforces complete SQL filters on original values before masking.
+No custom SQL translator, delete matcher or serialized DataFile codec exists.
 
 ## Bounds and evidence
 
-Each native Iceberg connection uses at most four threads, 256 MiB engine memory,
-no disk spill and 8,192-row streaming batches. Planning admits at most 10,000
-manifest entries; Delta and Parquet have additional documented task/metadata
-limits. Provider metadata APIs may materialize listings/manifests; these caps do
-not establish a hard planning RSS limit. Native blocking IO is not immediately
-interruptible; active checks reject late batches and cleanup owns readers and
-connections. Per-worker limits do not establish a deployment-wide capacity SLA.
+Each native Iceberg reader uses one IO runtime thread, one data-file stream and
+8,192-row batches. Planning admits at most 10,000 manifest entries/native file
+plans; Delta and Parquet have additional documented limits. Async planning and
+batch pulls use operation deadlines. Metadata/delete buffers are upstream-owned;
+these limits do not establish a hard RSS or cluster capacity cap. Active checks
+reject late batches; close owns streams and opened providers.
 
-The socket lane `tests/plugin_platform/test_cloud_formats.py` runs real Arrow,
-Delta Kernel, PyIceberg and native DuckDB against a disposable HTTP S3 emulator.
-It covers COW/MoR deletes and replacements, restored parallel tasks, snapshot
-pinning and object names with escaped characters. Local owning lanes cover schema
-metadata, projection, cancellation, cleanup and path admission. No production
-AWS benchmark or speedup claim is made.
+The socket lane `tests/plugin_platform/test_cloud_formats.py` uses real Arrow,
+Delta Kernel, PyIceberg and Apache Iceberg against disposable HTTP S3. Iceberg
+COW/position/equality cases run separate fresh worker processes: the server denies
+reads of any other task's data files, and workers must return exact rows after
+deletes/replacement updates. This proves independent worker execution and disjoint
+data IO on one host. An additional qualification ran three independent Linux VM
+worker containers per delete mode against the host's S3 emulator, using the Linux
+native wheel and passive JSON assignments. Exact rows, schemas and assigned-file
+IO passed across that OS/network boundary. Actual multi-host AWS IAM/STS remains
+deployment qualification.
+Local lanes cover nested schemas, evolution, hidden keys, cancellation, cleanup
+and path admission. No production AWS benchmark or speedup claim is made.
 
 References: [delta-rs S3](https://delta-io.github.io/delta-rs/latest/integrations/object-storage/s3/),
 [PyIceberg configuration](https://py.iceberg.apache.org/configuration/),
-[DuckDB Iceberg](https://duckdb.org/docs/current/core_extensions/iceberg/overview),
-[upstream equality projection issue](https://github.com/duckdb/duckdb-iceberg/issues/940).
+[Apache Iceberg Rust](https://github.com/apache/iceberg-rust),
+[upstream file reader](https://docs.rs/iceberg/0.10.0/iceberg/arrow/struct.ArrowReader.html).

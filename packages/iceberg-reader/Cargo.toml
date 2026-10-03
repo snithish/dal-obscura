@@ -1,0 +1,23 @@
+[package]
+name = "dal-obscura-iceberg-reader"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.94"
+license = "Apache-2.0"
+
+[lib]
+name = "dal_obscura_iceberg_reader"
+crate-type = ["cdylib"]
+
+[dependencies]
+iceberg = "=0.10.0"
+iceberg-storage-opendal = { version = "=0.10.0", default-features = false, features = ["opendal-fs", "opendal-s3"] }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py312"] }
+arrow-pyarrow = "58"
+futures = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
+
+# Released 0.10.x drops nonmatching NULL rows in equality-delete filters.
+# Pin Apache's merged fix; remove the patch after a release includes PR #2781.
+[patch.crates-io]
+iceberg = { git = "https://github.com/apache/iceberg-rust", rev = "22c256e985a68b3a71dd3890d3ebd6bedc3e7b0d" }

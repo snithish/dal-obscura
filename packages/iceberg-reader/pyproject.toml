@@ -1,0 +1,15 @@
+[project]
+name = "dal-obscura-iceberg-reader"
+version = "0.2.0"
+description = "Bounded Python binding to Apache Iceberg file planning and native Arrow reads"
+requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+dependencies = ["pyarrow>=15"]
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+module-name = "dal_obscura_iceberg_reader"
+include = ["dal_obscura_iceberg_reader.pyi"]

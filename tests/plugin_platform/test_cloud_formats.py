@@ -21,8 +21,8 @@ from dal_obscura_plugin_api import (
 from deltalake import DeltaTable, QueryBuilder, WriterProperties, write_deltalake
 
 from tests.support.delta import install_deletion_vector
-from tests.support.plugin_scans import parallel_rows
-from tests.support.s3 import s3_bucket, upload_directory
+from tests.support.plugin_scans import distributed_rows, parallel_rows
+from tests.support.s3 import data_read_guard, s3_bucket, upload_directory
 
 pytestmark = pytest.mark.socket
 
@@ -155,7 +155,8 @@ def test_manifest_s3_parallel_nested_projection(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("mode", ["copy-on-write", "position", "equality"])
-def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("layout", ["files", "row-groups"])
+def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode, layout):
     from pyiceberg.catalog import load_catalog
     from pyiceberg.schema import Schema
     from pyiceberg.types import LongType, NestedField, StringType
@@ -164,7 +165,7 @@ def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode):
     from tests.support.iceberg import install_delete_file
 
     context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "iceberg-s3")
-    with s3_bucket(monkeypatch) as (client, bucket):
+    with data_read_guard() as guard, s3_bucket(monkeypatch, guard=guard) as (client, bucket):
         endpoint = client.meta.endpoint_url
         catalog = load_catalog(
             "s3",
@@ -180,9 +181,9 @@ def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode):
                 NestedField(1, "id", LongType(), required=True),
                 NestedField(2, "email", StringType()),
             ),
-            properties={"format-version": "2"},
+            properties={"format-version": "2", "write.parquet.row-group-limit": "2"},
         )
-        for ids in ([0, 1, 2], [3, 4, 5]):
+        for ids in [[0, 1, 2], [3, 4, 5]] if layout == "files" else [list(range(6))]:
             table.append(
                 pa.table(
                     {"id": ids, "email": [f"user{i}@example.com" for i in ids]},
@@ -212,13 +213,15 @@ def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode):
         schema = plugin.schema(context).arrow_schema
         tasks = plugin.plan(ScanRequest(schema, 3), context)
         plugin.close()
-        assert len(tasks) == (1 if mode == "equality" else 3)
+        assert len(tasks) == 3
+        guard.assign(tasks)
         assert sorted(
-            parallel_rows(IcebergFormatPlugin, handle, tasks, context), key=lambda r: r["id"]
+            distributed_rows(IcebergFormatPlugin, handle, tasks), key=lambda r: r["id"]
         ) == [
             {"id": i, "email": "updated@example.com" if i == 1 else f"user{i}@example.com"}
             for i in range(6)
         ]
+        guard.assert_disjoint_reads()
 
 
 def test_s3_storage_admission_contains_decoded_members(monkeypatch):

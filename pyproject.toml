@@ -21,7 +21,8 @@ postgres = ["psycopg[binary]>=3.2.0"]
 server = [
   "duckdb==1.5.4",
   "psutil>=5.9.0",
-  "pyiceberg[sql-sqlite]>=0.11.1",
+  "pyiceberg[sql-sqlite]==0.11.1",
+  "dal-obscura-iceberg-reader==0.2.0",
   "httpx>=0.27.0",
   "pydantic>=2.12.0",
   "pyjwt>=2.8.0",
@@ -32,10 +33,6 @@ server = [
   "sqlalchemy>=2.0.0",
   "alembic>=1.13.0",
   "grpcio>=1.62.0",
-  "duckdb-extension-iceberg==1.5.4",
-  "duckdb-extension-httpfs==1.5.4",
-  "duckdb-extension-aws==1.5.4",
-  "duckdb-extension-avro==1.5.4",
 ]
 examples = ["dal-obscura[duckdb,polars]"]
 
@@ -57,13 +54,15 @@ requires = ["uv_build>=0.9.28,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-source-include = ["packages/plugin-api/**"]
+source-include = ["packages/plugin-api/**", "packages/iceberg-reader/**"]
 
 [tool.uv.sources]
 dal-obscura-plugin-api = { path = "packages/plugin-api" }
+dal-obscura-iceberg-reader = { path = "packages/iceberg-reader" }
 
 [tool.pytest.ini_options]
 addopts = "-q --benchmark-skip"
+testpaths = ["tests", "packages"]
 pythonpath = [
   ".",
   "src",
@@ -81,6 +80,7 @@ markers = [
 
 [tool.ty.environment]
 extra-paths = [
+  "packages/iceberg-reader",
   "packages/plugin-api/src",
   "packages/plugin-conformance/src",
   "packages/manifest-parquet-plugin/src",

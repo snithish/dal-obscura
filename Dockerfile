@@ -3,7 +3,14 @@
 # Builder image includes uv and a matching CPython runtime. Dependency
 # resolution is locked by uv.lock, so CI and local builds produce the same
 # install set unless the lockfile changes.
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM rust:1.94.0-slim-bookworm AS builder
+
+# Native reader is compiled once; the runtime carries no compiler. Copy Python
+# and uv into the Rust stage instead of duplicating the much larger toolchain.
+COPY --from=ghcr.io/astral-sh/uv:python3.12-bookworm-slim /usr/local /usr/local
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y build-essential ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -12,13 +19,17 @@ ENV UV_LINK_MODE=copy \
 
 # Copy dependency metadata first for better layer caching. README and LICENSE
 # are package metadata inputs for the setuptools build backend.
-COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY pyproject.toml uv.lock README.md LICENSE rust-toolchain.toml ./
 COPY src ./src
 COPY packages/plugin-api ./packages/plugin-api
+COPY packages/iceberg-reader ./packages/iceberg-reader
 
 # Install only production dependencies plus the Flight server and Postgres
 # driver extras. No dev, test, or build caches are copied into the runtime stage.
 RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/packages/iceberg-reader/target \
     uv sync --extra server --extra postgres --frozen --no-dev
 
 # Runtime image has Python but not uv. Keeping the package manager out of the

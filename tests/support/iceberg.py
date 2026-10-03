@@ -108,11 +108,20 @@ def iceberg_sql_catalog_options(
     }
 
 
-def install_delete_file(table, *, kind, ids, delete_path=None):
+def install_delete_file(
+    table,
+    *,
+    kind,
+    ids=(),
+    delete_path=None,
+    equality_columns=("id",),
+    equality_records=None,
+    partition=(),
+):
     """Write a v2 MoR fixture with upstream Avro writers, never production readers.
 
     PyIceberg has no public MoR writer. This fixture supplies explicit delete
-    records and commits a snapshot; DuckDB independently interprets its semantics.
+    records and commits a snapshot; Apache Iceberg independently interprets its semantics.
     """
     import uuid
 
@@ -137,8 +146,8 @@ def install_delete_file(table, *, kind, ids, delete_path=None):
     stem = table.metadata.location + "/metadata/delete-" + uuid.uuid4().hex
     delete_path = delete_path or stem + ".parquet"
     if kind == "equality":
-        schema = pa.schema([pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})])
-        records = [{"id": i} for i in ids]
+        schema = pa.schema([table.schema().as_arrow().field(name) for name in equality_columns])
+        records = equality_records if equality_records is not None else [{"id": i} for i in ids]
         content = DataFileContent.EQUALITY_DELETES
     else:
         schema = pa.schema(
@@ -163,12 +172,14 @@ def install_delete_file(table, *, kind, ids, delete_path=None):
         content=content,
         file_path=delete_path,
         file_format=FileFormat.PARQUET,
-        partition=Record(),
+        partition=Record(*partition),
         record_count=len(records),
         file_size_in_bytes=len(table.io.new_input(delete_path)),
-        equality_ids=[1] if kind == "equality" else None,
+        equality_ids=[table.schema().find_field(name).field_id for name in equality_columns]
+        if kind == "equality"
+        else None,
     )
-    file.spec_id = 0
+    file.spec_id = table.spec().spec_id
 
     class DeleteManifestWriter(ManifestWriterV2):
         def content(self):
@@ -218,39 +229,21 @@ def install_delete_file(table, *, kind, ids, delete_path=None):
     return table
 
 
-class NativeConnectionStub:
-    """Native stream boundary fake with explicit failure and cleanup ownership."""
+class NativeReaderStub:
+    """Native batch stream fake with explicit failure and cleanup ownership."""
 
     def __init__(self, batch, *, fail=False):
+        self.remaining = iter([batch, batch])
         self.closed = []
         self.fail = fail
-        self.reader = NativeReaderStub(batch, self.closed, fail=fail)
 
-    def execute(self, sql, parameters):
+    def start(self, files):
         return self
 
-    def to_arrow_reader(self, rows):
-        return self.reader
-
-    def close(self):
-        self.closed.append("connection")
-        if self.fail:
-            raise ValueError("connection cleanup failed")
-
-
-class NativeReaderStub:
-    def __init__(self, batch, closed, *, fail=False):
-        self.remaining = iter([batch, batch])
-        self.closed = closed
-        self.fail = fail
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
+    def next(self, seconds):
         if self.fail:
             raise RuntimeError("native read failed")
-        return next(self.remaining)
+        return next(self.remaining, None)
 
     def close(self):
         self.closed.append("reader")

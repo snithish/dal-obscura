@@ -32,7 +32,8 @@ validation calls. Obsolete validation-hook and fingerprint fixtures were removed
 
 ## Build and qualification
 
-Rebuild all six wheels whenever an owning artifact changes:
+Rebuild all seven distributions whenever an owning artifact changes; the native
+reader needs a wheel for each worker platform:
 
 ```bash
 uv build --wheel --out-dir dist/plugins-0.2.0 .
@@ -41,6 +42,7 @@ uv build --wheel --out-dir dist/plugins-0.2.0 packages/plugin-conformance
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/manifest-parquet-plugin
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/iceberg-rest-plugin
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/delta-plugin
+uv build --wheel --out-dir dist/plugins-0.2.0 packages/iceberg-reader
 ```
 
 Install exact wheels in a fresh environment. Run package and core routing tests
@@ -59,17 +61,18 @@ python scripts/build_plugin_lock.py --output /tmp/plugin-lock.json \
 ```
 
 Admit all five entries through the registry and verify exact artifact identities.
-Native SQL/Iceberg ship in the service wheel. Native DuckDB 1.5.4 extension wheels
-are pinned server dependencies and load from installed package resources; workers
-never download an extension during a read.
+Native SQL/Iceberg ship in the service wheel. The independently packaged
+[native Iceberg reader](../packages/iceberg-reader/README.md) is a pinned server
+dependency. Build it with Rust 1.94 and ship its exact platform wheel to every worker;
+it implements no additional plugin ABI. Workers never compile/download during reads.
 
 Full mandatory Python qualification uses disposable PostgreSQL, all five real
 Flight backend fixtures and the no-skips wrapper. S3 tests use a disposable HTTP
-emulator with the actual Arrow/Delta/DuckDB clients. They establish storage and
+emulator with the actual Arrow/Delta/Apache Iceberg clients. They establish storage and
 scan contracts, not live AWS IAM/STS renewal or production throughput. See
 [cloud execution](cloud-formats.md) for COW/MoR, upstream API gaps and budgets.
 
-Release output remains outside Git in `dist/plugins-0.2.0/`: six wheels,
+Release output remains outside Git in `dist/plugins-0.2.0/`: seven distributions' wheels,
 `plugin-lock.json`, `qualification.json` and `SHA256SUMS`. The local archive is
 `dist/dal-obscura-plugins-0.2.0.tar.gz`. Artifact changes require a regenerated
 lock and checksums; source-only registration is insufficient. The release is
@@ -79,7 +82,32 @@ Read the [SDK](../packages/plugin-api/README.md),
 [conformance guide](../packages/plugin-conformance/README.md) and
 [fresh deployment guide](core-cutover.md).
 
-## Qualification on 2026-10-03
+## Distributed reader qualification on 2026-10-03
+
+- Full Python: **1,064 passed, zero skips**, disposable PostgreSQL 17.10 and all
+  five real Flight backend fixtures.
+- Installed wheels with production source paths disabled: **120 package checks**,
+  **79 routing/cloud checks**, **33 SDK/Delta checks without the service**, and
+  **46 final native checks** after the last reader/server rebuild.
+- COW, position and equality delete tasks passed in separate fresh processes over
+  S3 for both file and row-group layouts. Guards deny another task's data files;
+  exact schemas, rows, updates and pinned snapshots are checked.
+- The final native wheel compiled on macOS arm64 and Linux aarch64. Three Linux
+  VM worker containers per delete mode also read the host S3 emulator using passive
+  JSON tasks, with exact rows, schemas and assigned-file reads.
+- Five exact external locks, CLI smoke checks, fresh packaged schema baseline,
+  Ruff, Ty, Rust fmt/Clippy, all-file pre-commit and documentation links passed.
+- Full service Docker image build reached dependency installation but exceeded
+  available VM disk space. Linux native compilation and worker execution passed
+  using host-backed build caches; the complete image build remains unqualified.
+- No live AWS IAM/STS renewal, cluster capacity or throughput claim. Existing demo
+  services were preserved.
+
+Old Iceberg task payloads and `parallelism` configuration are intentionally
+unsupported. Drain old tickets and deploy matching service/native reader wheels
+to every worker before issuing new plans. The public plugin API remains version 2.
+
+## Previous qualification on 2026-10-03 (before distributed reader cutover)
 
 - Full Python: **1,049 passed, zero skips**, using disposable PostgreSQL and all
   five real Flight backend fixtures, including the S3 emulator lane.

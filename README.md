@@ -250,7 +250,8 @@ requirements to tests and document streaming, planning, and scaling limits.
 - Row filters and masks are DuckDB SQL expressions.
 - Catalogs resolve governed targets into executable table formats.
 - Standalone path reads are not a public discovery path.
-- Iceberg uses native DuckDB snapshot/delete reads; full governance filters are reapplied.
+- Iceberg uses independently executable Apache Iceberg Rust file reads for COW/MoR;
+  core applies full governance SQL filters.
 - ABAC conditions currently support exact principal-attribute matches and
   explicit allowed-value lists.
 - Tickets persist bounded passive JSON scan envelopes server-side; decoding cannot

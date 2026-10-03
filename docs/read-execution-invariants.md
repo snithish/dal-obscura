@@ -60,8 +60,8 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
   release admission slots on failures. Evidence: DuckDB adapter admission, slice
   buffer, OOM, subprocess memory, cancellation, and first-output tests.
 - **Pin and split scans.** SDK handles pin metadata locations or table versions.
-  Native libraries interpret deletes. COW and position-delete Iceberg use disjoint
-  file groups; equality deletes use one native scan with bounded internal threads.
+  Native libraries interpret deletes. Iceberg COW and both MoR delete modes use
+  disjoint file groups, independently executable on separate workers.
   Delta and Parquet split row groups. Evidence: owning native-format tests,
   cloud-format tests and installed-wheel qualification. See [cloud execution](cloud-formats.md).
 
@@ -79,14 +79,15 @@ qualify these contracts; see the package guide for supported features and budget
 DuckDB uses one thread per admitted stream and transient in-memory connections.
 Queries consume Arrow batches, with no whole-result accumulation in production.
 Ticket fan-out provides file-level parallelism; clients must consume endpoints
-concurrently to realize it. Iceberg COW/position tasks assign largest data-file byte costs first to the
-least-loaded ticket, with deterministic ties. Equality-delete tasks use up to four
-native threads instead of distributed fan-out. Native reads retain all schema
-fields to preserve hidden equality keys. These choices have documented IO and
-parallelism costs; no production speedup is claimed. Planning materializes bounded
-file membership and tickets, and upstream metadata APIs may materialize manifests.
-Planning memory therefore grows with file count; native delete buffers are owned
-by DuckDB's execution engine, not a custom per-file Python loader.
+concurrently to realize it. Every Iceberg mode assigns largest data-file byte
+costs first to the least-loaded ticket, with deterministic ties. Apache Iceberg
+Rust reads only assigned files and retains hidden/historical equality keys;
+PyIceberg's field-ID projection evolves values after deletes. The format exposes
+no SQL pushdown; full governance SQL remains in the core. Planning materializes
+bounded file membership and native plans. Upstream APIs may materialize manifests
+and delete buffers; no custom delete loader or hard native RSS cap is provided.
+Metadata planning is repeated per fresh worker; data files are never rescanned
+outside task ownership. See [native binding](../packages/iceberg-reader/README.md).
 
 Admission and DuckDB memory limits are per process. Arrow allocations and backend
 buffers are not all charged to DuckDB's memory limit. Input/output checks reject
@@ -100,7 +101,7 @@ The masking benchmarks verify output while timing scalar/nested transforms; the
 multi-file and ticket-to-response benchmarks cover adjacent costs. These establish
 local regression evidence, not cluster capacity or a production throughput SLA.
 Use representative file skew, delete density, wide nested rows, and concurrent
-clients for deployment sizing. Native engine/extension upgrades require delete, nested schema and installed-wheel
+clients for deployment sizing. Native library upgrades require delete, nested schema and installed-wheel
 conformance checks.
 
 ## Verification

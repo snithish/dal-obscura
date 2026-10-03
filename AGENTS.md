@@ -107,12 +107,12 @@ See [architecture atlas](docs/architecture/architecture-atlas.md),
   by rescanning the whole table on every worker and filtering duplicate output.
   Qualify disjoint work and exact row coverage across separate workers sharing
   object storage; same-process thread-pool tests alone are insufficient evidence.
-- Known gap: the current DuckDB 1.5.4 Iceberg adapter collapses equality-delete
-  scans into one task because native filename output fails for that delete mode.
-  Its up-to-four native threads remain confined to one machine. This is an unmet
-  distributed-read requirement, not an acceptable completed MoR implementation.
-  Fix upstream split support or choose a maintained reader with independently
-  executable delete-aware scan units before claiming distributed MoR support.
+- Iceberg uses independently executable Apache Iceberg Rust file tasks for COW
+  and MoR, splitting row groups from manifest offsets when needed. Keep required
+  historical equality keys internal through schema changes;
+  reused names must not reuse old field identity. Qualify separate S3 workers with
+  data-file access restricted to their assignments; shared metadata/delete reads
+  are legitimate. Ship the native reader wheel and pinned Rust build toolchain.
 - Plan parallel tasks whenever files, fragments, partitions, or row groups are
   splittable. Cover work exactly once within the task budget, group excess work,
   and return zero tasks for an empty scan. Document any unsplittable backend's
@@ -296,6 +296,7 @@ uv build --wheel --out-dir dist/plugins-0.2.0 packages/plugin-conformance
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/manifest-parquet-plugin
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/iceberg-rest-plugin
 uv build --wheel --out-dir dist/plugins-0.2.0 packages/delta-plugin
+uv build --wheel --out-dir dist/plugins-0.2.0 packages/iceberg-reader
 ```
 
 The complete benchmark lane includes large subprocess RSS probes; select focused
