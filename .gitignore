@@ -213,6 +213,9 @@ cython_debug/
 # CocoIndex Code local project state
 .cocoindex_code/
 
+# Local operator candidates, configuration references and release receipts
+.dal-obscura-deploy/
+
 # Superpowers brainstorming companion artifacts
 .superpowers/
 

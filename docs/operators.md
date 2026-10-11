@@ -98,8 +98,15 @@ it can produce, and both catalog and table-format descriptors declare their
 supported `handle_versions`. Pair admission uses these declarations before
 capability checks.
 
-Generate a lock only after installing the exact reviewed wheels, and name every
-admitted entry explicitly. The builder reads static wheel descriptors without
+For routine Compose deployment, use the [operator plugin workflow](plugin-deployment.md):
+`dal-obscura plugin add`, `dal-obscura plugin configure`, then `dal-obscura deploy`.
+It installs packages in an isolated worker build, prepares admission automatically,
+publishes one image with its embedded lock, and verifies every worker and a Flight read.
+Operators review the plugin IDs and exact versions before publication.
+
+For lower-level release qualification, generate a lock only after installing the
+exact reviewed wheels, and name every admitted entry explicitly. The builder reads
+static wheel descriptors without
 importing plugin factories, derives descriptor and installed-file digests, writes
 atomically, and refuses to overwrite an existing lock:
 

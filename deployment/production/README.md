@@ -52,6 +52,11 @@ reset, change live configuration, or migrate state. Back up PostgreSQL and the r
 secret, key, and certificate configuration before upgrades. A failed migration
 or readiness check keeps ingress closed until the operator resolves it.
 
+For routine plugin installation and publication on this initialized topology, use
+the [operator plugin CLI](../../docs/plugin-deployment.md). It builds one immutable
+image with its admission lock, updates both application services and verifies each
+replica plus an authenticated synthetic Flight read.
+
 ## Restore and emergency access invalidation
 
 Restore a backup from this schema version into an isolated environment and

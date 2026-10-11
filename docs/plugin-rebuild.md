@@ -32,6 +32,10 @@ validation calls. Obsolete validation-hook and fingerprint fixtures were removed
 
 ## Build and qualification
 
+Routine operators can use the [plugin deployment CLI](plugin-deployment.md) to install
+packages, prepare exact admission automatically and publish a Compose release. The
+following lower-level commands remain the plugin author's build and qualification lane.
+
 Rebuild all seven distributions whenever an owning artifact changes; the native
 reader needs a wheel for each worker platform:
 
