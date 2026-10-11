@@ -47,6 +47,13 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
   and each lazy input batch are validated. Evidence: adapter schema assertions,
   Flight `test_flight_info_schema_matches_mask_output_types`, and public-plugin
   `test_public_format_validates_lazy_batch_schema_before_streaming`.
+- **Preserve metadata bytes in schema identity.** Canonical encoding version 2
+  uses lossless base64 for Arrow metadata keys and values at every schema and
+  field level. Binary bytes cannot collide with literal escape text. Metadata
+  insertion order does not affect fingerprints or synthetic identity scopes.
+  Evidence: `test_schema_identity_distinguishes_binary_metadata`,
+  `test_schema_identity_ignores_metadata_insertion_order`, and
+  `test_schema_admission_rejects_binary_metadata_replaced_with_escape_text`.
 - **Bind execution to the ticket.** Reject identity/issuer/context mismatches,
   corrupt payloads, expired tickets, excess exchanges, and explicit revocation.
   Check stream expiry/deadline/revocation before each emitted batch. Exchange

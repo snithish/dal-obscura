@@ -24,6 +24,9 @@ are deliberately left untouched during qualification.
 4. Publish catalogs, policies, identities and runtime configuration using current
    contracts. Storage credentials belong to worker identity; never put them into
    published table handles or tickets.
+   Schema identity encoding version 2 preserves arbitrary metadata bytes with
+   base64. Explicitly readmit schemas and republish; fingerprints and synthetic
+   identities from earlier encoding versions are unsupported.
 5. Start both planes and verify readiness, authentication, allowed/denied reads,
    schema discovery, save/preview, revocation and provider SSO sign-out.
 

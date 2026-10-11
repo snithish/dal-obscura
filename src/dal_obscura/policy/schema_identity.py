@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from collections.abc import Iterable
@@ -110,8 +111,8 @@ def _metadata(metadata: dict[bytes, bytes] | None) -> list[list[str]]:
     return sorted(
         [
             [
-                key.decode("utf-8", "backslashreplace"),
-                value.decode("utf-8", "backslashreplace"),
+                base64.b64encode(key).decode("ascii"),
+                base64.b64encode(value).decode("ascii"),
             ]
             for key, value in metadata.items()
         ]
@@ -119,8 +120,9 @@ def _metadata(metadata: dict[bytes, bytes] | None) -> list[list[str]]:
 
 
 def schema_shape(schema: pa.Schema) -> dict[str, object]:
-    """Canonical shape shared by admission fingerprints and synthetic IDs."""
+    """Canonical v2 shape with lossless base64 Arrow metadata bytes."""
     return {
+        "encoding": 2,
         "fields": [_shape_field(field) for field in schema],
         "metadata": _metadata(schema.metadata),
     }

@@ -264,3 +264,34 @@ Qualification covers 257-character ASCII, 1,024-character Unicode, and 16,384-ch
 Isolated-process probes on PyArrow 23.0.1 round-trip Arrow IPC schemas at depths 64 and 65. Depths 128 and 256 fail with `OSError: Invalid flatbuffers message.` These are dependency probe results, not governed-read support claims. Default schema admission still enforces 64 levels, 10,000 nodes, and a 2 MiB Arrow encoding; the conformance kit, recursive projection/type construction, HTTP tree serialization, and consumer nesting limits remain to be coordinated. Changing the path representation does not make deep schemas readable.
 
 E01 is **partially resolved**. Field names beyond the old cap now preserve identity; arbitrary nesting, larger schemas and values, configurable/visible resource budgets, incremental schema authoring, and live-cloud format qualification remain outstanding. This delivery does not expand the advertised catalog, format, storage, or consumer inventory.
+
+## 13. Third implementation delivery — lossless schema metadata identity
+
+Schema foundation review exposed a correctness and security defect: the canonical
+shape decoded arbitrary Arrow metadata bytes using `backslashreplace`. A binary
+byte such as `0xff` and the literal four-byte text `\xff` consequently produced
+the same schema fingerprint and synthetic identity scope. Runtime admission could
+accept that metadata substitution for schemas without provider field IDs.
+
+The shared canonical shape now uses encoding version 2 and base64 for every
+metadata key and value, including schema, field, and collection-child metadata.
+Sorting the encoded pairs keeps insertion order irrelevant. Both authoring
+fingerprints and runtime synthetic identity scopes consume this one shape; there
+is no compatibility decoder or alternate identity implementation.
+
+This is an intentional breaking identity change. Republish and explicitly
+readmit schemas before using the new artifacts. Existing synthetic identities and
+stored fingerprints cannot be reused. Provider IDs retain their existing meaning;
+this change does not add metadata-based revocation for previously issued tickets
+or replace the separate stable-provider admission contract.
+
+Regression coverage distinguishes binary metadata from escape text at schema,
+field, list-element, and map-value locations for both keys and values. It also
+checks insertion-order stability and rejection through the runtime admission
+boundary. Qualification uses focused source tests and rebuilt installed-wheel
+schema/admission tests, followed by the required fast commit checks.
+
+E01 remains partially resolved: this delivery fixes exact metadata identity,
+not arbitrary nesting, native IPC ceilings, iterative projection, or UI schema
+paging. CoW/MoR cloud coverage, broader catalogs, and the remaining plan continue
+to require their own implementation and qualification.

@@ -270,6 +270,30 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
         _validate_schema_admission(asset, schema)
 
 
+def test_schema_admission_rejects_binary_metadata_replaced_with_escape_text():
+    original = pa.schema([pa.field("email", pa.string(), metadata={b"key": b"\xff"})])
+    identities = _schema_identities(original)
+    asset = LiveAsset(
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "fields": [
+                    {"path": list(path), "field_id": field_id, "type": field_type}
+                    for (path, field_id), field_type in identities.items()
+                ]
+            }
+        },
+        policy_version=1,
+    )
+    changed = pa.schema([pa.field("email", pa.string(), metadata={b"key": b"\\xff"})])
+
+    _validate_schema_admission(asset, original)
+    with pytest.raises(ValueError, match="schema admission"):
+        _validate_schema_admission(asset, changed)
+
+
 def test_legacy_wildcard_policy_requires_schema_admission():
     asset = LiveAsset(
         catalog="analytics",

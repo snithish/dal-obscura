@@ -147,7 +147,7 @@ def schema_fingerprint(schema: object) -> str:
         raise TypeError("schema_fingerprint expects an Iceberg or Arrow schema")
     _validate_arrow_schema_bounds(arrow_schema)
     encoded = json.dumps(
-        {"encoding": 1, **schema_shape(arrow_schema)},
+        schema_shape(arrow_schema),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,

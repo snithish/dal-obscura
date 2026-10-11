@@ -508,6 +508,42 @@ def test_schema_fingerprint_rejects_excessive_arrow_nesting() -> None:
         schema_fingerprint(pa.schema([pa.field("root", nested)]))
 
 
+@pytest.mark.parametrize("location", ["schema", "field", "list-element", "map-value"])
+@pytest.mark.parametrize("part", ["key", "value"])
+def test_schema_identity_distinguishes_binary_metadata(location: str, part: str) -> None:
+    def schema(raw: bytes) -> pa.Schema:
+        metadata = {raw: b"value"} if part == "key" else {b"key": raw}
+        leaf = pa.field("leaf", pa.string(), metadata=metadata)
+        field = (
+            pa.field("items", pa.list_(leaf))
+            if location == "list-element"
+            else pa.field("labels", pa.map_(pa.string(), leaf))
+            if location == "map-value"
+            else leaf
+        )
+        return (
+            pa.schema([pa.field("leaf", pa.string())], metadata=metadata)
+            if location == "schema"
+            else pa.schema([field])
+        )
+
+    binary = schema(b"\xff")
+    literal_escape = schema(b"\\xff")
+
+    assert schema_fingerprint(binary) != schema_fingerprint(literal_escape)
+    assert schema_scope_digest(binary) != schema_scope_digest(literal_escape)
+
+
+def test_schema_identity_ignores_metadata_insertion_order() -> None:
+    def schema(metadata: dict[bytes, bytes]) -> pa.Schema:
+        return pa.schema([pa.field("value", pa.string(), metadata=metadata)], metadata=metadata)
+
+    forward = schema({b"\xff": b"\x00", b"text": b"\\xff"})
+    reverse = schema({b"text": b"\\xff", b"\xff": b"\x00"})
+    assert schema_fingerprint(forward) == schema_fingerprint(reverse)
+    assert schema_scope_digest(forward) == schema_scope_digest(reverse)
+
+
 def test_get_asset_schema_requires_read_capability() -> None:
     asset_id = uuid4()
     with pytest.raises(AuthorizationFailure):
