@@ -295,3 +295,42 @@ E01 remains partially resolved: this delivery fixes exact metadata identity,
 not arbitrary nesting, native IPC ceilings, iterative projection, or UI schema
 paging. CoW/MoR cloud coverage, broader catalogs, and the remaining plan continue
 to require their own implementation and qualification.
+
+## 14. Fourth implementation delivery — bounded canonical identity work
+
+The canonical identity owner now uses one iterative version-2 JSON encoder and
+incremental hash calculation for authoring fingerprints and runtime synthetic
+identity scopes. It no longer constructs the complete recursive schema shape or
+retains a complete canonical JSON string and UTF-8 byte copy. Long strings are
+escaped in 4,096-character pieces; small scalar records are encoded together.
+
+Both consumers enforce the existing schema node/depth/IPC limits before encoding,
+and a separate two-MiB canonical encoding budget during hashing. Previously,
+runtime scopes had no canonical JSON limit. Base64 metadata and ASCII-escaped
+Unicode names can exceed that limit while fitting Arrow IPC, and now fail closed
+with an explicit budget error. The control boundary translates the runtime scope
+error into its existing validation response. No partial identity is returned.
+
+Valid version-2 fingerprint and synthetic scope bytes are unchanged. Independent
+expected JSON covers Unicode and escaping across chunk boundaries; behavioral
+checks cover collection sizes, key ordering, child order/nullability, timestamps,
+decimal scale, metadata identity, and runtime/control rejection. Earlier encoding
+versions remain unsupported under the third delivery's readmission requirement.
+
+Qualification: 262 installed-wheel schema, admission, read-service, and plugin
+tests passed without skips in the selected local lane, plus the added control
+budget case and three benchmark cases against each of the old and new artifacts.
+Fresh environments and regenerated exact artifact locks remain outside Git.
+The repository fast checks run at commit. This does not replace PostgreSQL,
+real-provider, consumer, live-SSO, or live-cloud qualification for later changes.
+
+[Same-host measurements](schema-identity-performance.md) show lower Python peak
+allocation and higher latency. For 4,000 fields, allocation fell from about 2.6 MB
+to 0.9 MB while median fingerprint latency rose from 7.680 to 10.692 ms. This is a
+boundedness tradeoff, not a throughput claim or hard worker RSS guarantee.
+
+E01 remains partially resolved. Canonical identity traversal is now iterative;
+projection compilation, HTTP schema trees, UI schema browsing, provider/native
+depth ceilings, wider schemas, and configurable coordinated work budgets still
+need implementation. The advertised CoW/MoR storage and catalog matrix remains
+subject to the plan's separate qualification gates.

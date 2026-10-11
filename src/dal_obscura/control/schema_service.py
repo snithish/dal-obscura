@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import cast
 from uuid import UUID
 
@@ -26,17 +24,11 @@ from dal_obscura.policy.paths import (
     ListElementSegment,
     MapKeySegment,
 )
-from dal_obscura.policy.schema_bounds import (
-    MAX_SCHEMA_DEPTH,
-    MAX_SCHEMA_ENCODING_BYTES,
-    MAX_SCHEMA_NODES,
-    validate_arrow_schema_bounds,
-)
 from dal_obscura.policy.schema_identity import (
     numeric_field_id,
     schema_has_stable_ids,
+    schema_identity_digest,
     schema_scope_digest,
-    schema_shape,
 )
 from dal_obscura.policy.schema_index import field_children
 from dal_obscura.sources.plugins import PluginRegistry
@@ -70,9 +62,11 @@ def get_asset_schema(
         secret_provider=secret_provider,
     )
     arrow_schema = schema
-    _validate_arrow_schema_bounds(arrow_schema)
     asset = _db_assets.get_workspace_asset(store, asset_id)
-    scope_digest = schema_scope_digest(arrow_schema)
+    try:
+        scope_digest = schema_scope_digest(arrow_schema)
+    except ValueError as exc:
+        raise ValidationFailure(str(exc)) from exc
     return {
         "asset_id": str(asset_id),
         "catalog": asset["catalog"],
@@ -145,28 +139,8 @@ def schema_fingerprint(schema: object) -> str:
     arrow_schema = schema.as_arrow() if isinstance(schema, Schema) else schema
     if not isinstance(arrow_schema, pa.Schema):
         raise TypeError("schema_fingerprint expects an Iceberg or Arrow schema")
-    _validate_arrow_schema_bounds(arrow_schema)
-    encoded = json.dumps(
-        schema_shape(arrow_schema),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    if len(encoded) > MAX_SCHEMA_ENCODING_BYTES:
-        raise ValidationFailure(
-            f"Schema encoding exceeds the {MAX_SCHEMA_ENCODING_BYTES}-byte limit"
-        )
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _validate_arrow_schema_bounds(schema: pa.Schema) -> None:
     try:
-        validate_arrow_schema_bounds(
-            schema,
-            max_nodes=MAX_SCHEMA_NODES,
-            max_depth=MAX_SCHEMA_DEPTH,
-            max_encoding_bytes=MAX_SCHEMA_ENCODING_BYTES,
-        )
+        return schema_identity_digest(arrow_schema, ensure_ascii=False)
     except ValueError as exc:
         raise ValidationFailure(str(exc)) from exc
 

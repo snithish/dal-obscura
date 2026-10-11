@@ -294,6 +294,12 @@ def test_schema_admission_rejects_binary_metadata_replaced_with_escape_text():
         _validate_schema_admission(asset, changed)
 
 
+def test_runtime_schema_identities_reject_oversized_canonical_metadata():
+    schema = pa.schema([pa.field("email", pa.string())], metadata={b"key": b"x" * 1_600_000})
+    with pytest.raises(ValueError, match="Schema encoding exceeds"):
+        _schema_identities(schema)
+
+
 def test_legacy_wildcard_policy_requires_schema_admission():
     asset = LiveAsset(
         catalog="analytics",

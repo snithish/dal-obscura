@@ -51,9 +51,15 @@ Tickets remain bound to asset identity, issuer, subject, groups, and attributes.
   uses lossless base64 for Arrow metadata keys and values at every schema and
   field level. Binary bytes cannot collide with literal escape text. Metadata
   insertion order does not affect fingerprints or synthetic identity scopes.
+  Both consumers hash the same iterative encoding within a two-MiB canonical
+  byte budget, separately from Arrow IPC size. Unicode escaping and base64
+  expansion cannot bypass runtime scope admission. Valid version-2 bytes remain
+  unchanged; this budget does not establish a worker RSS cap.
   Evidence: `test_schema_identity_distinguishes_binary_metadata`,
   `test_schema_identity_ignores_metadata_insertion_order`, and
-  `test_schema_admission_rejects_binary_metadata_replaced_with_escape_text`.
+  `test_schema_admission_rejects_binary_metadata_replaced_with_escape_text`,
+  `test_schema_scope_rejects_json_expansion_within_arrow_ipc_budget`, and
+  `test_runtime_schema_identities_reject_oversized_canonical_metadata`.
 - **Bind execution to the ticket.** Reject identity/issuer/context mismatches,
   corrupt payloads, expired tickets, excess exchanges, and explicit revocation.
   Check stream expiry/deadline/revocation before each emitted batch. Exchange

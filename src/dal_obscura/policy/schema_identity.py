@@ -5,10 +5,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from typing import cast
 
 import pyarrow as pa
 
+from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ENCODING_BYTES, validate_arrow_schema_bounds
 from dal_obscura.policy.schema_index import walk_schema_fields
 
 SYNTHETIC_ID_PREFIX = "synthetic:"
@@ -19,9 +21,21 @@ _FIELD_ID_KEYS = (b"PARQUET:field_id", b"iceberg.field.id")
 def schema_scope_digest(schema: pa.Schema) -> str:
     """Digest the semantic shape used to scope synthetic field identities."""
 
-    payload = schema_shape(schema)
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return schema_identity_digest(schema, ensure_ascii=True)
+
+
+def schema_identity_digest(schema: pa.Schema, *, ensure_ascii: bool) -> str:
+    """Hash canonical v2 JSON incrementally within the shared schema budget."""
+    validate_arrow_schema_bounds(schema)
+    digest = hashlib.sha256()
+    remaining = MAX_SCHEMA_ENCODING_BYTES
+    for chunk in _identity_chunks(schema, ensure_ascii=ensure_ascii):
+        encoded = chunk.encode("utf-8")
+        remaining -= len(encoded)
+        if remaining < 0:
+            raise ValueError(f"Schema encoding exceeds the {MAX_SCHEMA_ENCODING_BYTES}-byte limit")
+        digest.update(encoded)
+    return digest.hexdigest()
 
 
 def schema_field_id(
@@ -86,22 +100,22 @@ def _shape_field(field: pa.Field) -> dict[str, object]:
         "name": field.name,
         "nullable": field.nullable,
         "metadata": _metadata(field.metadata),
-        "type": _shape_type(field.type),
+        "type": field.type,
     }
 
 
-def _shape_type(data_type: pa.DataType) -> object:
+def _shape_type(data_type: pa.DataType) -> dict[str, object]:
     value: dict[str, object] = {"id": str(data_type)}
     if pa.types.is_struct(data_type):
-        value["children"] = [_shape_field(field) for field in data_type]
+        value["children"] = list(data_type)
     elif pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
-        value["value_field"] = _shape_field(data_type.value_field)
+        value["value_field"] = data_type.value_field
     elif pa.types.is_map(data_type):
-        value["key_field"] = _shape_field(data_type.key_field)
-        value["item_field"] = _shape_field(data_type.item_field)
+        value["key_field"] = data_type.key_field
+        value["item_field"] = data_type.item_field
     elif pa.types.is_fixed_size_list(data_type):
         value["list_size"] = data_type.list_size
-        value["value_field"] = _shape_field(data_type.value_field)
+        value["value_field"] = data_type.value_field
     return value
 
 
@@ -119,13 +133,74 @@ def _metadata(metadata: dict[bytes, bytes] | None) -> list[list[str]]:
     )
 
 
-def schema_shape(schema: pa.Schema) -> dict[str, object]:
-    """Canonical v2 shape with lossless base64 Arrow metadata bytes."""
-    return {
+def _identity_chunks(schema: pa.Schema, *, ensure_ascii: bool) -> Iterator[str]:
+    """Iterative canonical traversal; escape long strings in bounded pieces."""
+    root = {
         "encoding": 2,
-        "fields": [_shape_field(field) for field in schema],
+        "fields": list(schema),
         "metadata": _metadata(schema.metadata),
     }
+    encoder = json.JSONEncoder(ensure_ascii=ensure_ascii, sort_keys=True, separators=(",", ":"))
+    stack: list[tuple[bool, object]] = [(False, root)]
+    while stack:
+        literal, value = stack.pop()
+        if literal:
+            yield cast(str, value)
+            continue
+        if (
+            isinstance(value, pa.Field)
+            and (encoded := _small_field_json(value, encoder)) is not None
+        ):
+            yield encoded
+            continue
+        value = _shallow_shape(value)
+        if isinstance(value, dict):
+            yield "{"
+            stack.append((True, "}"))
+            items = sorted(value.items())
+            for index in range(len(items) - 1, -1, -1):
+                key, child = items[index]
+                stack.extend([(False, child), (True, ":"), (False, key)])
+                if index:
+                    stack.append((True, ","))
+        elif isinstance(value, list):
+            yield "["
+            stack.append((True, "]"))
+            for index in range(len(value) - 1, -1, -1):
+                stack.append((False, value[index]))
+                if index:
+                    stack.append((True, ","))
+        elif isinstance(value, str):
+            yield from _string_chunks(value, encoder)
+        else:
+            yield encoder.encode(value)
+
+
+def _string_chunks(value: str, encoder: json.JSONEncoder) -> Iterator[str]:
+    yield '"'
+    for offset in range(0, len(value), 4096):
+        yield encoder.encode(value[offset : offset + 4096])[1:-1]
+    yield '"'
+
+
+def _shallow_shape(value: object) -> object:
+    if isinstance(value, pa.Field):
+        return _shape_field(value)
+    if isinstance(value, pa.DataType):
+        return _shape_type(value)
+    return value
+
+
+def _small_field_json(field: pa.Field, encoder: json.JSONEncoder) -> str | None:
+    """Batch small scalar records to avoid hashing each JSON punctuation mark."""
+    if pa.types.is_nested(field.type) or field.metadata or len(field.name) > 1024:
+        return None
+    type_shape = _shape_type(field.type)
+    if len(cast(str, type_shape["id"])) > 1024:
+        return None
+    shape = _shape_field(field)
+    shape["type"] = type_shape
+    return encoder.encode(shape)
 
 
 def numeric_field_id(field: pa.Field, path: Iterable[str], scope_digest: str) -> int:

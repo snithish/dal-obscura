@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -13,11 +15,10 @@ from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringT
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.schema_service import (
-    MAX_SCHEMA_DEPTH,
-    MAX_SCHEMA_NODES,
     get_asset_schema,
     schema_fingerprint,
 )
+from dal_obscura.policy.schema_bounds import MAX_SCHEMA_DEPTH, MAX_SCHEMA_NODES
 from dal_obscura.policy.schema_identity import numeric_field_id, schema_scope_digest
 from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
 from dal_obscura.sources.plugins import PluginRegistry
@@ -542,6 +543,102 @@ def test_schema_identity_ignores_metadata_insertion_order() -> None:
     reverse = schema({b"text": b"\\xff", b"\xff": b"\x00"})
     assert schema_fingerprint(forward) == schema_fingerprint(reverse)
     assert schema_scope_digest(forward) == schema_scope_digest(reverse)
+
+
+@pytest.mark.parametrize("name", ["界", "x" * 4095 + '\\"界', "🙂" * 4097])
+def test_schema_identity_matches_independent_version_two_encoding(name: str) -> None:
+    schema = pa.schema(
+        [pa.field(name, pa.list_(pa.field("item", pa.string(), metadata={b"k": b"\xff"})))],
+        metadata={b"s": b"v"},
+    )
+    expected = {
+        "encoding": 2,
+        "fields": [
+            {
+                "name": name,
+                "nullable": True,
+                "metadata": [],
+                "type": {
+                    "id": "list<item: string>",
+                    "value_field": {
+                        "name": "item",
+                        "nullable": True,
+                        "metadata": [["aw==", "/w=="]],
+                        "type": {"id": "string"},
+                    },
+                },
+            }
+        ],
+        "metadata": [["cw==", "dg=="]],
+    }
+    for digest, ensure_ascii in [(schema_fingerprint, False), (schema_scope_digest, True)]:
+        encoded = json.dumps(
+            expected, sort_keys=True, separators=(",", ":"), ensure_ascii=ensure_ascii
+        ).encode("utf-8")
+        assert digest(schema) == hashlib.sha256(encoded).hexdigest()
+
+
+def test_schema_scope_rejects_json_expansion_within_arrow_ipc_budget() -> None:
+    schema = pa.schema([pa.field("界" * 400_000, pa.string())])
+    # UTF-8 Arrow IPC fits; the existing ASCII scope encoding expands each name
+    # character to six bytes. Authoring fingerprints use UTF-8 and still fit.
+    assert len(schema_fingerprint(schema)) == 64
+    with pytest.raises(ValueError, match="Schema encoding exceeds"):
+        schema_scope_digest(schema)
+
+
+@pytest.mark.parametrize("digest", [schema_fingerprint, schema_scope_digest])
+def test_schema_identity_rejects_base64_expansion_within_arrow_ipc_budget(digest) -> None:
+    schema = pa.schema([pa.field("value", pa.string())], metadata={b"key": b"x" * 1_600_000})
+    with pytest.raises((ValidationFailure, ValueError), match="Schema encoding exceeds"):
+        digest(schema)
+
+
+def test_get_asset_schema_reports_scope_encoding_budget(monkeypatch) -> None:
+    schema = pa.schema([pa.field("界" * 400_000, pa.string())])
+    monkeypatch.setattr(
+        "dal_obscura.control.schema_service.load_asset_schema", lambda *args, **kwargs: schema
+    )
+    asset_id = uuid4()
+    with pytest.raises(ValidationFailure, match="Schema encoding exceeds"):
+        get_asset_schema(
+            _FakeStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+        )
+
+
+@pytest.mark.parametrize(
+    ("original", "changed"),
+    [
+        pytest.param(pa.list_(pa.string()), pa.large_list(pa.string()), id="list-width"),
+        pytest.param(pa.list_(pa.string(), 2), pa.list_(pa.string(), 3), id="fixed-list-size"),
+        pytest.param(
+            pa.map_(pa.string(), pa.int32()),
+            pa.map_(pa.string(), pa.int32(), keys_sorted=True),
+            id="map-key-order",
+        ),
+        pytest.param(
+            pa.list_(pa.field("item", pa.string(), nullable=True)),
+            pa.list_(pa.field("item", pa.string(), nullable=False)),
+            id="child-nullability",
+        ),
+        pytest.param(pa.timestamp("us", "UTC"), pa.timestamp("us", "Europe/Paris"), id="timezone"),
+        pytest.param(pa.decimal128(10, 2), pa.decimal128(10, 3), id="decimal-scale"),
+        pytest.param(
+            pa.struct([pa.field("first", pa.string()), pa.field("second", pa.string())]),
+            pa.struct([pa.field("second", pa.string()), pa.field("first", pa.string())]),
+            id="child-order",
+        ),
+    ],
+)
+def test_schema_identity_preserves_type_semantics(
+    original: pa.DataType, changed: pa.DataType
+) -> None:
+    before = pa.schema([pa.field("value", original)])
+    after = pa.schema([pa.field("value", changed)])
+    assert schema_fingerprint(before) != schema_fingerprint(after)
+    assert schema_scope_digest(before) != schema_scope_digest(after)
 
 
 def test_get_asset_schema_requires_read_capability() -> None:
