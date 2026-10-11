@@ -499,3 +499,21 @@ The target-initialization/diagnostic portion of E11 is resolved. This release st
 uses an existing initialized Compose topology. Provisioning, deployment-stage
 recovery/rollback, ticket draining, additional orchestrators, live registry rollout,
 live IAM/SSO, and broader provider/catalog/format qualification remain outstanding.
+
+## 20. Tenth implementation delivery — enforce navigation performance budgets
+
+The standalone web-vitals command now rejects LCP above 2,500 ms and CLS above
+0.1, as well as missing, non-finite, negative, or nonnumeric measurements. It
+prints the measured URL, viewport, limits, and metrics before failing so a failed
+run retains reviewable evidence. Navigation duration remains informational.
+The LCP threshold follows the [documented good-LCP boundary](https://web.dev/articles/lcp);
+this local gate does not establish the field 75th percentile.
+
+Twelve owning command-gate cases first exposed eight failures, then passed after
+implementation. All 70 UI unit cases and TypeScript checks pass. A real Chromium
+navigation against an isolated production preview reported LCP 120 ms and CLS
+0.000953 on this host. That fresh browser rendered the signed-out shell; the
+existing authenticated E2E fixtures and selected-column search p95 gate remain
+separate evidence. No live workload, field INP, or aggregate capacity claim is
+made. E06 remains partially resolved pending representative workload and field
+qualification.

@@ -72,6 +72,15 @@ pnpm --dir apps/governance-ui test:e2e
 pnpm --dir apps/governance-ui build
 ```
 
+With an isolated preview running on port 4173, `pnpm --dir apps/governance-ui
+measure:web-vitals` records LCP, CLS, and navigation duration. It fails for missing
+or invalid metrics, LCP above 2,500 ms, or CLS above 0.1, and prints the report
+before rejecting a measurement. Override the URL and viewport with
+`DAL_OBSCURA_WEB_VITALS_URL`, `DAL_OBSCURA_WEB_VITALS_WIDTH`, and
+`DAL_OBSCURA_WEB_VITALS_HEIGHT`. This command opens a fresh signed-out browser;
+the authenticated performance fixtures belong to the separate E2E lane. A single
+local navigation is a regression gate, not a field percentile or capacity SLA.
+
 Storybook is available with `pnpm --dir apps/governance-ui storybook`. Browser tests
 need their configured services and browser runtime; use the
 [Keycloak demo](../../examples/demo/keycloak/README.md) for live OIDC checks.

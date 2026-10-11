@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { assertWebVitals, WEB_VITALS_LIMITS } from "./web-vitals-budget.mjs";
 
 const url = process.env.DAL_OBSCURA_WEB_VITALS_URL ?? "http://127.0.0.1:4173/#assets";
 const width = Number(process.env.DAL_OBSCURA_WEB_VITALS_WIDTH ?? 1440);
@@ -32,10 +33,8 @@ try {
     cls: window.__dalObscuraWebVitals.cls,
     navigationMs: performance.getEntriesByType("navigation")[0]?.duration ?? null,
   }));
-  if (metrics.lcpMs === null) throw new Error("Largest Contentful Paint was not reported by the browser");
-  if (metrics.cls > 0.1) throw new Error(`Cumulative Layout Shift ${metrics.cls} exceeds 0.1`);
-
-  console.log(JSON.stringify({ url, viewport: { width, height }, metrics }, null, 2));
+  console.log(JSON.stringify({ url, viewport: { width, height }, limits: WEB_VITALS_LIMITS, metrics }, null, 2));
+  assertWebVitals(metrics);
 } finally {
   await browser.close();
 }
