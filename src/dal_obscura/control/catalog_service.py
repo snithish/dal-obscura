@@ -6,16 +6,18 @@ import ipaddress
 import math
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from math import isfinite
 from threading import BoundedSemaphore, Lock
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
+from uuid import UUID
 
-from dal_obscura_plugin_api import PluginDescriptor
+from dal_obscura_plugin_api import CatalogConfig, DiscoveryPage, PluginDescriptor
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.control.errors import ConfigurationConflictError, ValidationFailure
 from dal_obscura.sources.discovery import (
     ICEBERG_CATALOG_ID,
     discover_public_catalog_tables,
@@ -26,7 +28,6 @@ from dal_obscura.sources.secrets import (
     SecretProvider,
     resolve_secret_refs,
 )
-from dal_obscura.storage import assets as _db_assets
 from dal_obscura.storage import audit as _db_audit
 from dal_obscura.storage import catalogs as _db_catalogs
 from dal_obscura.storage import workspace as _db_workspace
@@ -83,113 +84,135 @@ def list_workspace_catalogs(
     return _db_catalogs.list_workspace_catalogs(store)
 
 
-def discover_workspace_catalog_tables(
+@dataclass(frozen=True)
+class CatalogDiscovery:
+    catalog_id: UUID
+    config: CatalogConfig
+
+
+def capture_catalog_discovery(
     store: Session,
     name: str,
     *,
     egress_allowlist: tuple[str, ...] = (),
-    session_key: str | None = None,
     plugin_registry: PluginRegistry | None = None,
-    secret_provider: SecretProvider | None = None,
-) -> dict[str, object]:
-    """Discovers tables for a configured workspace catalog."""
+) -> CatalogDiscovery:
+    """Capture immutable configuration; the route releases this transaction before IO."""
 
     _required_workspace(store)
     catalog = _db_catalogs.get_workspace_catalog(store, name)
-    catalog_options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(str(catalog["plugin_id"]), catalog_options, plugin_registry)
-    validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    catalog_options = _resolve_catalog_secrets(
-        catalog_options, scope=f"catalog:{name}", provider=secret_provider
+    options = cast(dict[str, Any], catalog["options"])
+    plugin_id = str(catalog["plugin_id"])
+    validate_admitted_catalog_options(plugin_id, options, plugin_registry)
+    validate_catalog_options(options, egress_allowlist=egress_allowlist)
+    try:
+        config = CatalogConfig(
+            plugin_id=plugin_id,
+            instance_id=name,
+            revision=_catalog_revision(catalog),
+            options=options,
+        )
+    except ValueError as exc:
+        raise ValidationFailure("Catalog configuration is invalid") from exc
+    return CatalogDiscovery(UUID(str(catalog["id"])), config)
+
+
+def discover_workspace_catalog_tables(
+    captured: CatalogDiscovery,
+    *,
+    session_key: str,
+    plugin_registry: PluginRegistry | None,
+    secret_provider: SecretProvider | None,
+    continuation: str | None = None,
+    limit: int = 100,
+) -> DiscoveryPage:
+    """Read one provider page without retaining a database session."""
+
+    config = captured.config
+    options = _resolve_catalog_secrets(
+        dict(config.options), scope=f"catalog:{config.instance_id}", provider=secret_provider
     )
     try:
         with _admit_session_discovery(session_key):
-            tables = discover_public_catalog_tables(
-                str(catalog["name"]),
-                str(catalog["plugin_id"]),
-                catalog_options,
-                revision=_catalog_revision(catalog),
+            return discover_public_catalog_tables(
+                config.instance_id,
+                config.plugin_id,
+                options,
+                revision=config.revision,
                 plugin_registry=plugin_registry,
+                continuation=continuation,
+                limit=limit,
             )
     except ValidationFailure:
         raise
     except Exception as exc:
-        # Provider exceptions can include catalog URIs, credentials, or
-        # implementation details. Keep those outside the browser/API boundary.
         raise ValidationFailure("Catalog discovery failed") from exc
-    governed_targets = {
-        value
-        for asset in _db_assets.list_workspace_assets(store)
-        if asset["catalog"] == catalog["name"]
-        for value in (asset["name"], asset["table_identifier"])
-        if isinstance(value, str) and value
-    }
-    return {
-        "catalog": catalog["name"],
-        "tables": [
-            {
-                **table,
-                "target": table["name"],
-                "governed": table["name"] in governed_targets
-                or table["table_identifier"] in governed_targets,
-            }
-            for table in tables
-        ],
-    }
+
+
+def ensure_catalog_discovery_current(store: Session, captured: CatalogDiscovery) -> None:
+    current = _db_catalogs.get_workspace_catalog(store, captured.config.instance_id)
+    revision = _catalog_revision(current)
+    if UUID(str(current["id"])) != captured.catalog_id or revision != captured.config.revision:
+        raise ConfigurationConflictError(
+            "Catalog changed during discovery; restart discovery", current_revision=revision
+        )
+
+
+def catalog_discovery_tables(
+    store: Session,
+    captured: CatalogDiscovery,
+    page: DiscoveryPage,
+) -> list[dict[str, object]]:
+    """Decorate a bounded page using a fresh catalog revision and indexed asset lookup."""
+
+    from dal_obscura.sources.plugin_runtime import _identifier_name
+
+    ensure_catalog_discovery_current(store, captured)
+    names = [_identifier_name(identifier) for identifier in page.entries]
+    governed = _db_catalogs.governed_table_identifiers(
+        store, catalog_id=captured.catalog_id, identifiers=names
+    )
+    return [
+        {
+            "backend": captured.config.plugin_id,
+            "name": name,
+            "table_identifier": name,
+            "target": name,
+            "governed": name in governed,
+        }
+        for name in names
+    ]
 
 
 def diagnose_workspace_catalog(
-    store: Session,
-    name: str,
+    captured: CatalogDiscovery,
     *,
-    egress_allowlist: tuple[str, ...] = (),
-    session_key: str | None = None,
-    plugin_registry: PluginRegistry | None = None,
-    secret_provider: SecretProvider | None = None,
+    session_key: str,
+    plugin_registry: PluginRegistry | None,
+    secret_provider: SecretProvider | None,
 ) -> dict[str, object]:
-    """Runs bounded catalog discovery and returns a redacted readiness result."""
+    """Sample one page; a continuation means the total count is unknown."""
 
-    _required_workspace(store)
-    catalog = _db_catalogs.get_workspace_catalog(store, name)
-    catalog_options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(str(catalog["plugin_id"]), catalog_options, plugin_registry)
-    validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    catalog_options = _resolve_catalog_secrets(
-        catalog_options, scope=f"catalog:{name}", provider=secret_provider
-    )
+    from dal_obscura.sources.plugin_runtime import _identifier_name
+
     checked_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    result: dict[str, object] = {"catalog": captured.config.instance_id, "checked_at": checked_at}
     try:
-        with _admit_session_discovery(session_key):
-            tables = list(
-                discover_public_catalog_tables(
-                    str(catalog["name"]),
-                    str(catalog["plugin_id"]),
-                    catalog_options,
-                    revision=_catalog_revision(catalog),
-                    plugin_registry=plugin_registry,
-                )
-            )
+        page = discover_workspace_catalog_tables(
+            captured,
+            session_key=session_key,
+            plugin_registry=plugin_registry,
+            secret_provider=secret_provider,
+            limit=10,
+        )
     except ValidationFailure:
-        raise
-    except Exception:
-        # Discovery exceptions can contain URIs, credentials, or provider
-        # internals. Return a stable operator-safe message instead.
-        return {
-            "catalog": catalog["name"],
-            "status": "unavailable",
-            "message": "Catalog discovery failed",
-            "checked_at": checked_at,
-        }
-    sample_tables = [
-        str(table["name"]) for table in tables[:10] if isinstance(table, dict) and table.get("name")
-    ]
+        return {**result, "status": "unavailable", "message": "Catalog discovery failed"}
     return {
-        "catalog": catalog["name"],
+        **result,
         "status": "ready",
         "message": "Catalog discovery succeeded",
-        "checked_at": checked_at,
-        "table_count": len(tables),
-        "sample_tables": sample_tables,
+        "table_count": len(page.entries) if page.continuation is None else None,
+        "sample_tables": [_identifier_name(identifier) for identifier in page.entries],
     }
 
 

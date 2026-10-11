@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dal_obscura_plugin_api import DiscoveryPage, TableIdentifier
+
 from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.sources.secrets import EnvSecretProvider
 from dal_obscura.storage.database.db import (
@@ -315,10 +317,9 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
         assert name == "analytics"
         assert plugin_id == ICEBERG_CATALOG_ID
         assert options == {"type": "sql", "uri": "sqlite:///catalog.db"}
-        return [
-            {"backend": "iceberg", "name": "default.users", "table_identifier": "default.users"},
-            {"backend": "iceberg", "name": "prod.orders", "table_identifier": "prod.orders"},
-        ]
+        return DiscoveryPage(
+            (TableIdentifier(("default",), "users"), TableIdentifier(("prod",), "orders"))
+        )
 
     monkeypatch.setattr(
         "dal_obscura.control.catalog_service.discover_public_catalog_tables",
@@ -330,16 +331,18 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
     assert response.status_code == 200
     assert response.json() == {
         "catalog": "analytics",
+        "revision": 0,
+        "next_cursor": None,
         "tables": [
             {
-                "backend": "iceberg",
+                "backend": ICEBERG_CATALOG_ID,
                 "governed": True,
                 "name": "default.users",
                 "table_identifier": "default.users",
                 "target": "default.users",
             },
             {
-                "backend": "iceberg",
+                "backend": ICEBERG_CATALOG_ID,
                 "governed": False,
                 "name": "prod.orders",
                 "table_identifier": "prod.orders",
@@ -372,7 +375,7 @@ def test_workspace_catalog_discovery_resolves_secret_references(client_factory, 
 
     def fake_discover_catalog_tables(name, plugin_id, options, **kwargs):
         received.update(options)
-        return []
+        return DiscoveryPage(())
 
     monkeypatch.setattr(
         "dal_obscura.control.catalog_service.discover_public_catalog_tables",
@@ -429,9 +432,7 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, 
         assert name == "analytics"
         assert plugin_id == ICEBERG_CATALOG_ID
         assert options == {"type": "sql", "uri": "sqlite:///catalog.db"}
-        return [
-            {"backend": "iceberg", "name": "default.users", "table_identifier": "default.users"}
-        ]
+        return DiscoveryPage((TableIdentifier(("default",), "users"),))
 
     monkeypatch.setattr(
         "dal_obscura.control.catalog_service.discover_public_catalog_tables",

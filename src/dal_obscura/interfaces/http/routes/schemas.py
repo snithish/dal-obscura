@@ -341,11 +341,21 @@ class CatalogMutationResponse(BaseModel):
     name: str
 
 
+class DiscoveredTableResponse(BaseModel):
+    backend: str
+    name: str
+    table_identifier: str
+    target: str
+    governed: bool
+
+
 class CatalogTablesResponse(BaseModel):
-    """Bounded catalog discovery result returned to management clients."""
+    """One provider page; cursors are caller/revision bound and expire after ten minutes."""
 
     catalog: str
-    tables: list[dict[str, Any]]
+    revision: int
+    tables: list[DiscoveredTableResponse] = Field(max_length=500)
+    next_cursor: str | None
 
 
 class CatalogDiagnosticResponse(BaseModel):

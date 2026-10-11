@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from dal_obscura.control.errors import (
@@ -110,6 +110,23 @@ def get_workspace_catalog(session: Session, name: str) -> dict[str, object]:
         "options": dict(record.options_json),
         "revision": record.revision,
     }
+
+
+def governed_table_identifiers(
+    session: Session, *, catalog_id: UUID, identifiers: list[str]
+) -> set[str]:
+    """Match only the requested discovery page, including friendly asset aliases."""
+
+    if not identifiers:
+        return set()
+    rows = session.execute(
+        select(AssetRecord.target, AssetRecord.table_identifier).where(
+            AssetRecord.catalog_id == catalog_id,
+            or_(AssetRecord.target.in_(identifiers), AssetRecord.table_identifier.in_(identifiers)),
+        )
+    )
+    requested = set(identifiers)
+    return {value for row in rows for value in row if value in requested}
 
 
 def _catalog_by_name(session: Session, *, name: str) -> CatalogRecord:

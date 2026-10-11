@@ -149,3 +149,12 @@ keep the newer key in the previous-key list for the same bounded window.
 This reference is an implementation and configuration contract; it is not a
 claim that a production image, TLS ingress, backup restore, multi-process race,
 or customer release has already been executed in this checkout.
+
+## Catalog browsing key
+
+Provision `DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET` as a random secret of
+at least 32 bytes and inject the same value into every control-plane replica.
+The key encrypts and authenticates short-lived discovery cursors; it is separate
+from ticket, database, OIDC, and bootstrap credentials. Rotation invalidates
+outstanding browse cursors and requires restarting discovery. It does not revoke
+Flight tickets or change published policy.

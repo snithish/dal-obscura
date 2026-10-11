@@ -1830,6 +1830,36 @@
             }
           },
           {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 12000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -7872,22 +7902,39 @@
             "type": "string",
             "title": "Catalog"
           },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
           "tables": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/DiscoveredTableResponse"
             },
             "type": "array",
+            "maxItems": 500,
             "title": "Tables"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
           }
         },
         "type": "object",
         "required": [
           "catalog",
-          "tables"
+          "revision",
+          "tables",
+          "next_cursor"
         ],
         "title": "CatalogTablesResponse",
-        "description": "Bounded catalog discovery result returned to management clients."
+        "description": "One provider page; cursors are caller/revision bound and expire after ten minutes."
       },
       "DataPlaneObservationResponse": {
         "properties": {
@@ -7907,6 +7954,39 @@
         ],
         "title": "DataPlaneObservationResponse",
         "description": "Explicit data-plane health observation state."
+      },
+      "DiscoveredTableResponse": {
+        "properties": {
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "table_identifier": {
+            "type": "string",
+            "title": "Table Identifier"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "governed": {
+            "type": "boolean",
+            "title": "Governed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "backend",
+          "name",
+          "table_identifier",
+          "target",
+          "governed"
+        ],
+        "title": "DiscoveredTableResponse"
       },
       "EvaluationMaskResponse": {
         "properties": {

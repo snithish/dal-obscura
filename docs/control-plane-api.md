@@ -58,3 +58,33 @@ node apps/governance-ui/scripts/generate-api-types.mjs --check
 
 HTTP contract tests live in `tests/interfaces/control_plane/test_api_contract.py`;
 authorization, sessions, and body limits have their own behavioral suites.
+
+## Catalog discovery pages
+
+`GET /v1/catalogs/{name}/tables?limit=100&cursor=<opaque-cursor>` returns
+`catalog`, `revision`, `tables`, and `next_cursor`. `limit` is between 1 and 500;
+omit the cursor for the first page. A null `next_cursor` marks the final page.
+This replaces the former complete-inventory response. The UI requests 50 rows
+per page and replaces the current page instead of accumulating every result.
+
+Each page reauthenticates the administrator and captures catalog configuration in
+a short database transaction. Provider IO runs after that transaction ends; a
+fresh transaction checks the revision and marks only the returned tables as
+governed. A catalog change during IO rejects the result with 409. Cursors are
+encrypted and authenticated, bound to caller, catalog identity/revision and page
+size, and expire after ten minutes. Invalid, changed-scope or expired cursors
+return 400 with an instruction to restart discovery. They carry no authorization;
+every request still requires current administrator access.
+
+Production requires `DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET` with at least
+32 bytes, shared by all control-plane replicas. Rotation invalidates outstanding
+discovery cursors; restart browsing. Local mode generates an ephemeral process key
+when no key is configured. Provider tokens are encrypted rather than exposed as
+queryable configuration or persisted browse state.
+
+Diagnostics sample at most ten entries in one plugin call. `table_count` is null
+when the sample has a continuation; it is not an estimated inventory total.
+Providers may still enumerate internally: the built-in Iceberg adapter currently
+enumerates and sorts its bounded inventory for each independently requested page.
+Browsing every page can therefore repeat provider IO. End-to-end paging does not
+remove that upstream limitation or establish live-cloud support.

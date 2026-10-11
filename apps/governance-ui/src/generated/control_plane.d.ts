@@ -1154,15 +1154,17 @@ export interface components {
         };
         /**
          * CatalogTablesResponse
-         * @description Bounded catalog discovery result returned to management clients.
+         * @description One provider page; cursors are caller/revision bound and expire after ten minutes.
          */
         CatalogTablesResponse: {
             /** Catalog */
             catalog: string;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Revision */
+            revision: number;
             /** Tables */
-            tables: {
-                [key: string]: unknown;
-            }[];
+            tables: components["schemas"]["DiscoveredTableResponse"][];
         };
         /**
          * DataPlaneObservationResponse
@@ -1173,6 +1175,19 @@ export interface components {
             reason: string;
             /** Status */
             status: string;
+        };
+        /** DiscoveredTableResponse */
+        DiscoveredTableResponse: {
+            /** Backend */
+            backend: string;
+            /** Governed */
+            governed: boolean;
+            /** Name */
+            name: string;
+            /** Table Identifier */
+            table_identifier: string;
+            /** Target */
+            target: string;
         };
         /** EvaluationMaskResponse */
         EvaluationMaskResponse: {
@@ -4464,7 +4479,10 @@ export interface operations {
     };
     discover_workspace_catalog_tables_v1_catalogs__name__tables_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path: {
                 name: string;

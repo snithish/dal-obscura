@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dal_obscura.control import catalog_service
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.discovery_cursors import MAX_CURSOR_LENGTH
+from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     CatalogDiagnosticResponse,
@@ -38,17 +42,44 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     )
     def discover_workspace_catalog_tables(
         name: str,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        cursor: Annotated[str | None, Query(min_length=1, max_length=MAX_CURSOR_LENGTH)] = None,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> CatalogTablesResponse:
-        return deps.with_transaction(
-            lambda service: catalog_service.discover_workspace_catalog_tables(
+        captured = deps.with_transaction(
+            lambda service: catalog_service.capture_catalog_discovery(
                 service.session,
                 name,
                 egress_allowlist=service.catalog_egress_allowlist,
-                session_key=actor.identity_key() if actor is not None else None,
                 plugin_registry=service.plugin_registry,
-                secret_provider=service.secret_provider,
             )
+        )
+        identity = actor.identity_key()
+        scope = (str(captured.catalog_id), captured.config.revision, identity, limit)
+        try:
+            continuation = deps.discovery_cursors.resolve(cursor, scope=scope) if cursor else None
+            page = catalog_service.discover_workspace_catalog_tables(
+                captured,
+                session_key=identity,
+                plugin_registry=deps.plugin_registry,
+                secret_provider=deps.secret_provider,
+                continuation=continuation,
+                limit=limit,
+            )
+            next_cursor = (
+                deps.discovery_cursors.issue(page.continuation, scope=scope)
+                if page.continuation is not None
+                else None
+            )
+        except ValidationFailure as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        tables = deps.with_transaction(
+            lambda service: catalog_service.catalog_discovery_tables(
+                service.session, captured, page
+            )
+        )
+        return CatalogTablesResponse(
+            catalog=name, revision=captured.config.revision, tables=tables, next_cursor=next_cursor
         )
 
     @api.get(
@@ -60,16 +91,26 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         name: str,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> CatalogDiagnosticResponse:
-        return deps.with_transaction(
-            lambda service: catalog_service.diagnose_workspace_catalog(
+        captured = deps.with_transaction(
+            lambda service: catalog_service.capture_catalog_discovery(
                 service.session,
                 name,
                 egress_allowlist=service.catalog_egress_allowlist,
-                session_key=actor.identity_key() if actor is not None else None,
                 plugin_registry=service.plugin_registry,
-                secret_provider=service.secret_provider,
             )
         )
+        result = catalog_service.diagnose_workspace_catalog(
+            captured,
+            session_key=actor.identity_key(),
+            plugin_registry=deps.plugin_registry,
+            secret_provider=deps.secret_provider,
+        )
+        deps.with_transaction(
+            lambda service: catalog_service.ensure_catalog_discovery_current(
+                service.session, captured
+            )
+        )
+        return CatalogDiagnosticResponse.model_validate(result)
 
     @api.put(
         "/v1/catalogs/{name}",

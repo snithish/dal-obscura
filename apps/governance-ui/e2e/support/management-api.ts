@@ -94,7 +94,7 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
           await options.deferredDiscovery.wait();
         }
         const tableName = options.deferredDiscovery ? (discoveryCalls === 1 ? "stale-orders" : "fresh-orders") : "orders";
-        return route.fulfill({ json: { catalog: catalogName, tables: [{ name: tableName, backend: "iceberg", identifier: `demo.${tableName}`, governed: false }] } });
+        return route.fulfill({ json: { catalog: catalogName, revision: 1, next_cursor: null, tables: [{ name: tableName, backend: "iceberg", table_identifier: `demo.${tableName}`, target: tableName, governed: false }] } });
       }
     }
     if (options.admin && path === "/v1/settings/runtime") {

@@ -20,7 +20,6 @@ from dal_obscura.sources.plugins import PluginRegistry
 
 ICEBERG_CATALOG_ID = "iceberg.catalog"
 
-CatalogTable = dict[str, object]
 Namespace = tuple[str, ...]
 DEFAULT_MAX_NAMESPACES = 1_000
 DEFAULT_MAX_TABLES = 10_000
@@ -37,9 +36,14 @@ def discover_public_catalog_tables(
     *,
     revision: int = 0,
     plugin_registry: PluginRegistry | None,
-) -> list[CatalogTable]:
-    """Discover tables through one admitted public catalog plugin."""
+    continuation: str | None = None,
+    limit: int = 100,
+) -> DiscoveryPage:
+    """Read one bounded page, without enumerating unrelated namespaces."""
 
+    if type(limit) is not int or not 1 <= limit <= DEFAULT_MAX_PAGE_ENTRIES:
+        raise ValueError("Invalid catalog discovery page size")
+    _validate_continuation(continuation)
     if plugin_registry is None:
         from dal_obscura.sources.builtins import create_builtin_plugin_registry
 
@@ -62,38 +66,27 @@ def discover_public_catalog_tables(
             ),
             context,
         )
-        deadline_at = monotonic() + DEFAULT_DEADLINE_SECONDS
-        _validate_public_catalog_lifecycle(plugin, context, deadline_at)
-        continuation: str | None = None
-        seen: set[str] = set()
-        tables: list[CatalogTable] = []
-        for _ in range(DEFAULT_MAX_NAMESPACES):
-            _check_budget(deadline_at, context.cancel_check)
-            page = plugin.list_tables(context, continuation=continuation, limit=500)
-            entries = _public_page_entries(page)
-            for identifier in entries:
-                if not isinstance(identifier, TableIdentifier):
-                    raise ValueError("Catalog plugin returned an invalid table identifier")
-                from dal_obscura.sources.plugin_runtime import _identifier_name
+        required = ("list_namespaces", "list_tables", "close")
+        if not all(callable(getattr(plugin, name, None)) for name in required):
+            raise ValueError("Catalog plugin does not implement the required lifecycle")
+        context.check_active()
+        page = plugin.list_tables(context, continuation=continuation, limit=limit)
+        context.check_active()
+        entries = _public_page_entries(page, limit=limit)
+        from dal_obscura.sources.plugin_runtime import _identifier_name
 
-                name = _identifier_name(identifier)
-                tables.append({"backend": plugin_id, "name": name, "table_identifier": name})
-                if len(tables) > DEFAULT_MAX_TABLES:
-                    raise ValueError("Catalog discovery exceeded the table limit")
-            token = page.continuation
-            if token is None:
-                return tables
-            if (
-                not isinstance(token, str)
-                or not token
-                or len(token) > 4_096
-                or any(ord(char) < 0x20 or ord(char) == 0x7F for char in token)
-                or token in seen
-            ):
-                raise ValueError("Catalog plugin returned an invalid continuation token")
-            seen.add(token)
-            continuation = token
-        raise ValueError("Catalog discovery exceeded the page limit")
+        names: set[str] = set()
+        for identifier in entries:
+            if not isinstance(identifier, TableIdentifier):
+                raise ValueError("Catalog plugin returned an invalid table identifier")
+            name = _identifier_name(identifier)
+            if name in names:
+                raise ValueError("Catalog plugin returned duplicate table identifiers")
+            names.add(name)
+        _validate_continuation(page.continuation)
+        if page.continuation is not None and page.continuation == continuation:
+            raise ValueError("Catalog plugin returned a non-progressing continuation")
+        return page
     finally:
         from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
 
@@ -103,36 +96,23 @@ def discover_public_catalog_tables(
             _DISCOVERY_SLOTS.release()
 
 
-def _validate_public_catalog_lifecycle(
-    plugin: CatalogPlugin,
-    context: ExecutionContext,
-    deadline_at: float,
-) -> None:
-    required = ("list_namespaces", "list_tables", "close")
-    if not all(callable(getattr(plugin, name, None)) for name in required):
-        raise ValueError("Catalog plugin does not implement the required lifecycle")
-    context.check_active()
-    namespaces = plugin.list_namespaces(context, namespace=())
-    for index, namespace in enumerate(namespaces):
-        _check_budget(deadline_at, context.cancel_check)
-        if index >= DEFAULT_MAX_NAMESPACES:
-            raise ValueError("Catalog discovery exceeded the namespace limit")
-        if not isinstance(namespace, (tuple, list)) or not namespace:
-            raise ValueError("Catalog plugin returned an invalid namespace")
-        if any(
-            not isinstance(segment, str) or not _valid_identifier_segment(segment)
-            for segment in namespace
-        ):
-            raise ValueError("Catalog plugin returned an invalid namespace")
+def _validate_continuation(token: str | None) -> None:
+    if token is not None and (
+        not isinstance(token, str)
+        or not token
+        or len(token) > 4_096
+        or any(ord(char) < 0x20 or ord(char) == 0x7F for char in token)
+    ):
+        raise ValueError("Catalog plugin returned an invalid continuation token")
 
 
-def _public_page_entries(page: object) -> tuple[TableIdentifier, ...]:
+def _public_page_entries(page: object, *, limit: int) -> tuple[TableIdentifier, ...]:
     if not isinstance(page, DiscoveryPage):
         raise ValueError("Catalog plugin returned an invalid discovery page")
     entries = page.entries
     if not isinstance(entries, tuple):
         raise ValueError("Catalog plugin returned an invalid discovery page")
-    if len(entries) > DEFAULT_MAX_PAGE_ENTRIES:
+    if len(entries) > limit:
         raise ValueError("Catalog plugin returned too many page entries")
     return entries
 

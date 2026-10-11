@@ -1,8 +1,8 @@
 import { discardChanges, useConfirmation } from "./ConfirmationProvider";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
-import type { Catalog, CatalogDiagnostic, PluginDescriptor, PluginPair, PluginState } from "../api";
+import type { Catalog, CatalogDiagnostic, CatalogTable, PluginDescriptor, PluginPair, PluginState } from "../api";
 import { controlPlane } from "../api";
 import { preserveSecretReference } from "../connection_options";
 import { recoveryMessage } from "../recovery";
@@ -11,6 +11,7 @@ import { Icon } from "./Icon";
 
 type PluginConfigField = { name: string; type: string; required: boolean; secret: boolean; options?: string[] };
 type PluginLifecycle = NonNullable<PluginState["lifecycle"]>;
+type DiscoveryNavigation = { cursor: string | null; index: number; history: Array<string | null> };
 
 const lifecycleTransitions: Record<PluginLifecycle, PluginLifecycle[]> = {
   enabled: ["enabled", "draining", "disabled", "revoked"],
@@ -99,8 +100,13 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
   const [message, setMessage] = useState("");
   const [lifecycleTargets, setLifecycleTargets] = useState<Record<string, PluginState["lifecycle"]>>({});
   const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null);
-  const [tables, setTables] = useState<Array<Record<string, unknown>>>([]);
+  const [tables, setTables] = useState<CatalogTable[]>([]);
   const [discoveredCatalog, setDiscoveredCatalog] = useState("");
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState("");
+  const [discoveryNavigation, setDiscoveryNavigation] = useState<DiscoveryNavigation>({ cursor: null, index: 0, history: [null] });
+  const [discoveryRequest, setDiscoveryRequest] = useState<(DiscoveryNavigation & { catalog: string }) | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selectedFormatId, setSelectedFormatId] = useState("");
   const [diagnostics, setDiagnostics] = useState<Record<string, CatalogDiagnostic>>({});
   const [diagnosing, setDiagnosing] = useState("");
@@ -114,10 +120,24 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
   const discoveryEpoch = useRef(0);
   const diagnosticEpoch = useRef(0);
   const discoveredCatalogRef = useRef("");
+  const discoveredRevisionRef = useRef<number | null>(null);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const savingRef = useRef(false);
   const governBusyRef = useRef<Set<string>>(new Set());
   const lifecycleBusyRef = useRef<Set<string>>(new Set());
+  const clearDiscovery = useCallback(() => {
+    discoveryEpoch.current += 1;
+    void queryClient.cancelQueries({ queryKey: ["management", sessionScope, "connections", "discover"] });
+    setTables([]);
+    setDiscoveredCatalog("");
+    discoveredCatalogRef.current = "";
+    discoveredRevisionRef.current = null;
+    setDiscoveryBusy(false);
+    setDiscoveryError("");
+    setNextCursor(null);
+    setDiscoveryRequest(null);
+    setDiscoveryNavigation({ cursor: null, index: 0, history: [null] });
+  }, [queryClient, sessionScope]);
   useEffect(() => () => {
     discoveryEpoch.current += 1;
     diagnosticEpoch.current += 1;
@@ -127,14 +147,21 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
   }, [queryClient, sessionScope]);
   useEffect(() => {
     catalogStateEpoch.current += 1;
-  }, [catalogs, pluginPairs]);
+    if (!discoveredCatalogRef.current) return;
+    const current = catalogs.find((catalog) => catalog.name === discoveredCatalogRef.current);
+    if (!current || current.revision !== discoveredRevisionRef.current) {
+      clearDiscovery();
+      setMessage("Catalog configuration changed. Discover tables again.");
+    }
+  }, [catalogs, pluginPairs, clearDiscovery]);
   useEffect(() => {
     setLifecycleBusy(null);
     setConnectionDirty(false);
     setLifecycleDirty(false);
     connectionEditEpoch.current += 1;
     lifecycleEditEpoch.current += 1;
-  }, [sessionScope]);
+    clearDiscovery();
+  }, [sessionScope, clearDiscovery]);
   const dirty = connectionDirty || lifecycleDirty;
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -254,27 +281,39 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
     setLifecycleDirty(false);
     onReload();
   }
-  async function discover(catalog: string) {
+  async function discover(catalog: string, navigation: DiscoveryNavigation = { cursor: null, index: 0, history: [null] }) {
     const epoch = ++discoveryEpoch.current;
     const stateEpoch = catalogStateEpoch.current;
+    const request = { ...navigation, catalog };
+    setDiscoveryRequest(request);
+    setDiscoveryBusy(true);
+    setDiscoveryError("");
+    void queryClient.cancelQueries({ queryKey: ["management", sessionScope, "connections", "discover"] });
     try {
       const catalogRow = catalogs.find((item) => item.name === catalog);
       const catalogPluginId = catalogRow?.plugin_id;
       const choices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogPluginId && pair.status === "admitted");
       const discovered = await queryClient.fetchQuery({
-        queryKey: ["management", sessionScope, "connections", "discover", catalog],
-        queryFn: ({ signal }) => controlPlane.discoverCatalogTables(catalog, signal),
+        queryKey: ["management", sessionScope, "connections", "discover", catalog, catalogRow?.revision, navigation.cursor],
+        queryFn: ({ signal }) => controlPlane.discoverCatalogTables(catalog, navigation.cursor, signal),
+        retry: false,
       });
       if (epoch !== discoveryEpoch.current || stateEpoch !== catalogStateEpoch.current) return;
       setDiscoveredCatalog(catalog);
+      if (discoveredCatalogRef.current !== catalog) {
+        setSelectedFormatId(choices.length === 1 ? choices[0].format_plugin_id : "");
+      }
       discoveredCatalogRef.current = catalog;
-      setSelectedFormatId(choices.length === 1 ? choices[0].format_plugin_id : "");
+      discoveredRevisionRef.current = discovered.revision;
       setTables(discovered.tables);
-      setMessage(`Loaded table inventory for ${catalog}.`);
+      setDiscoveryNavigation(navigation);
+      setNextCursor(discovered.next_cursor);
     } catch (error) {
       if (isAbortError(error)) return;
-      if (epoch !== discoveryEpoch.current) return;
-      setTables([]); setMessage(recoveryMessage(error, "Discovery failed; source credentials and endpoint policy were not changed."));
+      if (epoch !== discoveryEpoch.current || stateEpoch !== catalogStateEpoch.current) return;
+      setDiscoveryError(recoveryMessage(error, "Discovery failed; retry this page or restart discovery."));
+    } finally {
+      if (epoch === discoveryEpoch.current) setDiscoveryBusy(false);
     }
   }
   async function diagnose(catalog: string) {
@@ -295,9 +334,9 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
       setDiagnosing("");
     }
   }
-  async function govern(catalog: string, table: Record<string, unknown>) {
-    const target = String(table.target ?? table.name ?? "").trim();
-    const identifier = discoveredTableIdentifier(table);
+  async function govern(catalog: string, table: CatalogTable) {
+    const target = table.target;
+    const identifier = table.table_identifier;
     if (!target || !identifier) return setMessage("The discovered table has no safe identifier.");
     const catalogRow = catalogs.find((item) => item.name === catalog);
     const catalogPluginId = catalogRow?.plugin_id;
@@ -316,7 +355,10 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
     try {
       await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier, controller.signal);
       if (controller.signal.aborted || discoveryScope !== discoveryEpoch.current || stateEpoch !== catalogStateEpoch.current || discoveredCatalogRef.current !== catalog) return;
-      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog);
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] });
+      void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] });
+      setTables((current) => current.map((item) => item.table_identifier === identifier ? { ...item, governed: true } : item));
+      setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`);
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Asset registration was rejected; the source table was not changed."));
     } finally {
@@ -369,18 +411,43 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
         : <TextInput label={label} value={value} onChange={(event) => update(event.currentTarget.value)} placeholder={field.name === "uri" ? "https://catalog.example" : field.name === "password" ? "prod/catalog/password" : undefined} type={field.secret ? "password" : field.type === "integer" || field.type === "number" ? "number" : "text"} />;
     return <div key={field.name}>{control}</div>;
   };
-  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Catalog connections</h2><p className="muted">Choose from adapters admitted by the control plane. Credentials stay in server configuration and are never rendered.</p></div><Button type="button" variant="default" className="secondary" onClick={reload} leftSection={<Icon name="refresh-cw" size={16} />}>Refresh</Button></div>{pluginStates.length > 0 && <p className="help">Adapter status: {pluginStates.map((state) => state.plugin_id + " " + (state.lifecycle ?? state.status)).join(", ")}</p>}{pluginCards}<div className="form-card"><div className="management-head"><div><h3>{editingCatalog ? `Edit ${editingCatalog.name}` : "Add catalog"}</h3><p className="help">{editingCatalog ? "Safe values are prefilled. Secret references remain deployment-managed." : "Create a catalog configuration using an admitted adapter."}</p></div>{editingCatalog && <Button type="button" variant="default" size="sm" className="secondary compact" onClick={cancelEdit} leftSection={<Icon name="x" size={15} />}>Cancel edit</Button>}</div><div className="form-grid"><TextInput label="Name" value={name} disabled={Boolean(editingCatalog)} onChange={(event) => { markDirty("connection"); setName(event.currentTarget.value); }} placeholder="analytics" />{catalogPlugins.length > 1 && <NativeSelect label="Catalog adapter" value={pluginId} onChange={(event) => { markDirty("connection"); setPluginId(event.currentTarget.value); }} data={catalogPlugins.map((plugin) => ({ value: plugin.plugin_id, label: plugin.display_name || plugin.plugin_id }))} />}{effectiveFields.map(renderField)}</div><p className="help connection-note">Use a URI without userinfo or query credentials. The password field is a name resolved by the deployment secret provider; never paste a password or token here.</p><Button type="button" className="primary" disabled={saving} onClick={() => void save()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : editingCatalog ? "Save catalog changes" : "Save connection"}</Button>{message && <p className="notice">{message}</p>}</div>{discoveredChoices.length > 1 && <div className="form-card"><h3>Select table format</h3><p className="help">This catalog advertises multiple output formats. Choose one before governing a discovered table.</p><NativeSelect aria-label="Selected table format" value={selectedFormatId} onChange={(event) => { markDirty("connection"); setSelectedFormatId(event.currentTarget.value); }} data={[{ value: "", label: "Choose a format…" }, ...discoveredChoices.map((pair) => ({ value: pair.format_plugin_id, label: `${pair.format_plugin_id} · handle v${pair.handle_versions.join(", ")}` }))]} /></div>}{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">{catalogDisplayName(catalog)}</p><p className="diagnostic"><span className="pill pill-muted">{catalog.status ?? "unknown"}</span> · {catalog.governed_asset_count ?? 0} governed assets</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><Button type="button" variant="default" className="secondary" onClick={() => beginEdit(catalog)} leftSection={<Icon name="pencil" size={16} />}>Edit</Button><Button type="button" variant="default" className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)} leftSection={<Icon name="refresh-cw" size={15} />}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</Button><Button type="button" variant="default" className="secondary" onClick={() => void discover(catalog.name)} leftSection={<Icon name="search" size={15} />}>Discover tables</Button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an admitted catalog adapter to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap" role="region" aria-label="Discovered catalog tables table"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={discoveredTableIdentifier(table) || String(index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "Unknown")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <Button type="button" variant="default" size="sm" className="secondary compact" disabled={governBusy !== null} onClick={() => void govern(discoveredCatalog, table)} leftSection={<Icon name="shield-check" size={15} />}>{governBusy ? "Governing…" : "Govern table"}</Button>}</td></tr>)}</tbody></table></div>}</section>;
+  const tableBrowser = (discoveredCatalog || discoveryError) && <section
+    className="catalog-discovery form-card" aria-label={`Discovered tables in ${discoveredCatalog || discoveryRequest?.catalog}`}
+    aria-busy={discoveryBusy}
+  >
+    <div className="management-head">
+      <div><h3>Tables in {discoveredCatalog || discoveryRequest?.catalog}</h3>
+        <p role="status" className="help">{discoveryBusy ? `Loading page ${(discoveryRequest?.index ?? 0) + 1}…` : `Page ${discoveryNavigation.index + 1} · ${tables.length} tables`}</p>
+      </div>
+      <Button variant="default" disabled={discoveryBusy || governBusy !== null} onClick={() => void discover(discoveredCatalog || discoveryRequest!.catalog)}>Refresh table discovery</Button>
+    </div>
+    {discoveryError && <div className="discovery-error"><p role="alert">{discoveryError}</p>
+      <Button variant="default" disabled={discoveryBusy} onClick={() => discoveryRequest && void discover(discoveryRequest.catalog, discoveryRequest)}>Retry page</Button>
+    </div>}
+    <div className="discovery-pagination" role="group" aria-label="Discovery pages">
+      <Button variant="default" disabled={discoveryBusy || governBusy !== null || discoveryNavigation.index === 0} onClick={() => {
+        const index = discoveryNavigation.index - 1;
+        void discover(discoveredCatalog, { ...discoveryNavigation, index, cursor: discoveryNavigation.history[index] });
+      }}>Previous page</Button>
+      <Button variant="default" disabled={discoveryBusy || governBusy !== null || nextCursor === null} onClick={() => {
+        if (nextCursor === null) return;
+        const index = discoveryNavigation.index + 1;
+        const history = [...discoveryNavigation.history.slice(0, index), nextCursor];
+        void discover(discoveredCatalog, { cursor: nextCursor, index, history });
+      }}>Next page</Button>
+    </div>
+    {tables.length ? <div className="table-wrap" role="region" aria-label="Discovered catalog tables table" tabIndex={0}>
+      <table><thead><tr><th>Table</th><th>Catalog adapter</th><th>Governed</th><th>Action</th></tr></thead>
+        <tbody>{tables.map((table) => <tr key={table.table_identifier}>
+          <td>{table.name}<small className="discovery-mobile-meta">{table.backend} · {table.governed ? "Governed" : "Not governed"}</small></td><td>{table.backend}</td><td>{table.governed ? "Yes" : "No"}</td>
+          <td>{table.governed ? <span className="pill">Registered</span> : <Button variant="default" size="sm" disabled={discoveryBusy || governBusy !== null} onClick={() => void govern(discoveredCatalog, table)} leftSection={<Icon name="shield-check" size={15} />}>Govern table</Button>}</td>
+        </tr>)}</tbody></table>
+    </div> : <p className="schema-empty">No tables on this page.</p>}
+  </section>;
+  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Catalog connections</h2><p className="muted">Choose from adapters admitted by the control plane. Credentials stay in server configuration and are never rendered.</p></div><Button type="button" variant="default" className="secondary" onClick={reload} leftSection={<Icon name="refresh-cw" size={16} />}>Refresh</Button></div>{pluginStates.length > 0 && <p className="help">Adapter status: {pluginStates.map((state) => state.plugin_id + " " + (state.lifecycle ?? state.status)).join(", ")}</p>}{pluginCards}<div className="form-card"><div className="management-head"><div><h3>{editingCatalog ? `Edit ${editingCatalog.name}` : "Add catalog"}</h3><p className="help">{editingCatalog ? "Safe values are prefilled. Secret references remain deployment-managed." : "Create a catalog configuration using an admitted adapter."}</p></div>{editingCatalog && <Button type="button" variant="default" size="sm" className="secondary compact" onClick={cancelEdit} leftSection={<Icon name="x" size={15} />}>Cancel edit</Button>}</div><div className="form-grid"><TextInput label="Name" value={name} disabled={Boolean(editingCatalog)} onChange={(event) => { markDirty("connection"); setName(event.currentTarget.value); }} placeholder="analytics" />{catalogPlugins.length > 1 && <NativeSelect label="Catalog adapter" value={pluginId} onChange={(event) => { markDirty("connection"); setPluginId(event.currentTarget.value); }} data={catalogPlugins.map((plugin) => ({ value: plugin.plugin_id, label: plugin.display_name || plugin.plugin_id }))} />}{effectiveFields.map(renderField)}</div><p className="help connection-note">Use a URI without userinfo or query credentials. The password field is a name resolved by the deployment secret provider; never paste a password or token here.</p><Button type="button" className="primary" disabled={saving} onClick={() => void save()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : editingCatalog ? "Save catalog changes" : "Save connection"}</Button>{message && <p className="notice">{message}</p>}</div>{discoveredChoices.length > 1 && <div className="form-card"><h3>Select table format</h3><p className="help">This catalog advertises multiple output formats. Choose one before governing a discovered table.</p><NativeSelect aria-label="Selected table format" value={selectedFormatId} onChange={(event) => { markDirty("connection"); setSelectedFormatId(event.currentTarget.value); }} data={[{ value: "", label: "Choose a format…" }, ...discoveredChoices.map((pair) => ({ value: pair.format_plugin_id, label: `${pair.format_plugin_id} · handle v${pair.handle_versions.join(", ")}` }))]} /></div>}{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">{catalogDisplayName(catalog)}</p><p className="diagnostic"><span className="pill pill-muted">{catalog.status ?? "unknown"}</span> · {catalog.governed_asset_count ?? 0} governed assets</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><Button type="button" variant="default" className="secondary" onClick={() => beginEdit(catalog)} leftSection={<Icon name="pencil" size={16} />}>Edit</Button><Button type="button" variant="default" className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)} leftSection={<Icon name="refresh-cw" size={15} />}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</Button><Button type="button" variant="default" className="secondary" onClick={() => void discover(catalog.name)} leftSection={<Icon name="search" size={15} />}>Discover tables</Button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an admitted catalog adapter to begin asset onboarding.</p></div>}{tableBrowser}</section>;
 }
 
 
 function catalogDisplayName(catalog: Catalog): string {
   return `Catalog adapter · ${catalog.plugin_id}`;
-}
-
-function discoveredTableIdentifier(table: Record<string, unknown>): string {
-  for (const key of ["table_identifier", "identifier", "target", "name"]) {
-    const value = table[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
 }

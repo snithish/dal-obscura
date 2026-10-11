@@ -121,6 +121,15 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
             ),
             plugin_registry=plugin_registry,
             secret_provider=secret_provider,
+            catalog_cursor_secret=(
+                cursor_secret.encode("utf-8")
+                if (
+                    cursor_secret := _optional(
+                        values, "DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET"
+                    )
+                )
+                else None
+            ),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
@@ -328,6 +337,12 @@ def _validate_profile(  # noqa: C901
         or _origin(post_logout_redirect_uri) not in allowed_origins
     ):
         raise ValueError("Production OIDC redirect origins must be listed in CORS origins")
+    cursor_secret = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET")
+    if cursor_secret is None or len(cursor_secret.encode("utf-8")) < 32:
+        raise ValueError(
+            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET must contain at least "
+            "32 bytes in production"
+        )
 
 
 def _oidc_resolver(values: Mapping[str, str]) -> OidcActorResolver | None:

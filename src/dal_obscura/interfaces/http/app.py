@@ -154,6 +154,7 @@ def create_app(  # noqa: C901
     trusted_proxy_peers: tuple[str, ...] = (),
     plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
+    catalog_cursor_secret: bytes | None = None,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed."""
 
@@ -360,6 +361,8 @@ def create_app(  # noqa: C901
             expose_headers=["x-request-id", "retry-after"],
         )
     install_health_routes(app, session_maker)
+    from dal_obscura.control.discovery_cursors import DiscoveryCursors
+
     deps = ControlPlaneDeps(
         session_maker=session_maker,
         admin_token=admin_token,
@@ -383,6 +386,7 @@ def create_app(  # noqa: C901
         ),
         plugin_registry=plugin_registry,
         secret_provider=secret_provider,
+        discovery_cursors=DiscoveryCursors(catalog_cursor_secret),
     )
 
     for route in (

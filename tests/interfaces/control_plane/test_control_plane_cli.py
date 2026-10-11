@@ -200,6 +200,29 @@ def test_control_plane_cli_rejects_insecure_production_profile(capsys):
     assert "at least 32 characters" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("secret", ["", "short"])
+def test_control_plane_cli_requires_a_shared_catalog_cursor_secret(secret, capsys):
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "admin",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "admins",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "ui",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET": secret,
+        }
+    )
+    assert result == 1
+    assert "CATALOG_CURSOR_SECRET must contain at least 32 bytes" in capsys.readouterr().err
+
+
 def test_control_plane_cli_requires_real_tls_oidc_in_production(capsys):
     database_url = "postgresql+psycopg://user:pass@db.example/control_plane"
     environment = {

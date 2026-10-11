@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, TypeVar, cast
 from urllib.parse import urlsplit
 
@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.discovery_cursors import DiscoveryCursors
 from dal_obscura.control.errors import (
     AuthorizationFailure,
     ConfigurationConflictError,
@@ -90,6 +91,7 @@ class ControlPlaneDeps:
     trusted_proxy_peers: tuple[str, ...] = ()
     plugin_registry: PluginRegistry | None = None
     secret_provider: SecretProvider | None = None
+    discovery_cursors: DiscoveryCursors = field(default_factory=DiscoveryCursors)
 
     def __post_init__(self) -> None:
         if not 1 <= self.session_ttl_seconds <= MAX_BROWSER_SESSION_TTL_SECONDS:

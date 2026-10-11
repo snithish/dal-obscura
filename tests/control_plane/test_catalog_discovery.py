@@ -9,7 +9,29 @@ from dal_obscura.sources.discovery import (
     discover_public_catalog_tables,
 )
 from dal_obscura.sources.plugins import PluginRegistry
-from tests.support.discovery import _unchecked_discovery_page, discover_iceberg_tables
+from tests.support.discovery import (
+    PagedCatalogRegistry,
+    _unchecked_discovery_page,
+    discover_iceberg_tables,
+)
+
+
+def test_public_discovery_reads_only_the_requested_page_of_a_large_catalog():
+    registry = PagedCatalogRegistry()
+    page = discover_public_catalog_tables(
+        "analytics",
+        "fixture.catalog",
+        {},
+        plugin_registry=registry,
+        continuation="99950",
+        limit=25,
+    )
+    assert page.entries == tuple(
+        TableIdentifier(("default",), f"table_{i:06}") for i in range(99950, 99975)
+    )
+    assert page.continuation == "99975"
+    assert registry.requests == [("99950", 25)]
+    assert registry.closed == 1
 
 
 class FakeIcebergCatalog:
@@ -173,11 +195,9 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
         plugin_registry=Registry(),
     )
 
-    assert tables == [
-        {"backend": "fixture.catalog", "name": "default.users", "table_identifier": "default.users"}
-    ]
+    assert tables == DiscoveryPage((TableIdentifier(("default",), "users"),))
     assert received_revision == [4]
-    assert listed_namespaces == [True]
+    assert listed_namespaces == []
     assert closed == [True]
 
 
@@ -219,10 +239,9 @@ def test_public_catalog_discovery_releases_capacity_when_close_fails() -> None:
                 "analytics", "fixture.catalog", {}, plugin_registry=registry
             )
 
-    assert (
-        discover_public_catalog_tables("analytics", "fixture.catalog", {}, plugin_registry=registry)
-        == []
-    )
+    assert discover_public_catalog_tables(
+        "analytics", "fixture.catalog", {}, plugin_registry=registry
+    ) == DiscoveryPage(())
 
 
 def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:

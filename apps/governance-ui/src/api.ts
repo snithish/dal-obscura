@@ -46,6 +46,7 @@ export type Preview = Pick<
     >
   > & { masks: Record<string, Mask>; row_filter: string | null };
 export type Session = ApiSchemas["SessionResponse"];
+export type CatalogTable = ApiSchemas["DiscoveredTableResponse"];
 export type UiAuthConfig = ApiSchemas["UiAuthConfigResponse"];
 export type SessionOptions = ApiSchemas["SessionOptionsResponse"];
 export type AuditEvent = ApiSchemas["AuditEventResponse"];
@@ -345,9 +346,9 @@ export const controlPlane = {
     request<ApiSchemas["CatalogInventoryResponse"][]>("/v1/catalogs", {
       signal,
     }),
-  discoverCatalogTables: (name: string, signal?: AbortSignal) =>
+  discoverCatalogTables: (name: string, cursor: string | null, signal?: AbortSignal) =>
     request<ApiSchemas["CatalogTablesResponse"]>(
-      `/v1/catalogs/${encodeURIComponent(name)}/tables`,
+      `/v1/catalogs/${encodeURIComponent(name)}/tables?${new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) })}`,
       { signal },
     ),
   diagnoseCatalog: async (name: string, signal?: AbortSignal) => {

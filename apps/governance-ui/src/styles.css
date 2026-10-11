@@ -343,3 +343,18 @@ td small { display: block; color: var(--text-secondary); margin-top: 4px; }
 .identity-facts dd { margin: .25rem 0 0; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .identity-facts { grid-template-columns: minmax(0, 1fr); } }
 .condition-evidence, .policy-test-result { margin-top: 1rem; }
+/* Discovery replaces a bounded page rather than accumulating a catalog inventory. */
+.catalog-discovery .table-wrap { max-height: 28rem; overflow: auto; }
+.catalog-discovery td { overflow-wrap: anywhere; }
+.catalog-discovery th { position: sticky; top: 0; background: var(--surface); }
+.discovery-pagination { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+.discovery-error { margin-bottom: 1rem; }
+.discovery-mobile-meta { display: none; }
+@media (max-width: 600px) {
+  .catalog-discovery table { min-width: 0; width: 100%; table-layout: fixed; }
+  .catalog-discovery th:nth-child(2), .catalog-discovery td:nth-child(2),
+  .catalog-discovery th:nth-child(3), .catalog-discovery td:nth-child(3) { display: none; }
+  .catalog-discovery th:last-child { width: 150px; }
+  .catalog-discovery th, .catalog-discovery td { padding-left: 8px; padding-right: 8px; }
+  .discovery-mobile-meta { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
+}
