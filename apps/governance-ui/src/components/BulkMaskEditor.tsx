@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
 import type { Mask, PolicyRule } from "../api";
 import { groupMasks, type ColumnOption } from "../policy_editor";
+import { ColumnPathSummary } from "./ColumnPathSummary";
 import { ColumnMultiSelect } from "./ColumnMultiSelect";
 import { TokenInput } from "./TokenInput";
 import { Icon } from "./Icon";
@@ -71,7 +72,7 @@ export function BulkMaskEditor({ rule, options, supportedMasks, readOnly, onAppl
     {!masked.length && !editing && <div className="policy-empty"><Icon name="shield-check" size={22} /><div><strong>Values are shown as stored</strong><p>Add a mask to protect sensitive columns.</p></div></div>}
     {masked.length > 0 && <div className="mask-cards">{masked.map((group, index) => <article className="mask-card" key={index}>
       <div className="mask-card-heading"><Icon name="shield-check" size={17} /><strong>{maskLabels[group.mask!.type]}</strong><span className="policy-count">{group.columns.length} {group.columns.length === 1 ? "column" : "columns"}</span><Button variant="subtle" size="compact-sm" aria-label={`Edit ${maskLabels[group.mask!.type]} mask`} onClick={() => begin(group.columns, group.mask)} disabled={readOnly || editing}>Edit</Button><Button variant="subtle" color="red" size="compact-sm" aria-label={`Remove ${maskLabels[group.mask!.type]} mask`} onClick={() => onApply(group.columns, undefined, [])} disabled={readOnly || editing}>Remove</Button></div>
-      <div className="policy-paths">{group.columns.map((column) => <code key={column}>{column}</code>)}</div>
+      <ColumnPathSummary columns={group.columns} label="masked columns" />
       {group.mask!.value !== undefined && <p className="mask-detail">{group.mask!.type === "keep_last" ? "Characters retained" : "Replacement"}: <code>{JSON.stringify(group.mask!.value)}</code></p>}
       {Boolean(group.mask!.exempt_principals?.length) && <div className="mask-exception-summary"><span>Can see original values:</span>{group.mask!.exempt_principals!.map((token) => <span className="column-chip" key={token}>{token}</span>)}</div>}
     </article>)}</div>}
@@ -92,6 +93,6 @@ export function BulkMaskEditor({ rule, options, supportedMasks, readOnly, onAppl
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="composer-footer"><p>{type ? type === "none" ? `${count} columns show original values` : `${count} masked · ${selectedExcluded.length} excluded` : "Choose a mask to continue"}</p><Button variant="default" onClick={close}>Cancel mask changes</Button><Button disabled={readOnly || !type || !validTargets || Boolean(error)} onClick={() => { onApply([...new Set([...originalTargets, ...targets])], mask ? { ...mask, ...(exemptionTokens.length ? { exempt_principals: exemptionTokens } : {}) } : undefined, [...selectedExcluded, ...originalTargets.filter((column) => !targetSet.has(column))]); close(); }}>Apply mask</Button></div>
     </div>}
-    {unmasked.length > 0 && <details className="unmasked-columns"><summary>{unmasked.length} {unmasked.length === 1 ? "column shows" : "columns show"} original values</summary><div className="policy-paths">{unmasked.map((column) => <code key={column}>{column}</code>)}</div></details>}
+    {unmasked.length > 0 && <details className="unmasked-columns"><summary>{unmasked.length} {unmasked.length === 1 ? "column shows" : "columns show"} original values</summary><ColumnPathSummary columns={unmasked} label="columns showing original values" /></details>}
   </section>;
 }

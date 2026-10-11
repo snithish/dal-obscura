@@ -8,7 +8,6 @@ import {
   ChevronDown,
   CircleAlert,
   CircleCheck,
-  ClipboardCheck,
   Copy,
   Database,
   Filter,
@@ -48,7 +47,6 @@ export type IconName =
   | "arrow-up"
   | "check"
   | "chevron-down"
-  | "clipboard-check"
   | "copy"
   | "filter"
   | "key-round"
@@ -79,7 +77,6 @@ const icons: Record<IconName, LucideIcon> = {
   "arrow-up": ArrowUp,
   check: Check,
   "chevron-down": ChevronDown,
-  "clipboard-check": ClipboardCheck,
   copy: Copy,
   filter: Filter,
   "key-round": KeyRound,

@@ -625,3 +625,26 @@ apply. E01 remains partially resolved: arbitrary native depth requires maintaine
 upstream/native support plus coordinated workers and consumers, not larger
 constants. See the probe document for bridge ownership and the next qualification
 gate.
+
+## 26. Sixteenth implementation delivery — bounded mask inspection
+
+Masked and original-value summaries now render at most five inline path previews.
+A keyboard disclosure provides scoped search, exact match counts and pages of at
+most 50 paths inside a focusable scroll region. Inspection stays available in
+read-only mode and does not apply masks or dirty drafts. Full long literal paths
+remain available without rewriting identity. Existing edit controls retain their
+permission and pending-edit boundaries. An unused icon was removed to keep the
+unchanged production bundle budget.
+
+TDD exposed all three wide-summary failures: 5,000 paths mounted instead of five.
+Owning browser checks cover 320/390/1440 px, exact late-field search/page values,
+empty states, keyboard close/focus, no HTTP writes and axe checks. The read-only
+story covers exact long Unicode literal paths; original-value review and policy
+lifecycle checks use their existing public UI boundaries. All 72 units, 59 browser
+stories, types/generated API checks and bundle gates pass; existing wide typing
+retains its 200 ms gate. See [before/after review](ui-review/mask-summary/README.md).
+
+E03 remains partial. This bounds paths within each mask group and original-value
+summary, not the number of distinct mask groups, exemption tokens, complete schema
+transfer, option indexes or provider paging. Real operator and field performance
+qualification remain open.

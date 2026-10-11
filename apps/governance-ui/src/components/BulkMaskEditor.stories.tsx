@@ -46,3 +46,18 @@ export const ReadOnly: Story = {
     await expect(canvas.getByRole("button", { name: "Edit Hash mask" })).toBeDisabled();
   },
 };
+
+const longLiteralPath = `["literal.dotted_${"深".repeat(1024)}"]`;
+const wideNames = [...Array.from({ length: 100 }, (_, index) => `field_${index}`), longLiteralPath];
+export const ReadOnlyWideMaskReview: Story = {
+  args: { readOnly: true, rule: { ...rule, columns: wideNames, masks: Object.fromEntries(wideNames.map(name => [name, { type: "hash" as const }])) } },
+  play: async ({ canvas, canvasElement, args }) => {
+    await expect(canvas.getByRole("button", { name: "Edit Hash mask" })).toBeDisabled();
+    await userEvent.click(canvas.getByText("Review all 101 masked columns", { exact: true }));
+    await userEvent.type(canvas.getByRole("searchbox", { name: "Search masked columns" }), "literal.dotted");
+    await expect(canvas.getByText("1 of 101 columns", { exact: true })).toBeVisible();
+    await expect(canvasElement.querySelectorAll(".column-path-review code")).toHaveLength(1);
+    await expect(canvasElement.querySelector(".column-path-review code")?.textContent).toBe(longLiteralPath);
+    await expect(args.onApply).not.toHaveBeenCalled();
+  },
+};

@@ -358,3 +358,12 @@ td small { display: block; color: var(--text-secondary); margin-top: 4px; }
   .catalog-discovery th, .catalog-discovery td { padding-left: 8px; padding-right: 8px; }
   .discovery-mobile-meta { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
 }
+
+.column-path-summary { margin-top: 10px; }
+.column-path-summary summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; }
+.column-path-preview code { max-width: 36ch; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.column-path-review { margin-top: 12px; }
+.column-path-review p { margin: 8px 0; font-size: 12px; }
+.column-path-review ul { max-height: 288px; overflow: auto; margin: 8px 0; padding: 0; list-style: none; }
+.column-path-review li { padding: 6px; overflow-wrap: anywhere; border-bottom: 1px solid var(--border); }
+.column-path-pages { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; }
