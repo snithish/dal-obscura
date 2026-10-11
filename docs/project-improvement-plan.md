@@ -406,3 +406,32 @@ previously accepted authoring requests; governed reads and admitted schema
 identities are unchanged. Provider-backed schema paging, configurable coordinated
 budgets, deeper native support, and complete catalog/CoW/MoR cloud qualification
 remain open. E01 is still only partially resolved.
+
+## 17. Seventh implementation delivery — bounded selection review
+
+Wide selections no longer render every field as a chip. The rule shows five
+chips and a count-bearing review action; the review searches the selected set and
+renders a bounded row window. The available-field search index, expanded leaf
+sets, result eligibility, and selection lookups are memoized at their owning
+component. Chip validity uses the existing path map instead of repeated scans.
+
+Selection review is available on mobile through an explicit browse/review toggle.
+Keyboard removal returns focus to review search; closing the dialog restores the
+picker trigger. Unavailable selections remain removable. Removing a field changes
+the draft without publishing it. Select-all copy now states that it applies to the
+current schema regardless of search, and future/unselected fields remain NULL.
+A modal-header landmark defect found by the full accessibility check is fixed.
+
+[Matched visual evidence](ui-review/wide-selection/README.md) covers 1,000 selected
+fields on desktop/mobile. Browser qualification exercises 10,000 selections at
+1440/390/320 pixels with zero automated accessibility violations and p95 local
+selected-field search below 200 ms. Existing bulk exclusions, prefixes, draft
+behavior, and 10,000-field available search remain qualified. UI unit, story,
+type, and production bundle checks accompany this delivery.
+
+E03 is partially resolved: DOM selection work and repeated lookup/derived work
+are bounded or indexed, while source schema transfer, full option indexes,
+provider-backed schema search/paging, and other policy summaries remain open.
+These synthetic UI fixtures do not change backend schema/policy/Flight limits or
+prove provider qualification. E05 still requires representative-operator studies
+and live device/keyboard evidence. Remaining release gates are unchanged.
