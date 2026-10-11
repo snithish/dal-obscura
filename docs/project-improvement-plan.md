@@ -2,7 +2,60 @@
 
 Audit date: 11 October 2026. Source baseline: `0c1d89f0bdfa4fecee4b1aa94319531e1da618b3`.
 
-This is a proposed implementation and qualification plan, not a claim that the work is complete. The audit examined source, repository qualification reports, and archived UI captures. It did not rerun the full runtime suite, conduct a penetration test, or qualify live cloud accounts. Existing local changes to VS Code and the nested-MoR demo were excluded. The [visual companion](project-improvement-plan.html) summarizes priorities and dependencies.
+This is the approved improvement program and its implementation record, not a claim that the release is complete. The audit examined source, repository qualification reports, and archived UI captures. It did not rerun the full runtime suite, conduct a penetration test, or qualify live cloud accounts. Existing local changes to VS Code and the nested-MoR demo were excluded. The [visual companion](project-improvement-plan.html) summarizes priorities and dependencies.
+
+## Current implementation status
+
+Updated 11 October 2026 after sixteen implementation deliveries. Findings E01–E13
+below preserve the original audit baseline; they do not describe every current
+source file. Delivery sections 11–26 record the implemented behavior and its
+qualification. Local implementation is partial; broader release claims remain gated.
+
+- **UX/UI, E03/E05/E06:** paged catalog results, bounded selection review, exact
+  schema inspection with bounded indentation, indexed mask edits, responsive wide
+  forms and bounded mask-field review are implemented. Local browser gates and
+  current before/after captures pass. Complete-schema transfer/search, distinct
+  mask groups, full tree navigation, representative operators and field INP remain.
+- **Ease of operation, E11:** package add/configure/deploy, guided target setup,
+  safe doctor diagnostics and atomic multi-catalog publication are implemented.
+  Real image push/Compose rollout, recovery/rollback and ticket draining remain.
+- **Security, E12:** exact plugin admission, sanitized bounded control JSON,
+  environment and scoped mounted-file secret references are implemented. Live
+  container rotation, cloud secret managers, provider egress, IAM/TLS renewal,
+  SBOM/provenance and live SSO remain separate qualification gates.
+- **Correctness and field identities, E01/E02:** incidental 256-character field
+  and 64-segment path caps are removed; exact binary metadata identity, bounded
+  canonical work and earlier native-schema rejection are implemented. Selected
+  schemas must preserve identity through C Data. Arbitrary native depth, large
+  offsets/values and negotiated/configurable resource envelopes remain unmet.
+  The [native probe](native-schema-boundaries.md) shows why lifting constants alone
+  cannot meet the nesting requirement.
+- **Formats/storage, E07–E09:** the documented Iceberg v1/v2 and Delta task
+  contracts remain the release foundation. Local and S3-emulator evidence does
+  not qualify live AWS/Azure/GCS. Delta column mapping/large deletion vectors,
+  Iceberg v3 and Hudi require maintained reader work and their own CoW/MoR cells.
+  Plain Parquet is an immutable file-source capability with no table-level MoR.
+- **Catalog breadth, E04/E09:** the open admitted SDK and bounded HTTP discovery
+  are implemented; built-in Iceberg still enumerates bounded inventories internally.
+  Each named provider/version needs real authentication, discovery/resolution and
+  storage qualification. An extensible catalog interface does not establish all
+  proprietary catalogs as supported.
+- **Scalability/performance, E10/E13:** local mask operation, typing and browser
+  navigation budgets have reproducible evidence. Worker/cluster RSS, deployment
+  fairness, provider throttling, large-file planning and distributed consumer
+  retry/credential renewal remain. These require representative native workloads,
+  exact distributed coverage and same-host measurements before a support claim.
+
+The next local implementation order is incremental schema authoring → provider-
+native paging → worker admission/resource measurements → deployment recovery →
+maintained reader and consumer extensions. Keep these changes atomic at their
+owning public boundaries. None can waive the live-provider release gates.
+
+External qualification needs target provider/version inventory, account/profile
+references, regions and orchestrator selection; credentials stay in their providers.
+Do not create a substitute production subsystem or disturb existing demo services
+to make an unavailable lane appear qualified. Section 10 is the release definition
+of done, not a checklist already satisfied by the local deliveries.
 
 ## 1. Assessment and scope
 
@@ -18,7 +71,7 @@ Three requirements need precise contracts:
 - **All catalog types are addressable through the catalog contract.** Build and qualify a named provider/version inventory across catalog families. An open adapter contract makes additional catalogs possible; it does not prove support for every present or future proprietary API. New catalog types remain backlog items until their adapters and qualification exist.
 - **Field names, values, and nesting are not constrained by incidental application constants.** Preserve data exactly and make resource admission configurable and visible. Literally unlimited input cannot be promised with finite memory or dependencies that have their own limits. A dependency ceiling must be removed, worked around without semantic loss, or disclosed as an unmet support requirement—never silently truncated.
 
-## 2. Evidence-backed findings
+## 2. Original audit findings (baseline `0c1d89f0`)
 
 **Confirmed** means directly observed in source or explicitly documented. **Qualification gap** means the repository does not establish the required deployment guarantee. **Design proposal** means an improvement that requires implementation and validation. P0 blocks a broader support claim; it does not imply a critical vulnerability. P1 is the next delivery priority; P2 extends breadth after the foundation.
 
@@ -228,9 +281,9 @@ The release is complete only when the requested experience and support contract 
 - Longer/deeper fields succeed end to end within the declared resource envelope. Any upstream hard ceiling remains an explicit unmet requirement, not a hidden truncation.
 - Security, correctness, memory, cancellation, performance, and recovery gates pass on the exact release artifacts. Documentation distinguishes measured limits from configured budgets and implemented features from qualified support.
 
-Resolve during Phase A: the named catalog/provider inventory; whether raw Parquet stays on the product surface; whether Hudi belongs in the first release; target cloud accounts/regions and storage identity model; acceptable dependency ceilings; supported orchestrators; and the workload envelope used for performance budgets. These decisions refine implementation sequencing. They do not prevent completing this plan, and no implementation approval is implied by this document.
+Resolve during Phase A: the named catalog/provider inventory; whether raw Parquet stays on the product surface; whether Hudi belongs in the first release; target cloud accounts/regions and storage identity model; acceptable dependency ceilings; supported orchestrators; and the workload envelope used for performance budgets. These decisions refine implementation sequencing and external qualification. The user approved implementation and clean breaking contracts after the original audit; that authorization does not supply provider accounts or waive qualification.
 
-Recommended first delivery: the capability/limit inventory, paged discovery, guided operator setup, and current UI baseline. Then change schema/resource contracts together before expanding support claims.
+The initial paged discovery, guided operator setup and local schema/UI deliveries are recorded below. Continue coordinated schema/resource work and the provider inventory before expanding support claims; use the current status above rather than treating the original findings as unresolved in full.
 
 ## 11. First implementation delivery — paged discovery
 
