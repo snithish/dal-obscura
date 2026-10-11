@@ -292,3 +292,19 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(
     assert invalid_payload["detail"] == "Synthetic evaluation rows are invalid"
     assert invalid_payload["error"]["code"] == "validation_error"
     assert invalid_payload["error"]["request_id"]
+
+
+def test_asset_schema_route_preserves_bounded_metadata_beyond_native_execution_depth(
+    client_factory, monkeypatch
+):
+    from tests.support.nested_schema import nested_struct_schema
+
+    client = client_factory()
+    asset = _provision_reviewable_asset(client)
+    monkeypatch.setattr(
+        schema_service, "load_source_schema", lambda **kwargs: nested_struct_schema(63)
+    )
+    response = client.get(f"/v1/assets/{asset['id']}/schema", headers=ADMIN_HEADERS)
+    assert response.status_code == 200
+    assert response.json()["fields"][0]["name"] == "root"
+    assert response.json()["fields"][0]["children"][0]["name"] == "level_62"

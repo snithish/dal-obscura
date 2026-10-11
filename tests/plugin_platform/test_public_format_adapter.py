@@ -389,7 +389,17 @@ def test_public_format_rejects_false_stable_id_claim() -> None:
         table_format.get_schema()
 
 
-def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
+@pytest.mark.parametrize(
+    "layers, error, operation",
+    [
+        (66, "nesting-depth", "schema"),
+        (66, "nesting-depth", "plan"),
+        (63, "native interchange", "plan"),
+    ],
+)
+def test_public_format_rejects_schema_depth_before_plugin_execution(
+    layers, error, operation
+) -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(
         catalog_plugin_id="manifest",
@@ -400,7 +410,7 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
         handle_version=1,
     )
     nested: pa.DataType = pa.string()
-    for index in range(66):
+    for index in range(layers):
         nested = pa.struct([pa.field(f"level_{index}", nested)])
     schema = pa.schema([pa.field("root", nested)])
 
@@ -417,8 +427,7 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
             return SchemaDescriptor(arrow_schema=schema)
 
         def plan(self, request, context):
-            del request, context
-            return []
+            pytest.fail("Rejected schema reached plugin planning")
 
         def execute(self, task, context):
             del task, context
@@ -431,8 +440,13 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
         format_factory=lambda value, context: DeepFormat(),
         handle=handle,
     )
-    with pytest.raises(ValueError, match="nesting-depth"):
-        table_format.get_schema()
+    with pytest.raises(ValueError, match=error):
+        if operation == "schema":
+            table_format.get_schema()
+        else:
+            table_format.plan(
+                PlanRequest(catalog="fixture", target="default.users", columns=["root"]), 1
+            )
 
 
 def test_format_without_current_descriptor_is_rejected_and_closed():
@@ -635,3 +649,48 @@ def test_runtime_closes_plan_when_iterator_construction_and_cleanup_fail():
     with pytest.raises(ValueError, match="cannot start planning"):
         table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
     assert closed == ["plan", "plugin"]
+
+
+def test_public_format_keeps_deep_metadata_and_plans_native_top_level_projection():
+    from dal_obscura_plugin_api import SchemaDescriptor
+
+    from tests.support.nested_schema import nested_struct_schema
+
+    schema = nested_struct_schema(63).append(pa.field("id", pa.int64()))
+    expected = pa.schema([pa.field("id", pa.int64())], metadata={b"binary": b"\xff"})
+
+    class Format:
+        descriptor = FORMAT_DESCRIPTOR
+
+        def schema(self, context):
+            return SchemaDescriptor(schema)
+
+        def plan(self, request, context):
+            assert request.schema.equals(expected, check_metadata=True)
+            return [ScanTask({"fragment": 0})]
+
+        def execute(self, task, context):
+            pytest.fail("Planning unexpectedly executed provider work")
+
+        def close(self):
+            pass
+
+    handle = TableHandle(
+        "manifest", "fixture", 1, TableIdentifier(("default",), "users"), "parquet.dataset", 1
+    )
+    source = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda *args: Format(),
+        handle=handle,
+    )
+    assert source.get_schema().equals(schema, check_metadata=True)
+    planned = source.plan(PlanRequest(catalog="fixture", target="default.users", columns=["id"]), 1)
+    assert planned.schema.equals(schema, check_metadata=True)
+    assert len(planned.tasks) == 1
+    from dal_obscura.sources.plugin_runtime import PublicPluginPartition
+
+    partition = planned.tasks[0].partition
+    assert isinstance(partition, PublicPluginPartition)
+    assert partition.schema.equals(expected, check_metadata=True)

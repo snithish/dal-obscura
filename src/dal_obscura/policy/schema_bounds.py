@@ -15,6 +15,17 @@ MAX_SCHEMA_ADMISSION_BYTES = 2 * 1024 * 1024
 MAX_SCHEMA_ADMISSION_FIELDS = 5_000
 
 
+def validate_native_schema(schema: pa.Schema) -> None:
+    """Check bounds and lossless native schema interchange."""
+    validate_arrow_schema_bounds(schema)
+    try:
+        restored = pa.Schema._import_from_c_capsule(schema.__arrow_c_schema__())
+    except pa.ArrowException as exc:
+        raise ValueError("Arrow schema cannot cross the native interchange boundary") from exc
+    if not restored.equals(schema, check_metadata=True):
+        raise ValueError("Arrow schema identity changes across native interchange")
+
+
 def validate_arrow_schema_bounds(
     schema: pa.Schema,
     *,

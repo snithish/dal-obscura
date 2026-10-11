@@ -10,7 +10,11 @@ import pyarrow as pa
 from dal_obscura_plugin_api import ScanTask as PluginScanTask
 from dal_obscura_plugin_api import TableHandle
 
-from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ENCODING_BYTES, validate_arrow_schema_bounds
+from dal_obscura.policy.schema_bounds import (
+    MAX_SCHEMA_ENCODING_BYTES,
+    validate_arrow_schema_bounds,
+    validate_native_schema,
+)
 from dal_obscura.sources.catalogs import _load_format_factory
 from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.sources.planning import ScanTask
@@ -43,7 +47,7 @@ class SourceTaskCodec:
             "plugin": list(self.registry.identity("table_format", handle.format_plugin_id)),
             "handle": handle.to_json(),
             "schema": _encode_schema(task.schema),
-            "output_schema": _encode_schema(output_schema),
+            "output_schema": _encode_schema(output_schema, for_execution=True),
             "path_roots": list(roots),
             "task": data.to_json(),
         }
@@ -71,7 +75,7 @@ class SourceTaskCodec:
             enforcer = PathRuleEnforcer([{"root": root} for root in roots])
             task = PluginScanTask.from_json(raw["task"])
             schema = _decode_schema(raw["schema"])
-            output_schema = _decode_schema(raw["output_schema"])
+            output_schema = _decode_schema(raw["output_schema"], for_execution=True)
             factory = _load_format_factory(self.registry, handle.format_plugin_id, enforcer)
             table = PublicPluginTableFormat(
                 catalog_name=handle.catalog_instance_id,
@@ -90,19 +94,21 @@ class SourceTaskCodec:
             raise ValueError("Invalid read payload in ticket") from exc
 
 
-def _encode_schema(schema: pa.Schema) -> str:
-    validate_arrow_schema_bounds(schema)
+def _encode_schema(schema: pa.Schema, *, for_execution: bool = False) -> str:
+    validator = validate_native_schema if for_execution else validate_arrow_schema_bounds
+    validator(schema)
     return base64.b64encode(schema.serialize()).decode("ascii")
 
 
-def _decode_schema(raw: object) -> pa.Schema:
+def _decode_schema(raw: object, *, for_execution: bool = False) -> pa.Schema:
     if not isinstance(raw, str) or len(raw) > 4 * ((MAX_SCHEMA_ENCODING_BYTES + 2) // 3):
         raise ValueError("Invalid scan schema")
     decoded = base64.b64decode(raw, validate=True)
     if len(decoded) > MAX_SCHEMA_ENCODING_BYTES:
         raise ValueError("Invalid scan schema")
     schema = pa.ipc.read_schema(pa.BufferReader(decoded))
-    validate_arrow_schema_bounds(schema)
+    validator = validate_native_schema if for_execution else validate_arrow_schema_bounds
+    validator(schema)
     return schema
 
 

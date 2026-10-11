@@ -38,7 +38,7 @@ from dal_obscura.policy.paths import (
     parse_field_path,
     resolve_schema_path,
 )
-from dal_obscura.policy.schema_bounds import validate_arrow_schema_bounds
+from dal_obscura.policy.schema_bounds import validate_arrow_schema_bounds, validate_native_schema
 from dal_obscura.policy.schema_identity import schema_has_stable_ids
 from dal_obscura.read.request import PlanRequest
 from dal_obscura.sources.contracts import CatalogTableListing, Source
@@ -113,6 +113,7 @@ class PublicPluginTableFormat(Source):
         if request.row_filter is not None and "filter_pushdown" in plugin.descriptor.capabilities:
             row_filter = request.row_filter.expression.sql(dialect="duckdb")
         output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
+        validate_native_schema(output_schema)
         planned = plugin.plan(ScanRequest(output_schema, max_tickets, row_filter), context)
         tasks: list[PluginScanTask] = []
         iterator = None

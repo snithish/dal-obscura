@@ -424,3 +424,63 @@ def test_long_field_identity_survives_signed_planning_filtering_and_masking(name
     assert advertised.output_schema.equals(expected_schema, check_metadata=True)
     assert table.schema.equals(expected_schema, check_metadata=True)
     assert table.to_pylist() == [{name: "[hidden]"}, {name: None}]
+
+
+@pytest.mark.parametrize("operation", ["schema", "plan"])
+def test_read_rejects_native_incompatible_output_before_planning_or_tickets(operation, monkeypatch):
+    from tests.support.nested_schema import nested_struct_schema
+
+    schema = nested_struct_schema(63)
+    source = StubTableFormat(
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
+    )
+    monkeypatch.setattr(
+        type(source), "plan", lambda *args: pytest.fail("Unsupported output reached scan planning")
+    )
+    tickets = FakeTicketCodec()
+    service = make_read_service(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=[
+                        "root." + ".".join(f"level_{index}" for index in reversed(range(63)))
+                    ],
+                    masks={},
+                    row_filter=None,
+                    policy_version=1,
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(source)),
+        ),
+        ticket_codec=tickets,
+        ticket_store=FakeTicketStore(),
+    )
+    request = PlanRequest(catalog="catalog1", target="users", columns=["root"])
+    with pytest.raises(ValueError, match="native interchange"):
+        getattr(service, operation)(request, AUTHORIZATION_HEADER)
+    assert tickets.signed_payloads == []
+
+
+def test_read_schema_allows_native_projection_of_deep_unselected_source():
+    from tests.support.nested_schema import nested_struct_schema
+
+    schema = nested_struct_schema(63).append(pa.field("id", pa.int64()))
+    source = StubTableFormat(
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
+    )
+    service = make_read_service(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id"], masks={}, row_filter=None, policy_version=1
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(source)),
+        ),
+    )
+    result = service.schema(
+        PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
+    )
+    assert result.output_schema.equals(pa.schema([pa.field("id", pa.int64())]), check_metadata=True)

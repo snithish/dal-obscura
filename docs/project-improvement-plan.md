@@ -600,3 +600,28 @@ Projected symlink secret volumes are rejected. Existing identity configurations
 and cached/opened provider sessions can retain resolved values and need their own
 reload/refresh lifecycle. Egress enforcement, provenance, field/native depth,
 provider breadth, and the rest of the plan remain open.
+
+## 25. Fifteenth implementation delivery — lossless native execution schemas
+
+Native execution schemas now roundtrip through the pinned Arrow C Data boundary
+and compare exact metadata before read planning, SDK planning, and signed-envelope
+encoding/decoding. This catches native recursion failures and embedded NUL field
+names whose identity would truncate. Invalid selected schemas fail before any
+tickets issue; source metadata remains browsable and unrelated scalar projections
+remain usable. No source names are rewritten and no generic depth cap is lowered.
+
+The isolated [native schema probe](native-schema-boundaries.md) records exact-value
+IPC, Parquet and DuckDB results. On PyArrow 23.0.1/DuckDB 1.5.4, 62 struct layers
+pass all stages; 63 fail native interchange despite working IPC/Parquet. Greater
+depths expose additional IPC limits. A 4,000-field same-host check measured median
+validation 3.534 → 4.972 ms, an explicit correctness cost. These results do not
+qualify arbitrary collection nesting, catalogs, cloud storage, or process RSS.
+
+TDD demonstrated the read schema failure and provider planning being reached
+without the guard. The final service wheel passes 324 installed schema/read/plugin/
+API/consumer cases with zero failures or skips using disposable PostgreSQL. Exact
+unchanged plugin artifacts were locked and admitted; Ruff/type and fast checks
+apply. E01 remains partially resolved: arbitrary native depth requires maintained
+upstream/native support plus coordinated workers and consumers, not larger
+constants. See the probe document for bridge ownership and the next qualification
+gate.

@@ -116,3 +116,37 @@ def test_scan_envelope_rejects_unknown_versions_artifacts_and_executable_fields(
     raw = {**json.loads(codec.encode(task)), **change}
     with pytest.raises(ValueError, match="Invalid read payload"):
         codec.decode(json.dumps(raw))
+
+
+def test_scan_envelope_rejects_native_incompatible_schema_when_encoding():
+    from tests.support.nested_schema import nested_struct_schema
+
+    codec, task = envelope()
+    deep = nested_struct_schema(63)
+    task = replace(task, partition=replace(task.partition, schema=deep))
+    with pytest.raises(ValueError, match="native interchange"):
+        codec.encode(task)
+
+
+def test_scan_envelope_rejects_native_incompatible_schema_when_decoding():
+    import base64
+
+    from tests.support.nested_schema import nested_struct_schema
+
+    codec, task = envelope()
+    raw = json.loads(codec.encode(task))
+    raw["output_schema"] = base64.b64encode(nested_struct_schema(63).serialize()).decode("ascii")
+    with pytest.raises(ValueError, match="Invalid read payload") as error:
+        codec.decode(json.dumps(raw))
+    assert "native interchange" in str(error.value.__cause__)
+
+
+def test_scan_envelope_retains_deep_source_metadata_with_a_native_projection():
+    from tests.support.nested_schema import nested_struct_schema
+
+    codec, task = envelope()
+    metadata_schema = nested_struct_schema(63)
+    task = replace(task, schema=metadata_schema)
+    restored = codec.decode(codec.encode(task))
+    assert restored.schema.equals(metadata_schema, check_metadata=True)
+    assert restored.partition.schema.equals(pa.schema([("id", pa.int64())]), check_metadata=True)

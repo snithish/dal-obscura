@@ -26,6 +26,7 @@ from dal_obscura.policy.filters import (
 )
 from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
 from dal_obscura.policy.projection import compile_projection
+from dal_obscura.policy.schema_bounds import validate_native_schema
 from dal_obscura.policy.schema_index import SchemaIndex
 from dal_obscura.read.contracts import (
     AuthorizedRead,
@@ -135,6 +136,7 @@ class ReadService:
         output_schema = compile_projection(
             base_schema, visible_columns, decision.masks
         ).output_schema
+        validate_native_schema(output_schema)
         return AuthorizedRead(
             base_schema,
             decision,
