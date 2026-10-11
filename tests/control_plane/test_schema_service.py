@@ -107,7 +107,7 @@ def _nested_schema() -> Schema:
 
 
 def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
-    from dal_obscura.control.schema_service import _arrow_field_node
+    from dal_obscura.control.schema_service import _arrow_field_node, _SchemaResponseBudget
     from dal_obscura.policy.paths import FieldSegment
 
     schema = _nested_schema()
@@ -116,6 +116,7 @@ def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
             arrow_field,
             (FieldSegment(field.name, field.field_id),),
             schema_scope_digest(schema.as_arrow()),
+            _SchemaResponseBudget(),
         )
         assert node["type"] == str(arrow_field.type)
 
@@ -606,6 +607,85 @@ def test_get_asset_schema_reports_scope_encoding_budget(monkeypatch) -> None:
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
         )
+
+
+def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(monkeypatch) -> None:
+    from dal_obscura.control import schema_service
+
+    schema = pa.schema(
+        [
+            pa.field(
+                "ancestor_" + "x" * 100_000,
+                pa.struct([pa.field(f"child_{index}", pa.string()) for index in range(100)]),
+            )
+        ]
+    )
+    monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
+    visited = []
+    original = schema_service.numeric_field_id
+
+    def record_field(field, names, scope):
+        visited.append(field.name)
+        return original(field, names, scope)
+
+    monkeypatch.setattr(schema_service, "numeric_field_id", record_field)
+    asset_id = uuid4()
+    with pytest.raises(ValidationFailure, match="Schema response exceeds the 8388608-byte budget"):
+        get_asset_schema(
+            _FakeStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+        )
+    assert 1 < len(visited) < 101
+
+
+def test_get_asset_schema_preserves_long_names_within_response_budget(monkeypatch) -> None:
+    from dal_obscura.control import schema_service
+    from dal_obscura.interfaces.http.routes.schemas import AssetSchemaResponse
+
+    name = '界."' * 4096
+    schema = pa.schema([pa.field(name, pa.struct([pa.field("leaf", pa.string())]))])
+    monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
+    asset_id = uuid4()
+    result = get_asset_schema(
+        _FakeStore(asset_id),  # type: ignore[arg-type]
+        asset_id,
+        ControlPlaneActor.for_platform_admin("admin"),
+    )
+    encoded = AssetSchemaResponse.model_validate(result).model_dump_json().encode("utf-8")
+    assert len(encoded) <= 8 * 1024 * 1024
+    node = json.loads(encoded)["fields"][0]
+    assert node["name"] == name
+    assert node["children"][0]["path"]["segments"][0]["name"] == name
+    assert node["children"][0]["human_path"] == f"[{json.dumps(name, ensure_ascii=False)}].leaf"
+
+
+def test_schema_response_budget_matches_serialized_http_contract(monkeypatch) -> None:
+    from dal_obscura.control import schema_service
+    from dal_obscura.interfaces.http.routes.schemas import AssetSchemaResponse
+
+    schema = _nested_schema().as_arrow()
+    monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
+    asset_id = uuid4()
+
+    def discover():
+        return get_asset_schema(
+            _FakeStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+        )
+
+    expected_bytes = len(AssetSchemaResponse.model_validate(discover()).model_dump_json().encode())
+    budget = schema_service._SchemaResponseBudget(remaining=expected_bytes)
+    monkeypatch.setattr(schema_service, "_SchemaResponseBudget", lambda: budget)
+    assert (
+        len(AssetSchemaResponse.model_validate(discover()).model_dump_json().encode())
+        == expected_bytes
+    )
+    assert budget.remaining == 0
+    budget.remaining = expected_bytes - 1
+    with pytest.raises(ValidationFailure, match="Schema response exceeds"):
+        discover()
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pyarrow as pa
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -136,6 +137,31 @@ def test_asset_schema_route_reads_authoritative_iceberg_schema(client_factory, m
     assert response.status_code == 200
     assert response.json()["fields"][0]["children"][0]["human_path"] == "profile.email"
     assert response.json()["fields"][1]["path"]["segments"][0]["field_id"] == 3
+
+
+def test_asset_schema_route_returns_validation_error_for_response_amplification(
+    client_factory, monkeypatch
+) -> None:
+    client = client_factory()
+    asset = _provision_reviewable_asset(client)
+    schema = pa.schema(
+        [
+            pa.field(
+                "x" * 100_000,
+                pa.struct([pa.field(f"child_{index}", pa.string()) for index in range(100)]),
+            )
+        ]
+    )
+    monkeypatch.setattr(schema_service, "load_source_schema", lambda **kwargs: schema)
+
+    response = client.get(f"/v1/assets/{asset['id']}/schema", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
+    assert response.json()["error"]["message"] == (
+        "Schema response exceeds the 8388608-byte budget"
+    )
+    assert "fields" not in response.json()
 
 
 def test_policy_evaluation_response_rejects_internal_schema_field_name() -> None:

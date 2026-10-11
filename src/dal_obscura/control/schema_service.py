@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
 from typing import cast
 from uuid import UUID
 
@@ -42,6 +44,23 @@ from dal_obscura.storage import assets as _db_assets
 from dal_obscura.storage import catalogs as _db_catalogs
 from dal_obscura.storage import workspace as _db_workspace
 
+MAX_SCHEMA_RESPONSE_BYTES = 8 * 1024 * 1024
+_RESPONSE_ENCODER = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+
+@dataclass
+class _SchemaResponseBudget:
+    remaining: int = MAX_SCHEMA_RESPONSE_BYTES
+
+    def charge(self, payload: dict[str, object], *, separators: int = 0) -> None:
+        self.remaining -= separators
+        for chunk in _RESPONSE_ENCODER.iterencode(payload):
+            self.remaining -= len(chunk.encode("utf-8"))
+            if self.remaining < 0:
+                raise ValidationFailure(
+                    f"Schema response exceeds the {MAX_SCHEMA_RESPONSE_BYTES}-byte budget"
+                )
+
 
 def get_asset_schema(
     store: Session,
@@ -67,7 +86,7 @@ def get_asset_schema(
         scope_digest = schema_scope_digest(arrow_schema)
     except ValueError as exc:
         raise ValidationFailure(str(exc)) from exc
-    return {
+    result: dict[str, object] = {
         "asset_id": str(asset_id),
         "catalog": asset["catalog"],
         "target": asset["name"],
@@ -75,11 +94,15 @@ def get_asset_schema(
         "schema_fingerprint": schema_fingerprint(arrow_schema),
         "stable_field_ids": schema_has_stable_ids(arrow_schema),
         "supported_masks": list(SUPPORTED_MASK_TYPES),
-        "fields": [
-            _arrow_field_node(field, (FieldSegment(field.name),), scope_digest)
-            for field in arrow_schema
-        ],
+        "fields": [],
     }
+    budget = _SchemaResponseBudget()
+    budget.charge(result, separators=max(0, len(arrow_schema) - 1))
+    result["fields"] = [
+        _arrow_field_node(field, (FieldSegment(field.name),), scope_digest, budget)
+        for field in arrow_schema
+    ]
+    return result
 
 
 def load_asset_schema(
@@ -149,6 +172,7 @@ def _arrow_field_node(
     field: pa.Field,
     path: tuple[FieldPathSegment, ...],
     scope_digest: str,
+    budget: _SchemaResponseBudget,
 ) -> dict[str, object]:
     names = tuple(
         segment.name
@@ -189,8 +213,13 @@ def _arrow_field_node(
     }
     children = tuple(field_children(field))
     if children:
+        # Account for the array wrapper now, then each child before retaining it.
+        # Commas are the only additional bytes when replacing the empty array.
+        node["children"] = []
+    budget.charge(node, separators=max(0, len(children) - 1))
+    if children:
         node["children"] = [
-            _arrow_field_node(child, (*bound_path, segment), scope_digest)
+            _arrow_field_node(child, (*bound_path, segment), scope_digest, budget)
             for child, segment in children
         ]
     return node

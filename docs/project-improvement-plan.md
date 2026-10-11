@@ -370,3 +370,39 @@ Core/SDK/API contracts are unchanged. No new PostgreSQL, installed service wheel
 live SSO, consumer, or CoW/MoR cloud support claims are made. E01 is still partially
 resolved, and the remaining storage/catalog/resource/operator work retains its
 separate acceptance gates.
+
+## 16. Sixth implementation delivery — bounded schema response construction
+
+The authoring response repeats ancestor names in typed paths, human paths, and
+container type labels. Arrow IPC and canonical identity budgets alone do not
+bound that expansion. An admitted schema with a 100,000-character ancestor and
+100 children previously produced a response far larger than its source schema.
+
+Schema discovery now accounts for compact UTF-8 JSON while constructing the
+response, with an 8 MiB budget shared by the envelope and every nested node.
+Array wrappers and separators count toward the same budget. Rejection happens
+before retaining the rest of the tree and returns a validation error naming the
+limit. No partial response or truncated field identity is returned. Exact long
+Unicode, quoted names, and collection paths remain supported within the budget.
+
+Behavioral tests reproduce the expansion and prove traversal stops before all
+101 nodes are visited. Independent serialization through the HTTP response model
+checks exact byte accounting, success at the boundary, and rejection one byte
+below it. Existing schema identity, authorization, and provider error tests remain
+applicable. This is a construction/output bound, not a hard RSS guarantee: Arrow
+type rendering, individual JSON chunks, provider schema loading, and HTTP model
+validation still allocate memory.
+
+Qualification: 47 schema service and HTTP API tests passed without skips against
+the rebuilt service wheel in a fresh 102-package environment, with repository
+source paths disabled. The six-plugin lock was regenerated from the exact
+installed artifacts; plugin artifacts and contracts are unchanged. Ruff and type
+checks passed. Repository fast checks run at commit. No new provider, consumer,
+PostgreSQL, native reader, or live-cloud qualification is claimed.
+
+The current tree contract remains recursive and the 64-level native admission
+ceiling remains. This interim fixed output budget intentionally rejects some
+previously accepted authoring requests; governed reads and admitted schema
+identities are unchanged. Provider-backed schema paging, configurable coordinated
+budgets, deeper native support, and complete catalog/CoW/MoR cloud qualification
+remain open. E01 is still only partially resolved.
