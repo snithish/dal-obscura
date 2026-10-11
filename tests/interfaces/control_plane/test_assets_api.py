@@ -696,3 +696,84 @@ def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated(client_
 
     invalid = client.get("/v1/assets/page?cursor=garbage", headers=ADMIN_HEADERS)
     assert invalid.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["x" * 257, "界" * 1024, "x" * 16384, " spaced.name "],
+    ids=["ascii-257", "unicode-1024", "ascii-16384", "whitespace"],
+)
+def test_schema_admission_preserves_exact_long_and_whitespace_names(client_factory, name):
+    client = client_factory()
+    asset = _provision_asset(client)
+    field = {"name": name, "field_id": "7", "path": [name], "type": "string", "nullable": True}
+    response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"expected_revision": 0, "fields": [field]},
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+    expected = {**field, "field_id": "iceberg:7"}
+    assert response.json()["fields"] == [expected]
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert detail["schema_fields"] == [expected]
+
+
+def test_schema_admission_allows_same_leaf_name_at_distinct_paths(client_factory):
+    client = client_factory()
+    asset = _provision_asset(client)
+    fields = [
+        {"name": "value", "field_id": str(index), "path": [parent, "value"], "type": "string"}
+        for index, parent in enumerate(["left", "right"], 1)
+    ]
+    response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"expected_revision": 0, "fields": fields},
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+    assert [field["path"] for field in response.json()["fields"]] == [
+        ["left", "value"],
+        ["right", "value"],
+    ]
+
+
+@pytest.mark.parametrize("name", [" spaced.name ", " "], ids=["spaced", "space-only"])
+def test_policy_admission_keeps_whitespace_field_identity(client_factory, name):
+    from dal_obscura.policy.paths import FieldPath, FieldSegment
+
+    client = client_factory()
+    asset = _provision_asset(client)
+    saved = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        headers=ADMIN_HEADERS,
+        json={
+            "expected_revision": 0,
+            "fields": [
+                {"name": name, "field_id": "1", "path": [name], "type": "string"},
+                {"name": "other", "field_id": "2", "path": ["other"], "type": "string"},
+            ],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    path = FieldPath((FieldSegment(name),)).to_human()
+    policy = client.put(
+        f"/v1/assets/{asset['id']}/policy",
+        headers=ADMIN_HEADERS,
+        json={
+            "expected_revision": 1,
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "effect": "allow",
+                    "principals": ["reader"],
+                    "columns": [path],
+                    "masks": {path: {"type": "null"}},
+                }
+            ],
+        },
+    )
+    assert policy.status_code == 200, policy.text
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert detail["policy_rules"][0]["columns"] == [path]
+    assert list(detail["policy_rules"][0]["masks"]) == [path]

@@ -11,7 +11,7 @@ from dal_obscura.storage.database.db import (
 )
 from dal_obscura.storage.database.orm import Base
 
-REVISION = "20261003_0001"
+REVISION = "20261011_0001"
 
 
 def test_check_config_store_schema_fails_without_mutating_empty_database() -> None:
@@ -153,3 +153,64 @@ def test_release_has_one_create_only_baseline():
     revisions = list(ScriptDirectory.from_config(_alembic_config(engine)).walk_revisions())
     assert [revision.revision for revision in revisions] == [REVISION]
     assert revisions[0].down_revision is None
+
+
+@pytest.mark.integration
+def test_postgres_admits_long_incompressible_names_and_distinct_leaf_paths():
+    import random
+    import string
+
+    from fastapi.testclient import TestClient
+
+    from dal_obscura.interfaces.http.app import create_app
+    from tests.interfaces.control_plane.workspace_helpers import ADMIN_HEADERS, _provision_asset
+    from tests.support.postgres import isolated_postgres_sessions
+
+    name = "".join(random.Random(71).choices(string.ascii_letters + string.digits, k=16384))
+    fields = [
+        {"name": name, "field_id": "1", "path": [name], "type": "string", "nullable": True},
+        {
+            "name": "value",
+            "field_id": "2",
+            "path": ["left", "value"],
+            "type": "string",
+            "nullable": True,
+        },
+        {
+            "name": "value",
+            "field_id": "3",
+            "path": ["right", "value"],
+            "type": "string",
+            "nullable": True,
+        },
+    ]
+    with (
+        isolated_postgres_sessions() as factory,
+        TestClient(create_app(factory, admin_token="test-admin")) as client,
+    ):
+        asset = _provision_asset(client)
+        saved = client.put(
+            f"/v1/assets/{asset['id']}/schema-fields",
+            headers=ADMIN_HEADERS,
+            json={"fields": fields, "expected_revision": 0},
+        )
+        assert saved.status_code == 200, saved.text
+        detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+        assert detail["schema_fields"] == [
+            {**field, "field_id": f"iceberg:{field['field_id']}"} for field in fields
+        ]
+
+
+def test_earlier_baseline_requires_fresh_database_without_mutating_it():
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE alembic_version SET version_num = '20261003_0001'"))
+    tables = inspect(engine).get_table_names()
+    with pytest.raises(
+        ConfigStoreMigrationRequired, match="Earlier database baselines are unsupported"
+    ):
+        check_config_store_schema(engine)
+    assert inspect(engine).get_table_names() == tables
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_0001"

@@ -19,7 +19,7 @@ are deliberately left untouched during qualification.
    same immutable artifacts/lock to both planes. The SDK is the sole factory/task
    contract; handles and tasks contain bounded passive JSON.
 3. Configure a fresh database and run `dal-obscura-migrate upgrade`, then `check`.
-   The sole revision `20261003_0001` creates the current schema directly. There
+   The sole revision `20261011_0001` creates the current schema directly. There
    are no ALTER, data translation or old-ticket cleanup migrations.
 4. Publish catalogs, policies, identities and runtime configuration using current
    contracts. Storage credentials belong to worker identity; never put them into

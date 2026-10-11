@@ -18,8 +18,7 @@ import pyarrow as pa
 
 _SIMPLE_FIELD_NAME: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
 _COLLECTION_SEGMENTS: Final = {"$element", "$key", "$value"}
-MAX_FIELD_PATH_SEGMENTS: Final = 64
-MAX_FIELD_NAME_LENGTH: Final = 256
+MAX_FIELD_PATH_BYTES: Final = 2 * 1024 * 1024
 MAX_FIELD_ID: Final = 2**31 - 1
 
 
@@ -61,17 +60,24 @@ class FieldPath:
             raise ValueError("Unsupported field path version")
         if not self.segments:
             raise ValueError("Field path must contain at least one segment")
-        if len(self.segments) > MAX_FIELD_PATH_SEGMENTS:
-            raise ValueError("Field path contains too many segments")
+        remaining = MAX_FIELD_PATH_BYTES - 16 * len(self.segments)
+        if remaining < 0:
+            raise ValueError("Field path exceeds the byte/work budget")
         if not isinstance(self.segments[0], FieldSegment):
             raise ValueError("Field paths must begin with a field segment")
         for segment in self.segments:
             if isinstance(segment, FieldSegment) and (
-                not segment.name
-                or len(segment.name) > MAX_FIELD_NAME_LENGTH
+                not isinstance(segment.name, str)
+                or not segment.name
                 or any(ord(char) < 0x20 or ord(char) == 0x7F for char in segment.name)
             ):
-                raise ValueError("Field segment names must be bounded printable text")
+                raise ValueError("Field segment names must be non-empty printable text")
+            if isinstance(segment, FieldSegment):
+                if len(segment.name) > remaining:
+                    raise ValueError("Field path exceeds the byte/work budget")
+                remaining -= len(_render_field_name(segment.name).encode("utf-8"))
+                if remaining < 0:
+                    raise ValueError("Field path exceeds the byte/work budget")
             if (
                 isinstance(segment, FieldSegment)
                 and segment.field_id is not None
@@ -105,11 +111,7 @@ class FieldPath:
         parts: list[str] = []
         for segment in self.segments:
             if isinstance(segment, FieldSegment):
-                rendered = (
-                    segment.name
-                    if _SIMPLE_FIELD_NAME.fullmatch(segment.name)
-                    else f"[{json.dumps(segment.name, ensure_ascii=False)}]"
-                )
+                rendered = _render_field_name(segment.name)
             elif isinstance(segment, ListElementSegment):
                 rendered = "$element"
             elif isinstance(segment, MapKeySegment):
@@ -135,11 +137,25 @@ class FieldPath:
         return cls(segments=segments, version=version)
 
 
+def _render_field_name(name: str) -> str:
+    return (
+        name if _SIMPLE_FIELD_NAME.fullmatch(name) else f"[{json.dumps(name, ensure_ascii=False)}]"
+    )
+
+
 def parse_field_path(value: str) -> FieldPath:
     """Parses the canonical human form without guessing dotted field names."""
     if not isinstance(value, str) or not value:
         raise ValueError("Field path must be non-empty text")
-    return _parse_field_path(value)
+    if len(value) > MAX_FIELD_PATH_BYTES or len(value.encode("utf-8")) > MAX_FIELD_PATH_BYTES:
+        raise ValueError("Field path exceeds the byte/work budget")
+    # Retain only small paths: entry-count bounds alone do not bound cached bytes.
+    parser = (
+        _parse_field_path
+        if len(value) <= 1024 and value.count(".") < 64
+        else _parse_field_path.__wrapped__
+    )
+    return parser(value)
 
 
 @lru_cache(maxsize=4096)
@@ -257,15 +273,15 @@ def _resolve_collection_segment(
 def _split_path(value: str) -> list[tuple[str, bool]]:
     tokens: list[tuple[str, bool]] = []
     offset = 0
+    decoder = json.JSONDecoder()
     while offset < len(value):
         if value[offset] == "[":
             try:
-                token, consumed = json.JSONDecoder().raw_decode(value[offset + 1 :])
+                token, closing = decoder.raw_decode(value, offset + 1)
             except json.JSONDecodeError as exc:
                 raise ValueError("Quoted field names must use JSON string syntax") from exc
             if not isinstance(token, str) or not token:
                 raise ValueError("Quoted field names must be non-empty text")
-            closing = offset + 1 + consumed
             if closing >= len(value) or value[closing] != "]":
                 raise ValueError("Unterminated quoted field name")
             offset = closing + 1

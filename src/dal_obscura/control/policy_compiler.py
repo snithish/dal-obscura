@@ -222,15 +222,14 @@ def _expand_schema_bound_paths(
     requested: list[str],
     schema_fields: list[dict[str, object]],
 ) -> list[str]:
-    admitted: list[tuple[str, tuple[FieldPathSegment, ...], str]] = []
+    admitted: list[tuple[str, tuple[FieldPathSegment, ...]]] = []
     for field in schema_fields:
         raw_path = field.get("path")
         if not isinstance(raw_path, list) or not raw_path:
             continue
         path = tuple(_schema_path_segments(cast(list[object], raw_path)))
         canonical = FieldPath(path).to_human()
-        raw_name = str(field.get("name", "")).strip()
-        admitted.append((canonical, path, raw_name))
+        admitted.append((canonical, path))
 
     expanded: list[str] = []
     seen: set[str] = set()
@@ -245,7 +244,7 @@ def _expand_schema_bound_paths(
             else:
                 candidates = [
                     canonical
-                    for canonical, path, _ in admitted
+                    for canonical, path in admitted
                     if len(parsed.segments) <= len(path)
                     and tuple(parsed.segments) == path[: len(parsed.segments)]
                 ]
@@ -261,7 +260,7 @@ def _expand_schema_bound_paths(
 def _schema_path_segments(path: list[object]) -> list[FieldPathSegment]:
     segments: list[FieldPathSegment] = []
     for segment in path:
-        if not isinstance(segment, str) or not segment.strip():
+        if not isinstance(segment, str) or not segment:
             raise ValidationFailure("Schema field paths must contain non-empty strings")
         if segment == "$element":
             segments.append(ListElementSegment())

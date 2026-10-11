@@ -240,7 +240,7 @@ before/after artifact for planner, masking, filtering, and table-format changes.
 Each configuration database represents one deployment. Catalog names are globally
 unique, assets are keyed by catalog and target, and runtime settings are shared by
 all connected data-plane processes. There are no cell or tenant routing IDs.
-The sole schema baseline is `20261003_0001`. Initialize a fresh database with
+The sole schema baseline is `20261011_0001`. Initialize a fresh database with
 `dal-obscura-migrate upgrade` before starting services. Earlier databases are
 unsupported; there is no in-place upgrade or compatibility migration.
 

@@ -11,6 +11,8 @@ from dal_obscura.policy.schema_index import field_children
 MAX_SCHEMA_NODES = 10_000
 MAX_SCHEMA_DEPTH = 64
 MAX_SCHEMA_ENCODING_BYTES = 2 * 1024 * 1024
+MAX_SCHEMA_ADMISSION_BYTES = 2 * 1024 * 1024
+MAX_SCHEMA_ADMISSION_FIELDS = 5_000
 
 
 def validate_arrow_schema_bounds(

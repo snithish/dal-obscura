@@ -383,3 +383,44 @@ def test_backend_schema_drift_is_rejected_before_ticket_creation(monkeypatch, dr
         planner.plan(
             PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
         )
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["x" * 257, "界" * 1024, ' long."field ' + "x" * 16384],
+    ids=["ascii-257", "unicode-1024", "ascii-16384"],
+)
+def test_long_field_identity_survives_signed_planning_filtering_and_masking(name):
+    from dal_obscura.policy.paths import FieldPath, FieldSegment
+
+    path = FieldPath((FieldSegment(name),)).to_human()
+    schema = pa.schema([pa.field(name, pa.string()), pa.field("region", pa.string())])
+    batch = pa.RecordBatch.from_arrays(
+        [pa.array(["private-us", "private-eu", None]), pa.array(["us", "eu", "us"])],
+        schema=schema,
+    )
+    source = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=(batch,),
+    )
+    reader = governed_read_service(
+        source,
+        AccessDecision(
+            allowed_columns=[path, "region"],
+            masks={path: MaskRule(type="redact", value="[hidden]")},
+            row_filter="region = 'us'",
+            policy_version=100,
+        ),
+    )
+    request = PlanRequest(catalog="catalog1", target="users", columns=[path])
+    advertised = reader.schema(request, AUTHORIZATION_HEADER)
+    planned = reader.plan(request, AUTHORIZATION_HEADER)
+    fetched = reader.fetch(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
+    table = pa.Table.from_batches(list(fetched.result_batches), schema=fetched.output_schema)
+    expected_schema = pa.schema([pa.field(name, pa.string())])
+    assert advertised.output_schema.equals(expected_schema, check_metadata=True)
+    assert table.schema.equals(expected_schema, check_metadata=True)
+    assert table.to_pylist() == [{name: "[hidden]"}, {name: None}]

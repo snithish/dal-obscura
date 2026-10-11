@@ -162,3 +162,34 @@ def test_parse_descriptor_rejects_unsafe_row_filter_sql(row_filter):
 
     with pytest.raises(ValueError, match=r"row filter|Row filter|Unsupported"):
         parse_descriptor(descriptor)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["x" * 257, "界" * 1024, "field_" + "x" * 16384],
+    ids=["ascii-257", "unicode-1024", "ascii-16384"],
+)
+def test_flight_descriptor_preserves_long_typed_field_names(name):
+    from dal_obscura.policy.paths import FieldPath, FieldSegment
+
+    column = FieldPath((FieldSegment(name),)).to_human()
+    descriptor = flight.FlightDescriptor.for_command(
+        encode_plan_command(
+            catalog="analytics",
+            target="test.table",
+            columns=[column],
+            include_typed_paths=True,
+        )
+    )
+    assert parse_descriptor(descriptor).columns == (column,)
+
+
+def test_flight_descriptor_still_enforces_total_wire_bytes():
+    from dal_obscura.flight.v1.read_pb2 import PlanRequest
+    from dal_obscura.interfaces.flight.contracts import MAX_DESCRIPTOR_BYTES
+
+    payload = PlanRequest(
+        protocol_version=1, target="test.table", columns=["x" * MAX_DESCRIPTOR_BYTES]
+    )
+    with pytest.raises(ValueError, match="command is too large"):
+        parse_descriptor(flight.FlightDescriptor.for_command(payload.SerializeToString()))

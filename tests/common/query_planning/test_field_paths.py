@@ -2,7 +2,6 @@ import pyarrow as pa
 import pytest
 
 from dal_obscura.policy.paths import (
-    MAX_FIELD_PATH_SEGMENTS,
     FieldPath,
     FieldSegment,
     ListElementSegment,
@@ -102,13 +101,28 @@ def test_field_path_validates_wire_model_invariants():
     assert MapValueSegment() != MapKeySegment()
 
 
-def test_field_path_rejects_unbounded_or_control_bearing_names():
-    with pytest.raises(ValueError, match="bounded printable"):
-        FieldPath((FieldSegment("x" * 257),))
-    with pytest.raises(ValueError, match="bounded printable"):
+@pytest.mark.parametrize(
+    "name",
+    ["x" * 257, "界" * 1024, ' long."field ' * 1639],
+    ids=["ascii-257", "unicode-1024", "ascii-16384"],
+)
+def test_long_field_names_round_trip_without_normalization(name):
+    path = FieldPath((FieldSegment(name),))
+    assert FieldPath.from_wire(path.to_wire()) == path
+    assert parse_field_path(path.to_human()) == path
+    assert resolve_schema_path(pa.schema([pa.field(name, pa.string())]), path).name == name
+
+
+@pytest.mark.parametrize("depth", [65, 128, 256])
+def test_path_shape_is_independent_of_schema_depth_admission(depth):
+    path = FieldPath(tuple(FieldSegment(f"field_{index}") for index in range(depth)))
+    assert parse_field_path(path.to_human()) == path
+    assert FieldPath.from_wire(path.to_wire()) == path
+
+
+def test_field_path_rejects_control_bearing_names():
+    with pytest.raises(ValueError, match="printable"):
         FieldPath((FieldSegment("bad\nname"),))
-    with pytest.raises(ValueError, match="too many segments"):
-        FieldPath(tuple([FieldSegment("root")] + [FieldSegment("child")] * MAX_FIELD_PATH_SEGMENTS))
 
 
 def test_field_path_rejects_out_of_range_field_ids():
@@ -159,3 +173,18 @@ def test_field_path_rejects_a_name_match_with_a_different_field_id():
 def test_field_path_wire_rejects_unknown_or_malformed_values(value):
     with pytest.raises(ValueError):
         FieldPath.from_wire(value)
+
+
+@pytest.mark.parametrize("value", ["x" * (2 * 1024 * 1024), "界" * 800000], ids=["ascii", "utf8"])
+def test_field_paths_reject_over_budget_text_in_typed_and_human_forms(value):
+    with pytest.raises(ValueError, match="byte/work budget"):
+        FieldPath((FieldSegment(value),))
+    with pytest.raises(ValueError, match="byte/work budget"):
+        parse_field_path(value)
+
+
+def test_field_path_budget_accounts_for_quoted_name_escaping():
+    from dal_obscura.policy.paths import MAX_FIELD_PATH_BYTES
+
+    with pytest.raises(ValueError, match="byte/work budget"):
+        FieldPath((FieldSegment('"' * (MAX_FIELD_PATH_BYTES // 2)),))

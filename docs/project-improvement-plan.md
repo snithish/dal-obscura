@@ -247,3 +247,20 @@ Implemented behavior:
 Qualification includes the fast Python lane, focused rendered-browser paging/race tests, keyboard/mobile and automated accessibility checks, UI unit/types/build budgets, and fresh installed-wheel HTTP/plugin admission with repository production source paths disabled. Exact wheels and regenerated locks remain outside Git.
 
 E04 is **partially resolved**: the built-in Iceberg client still enumerates its bounded inventory for each independent page. Browsing every page can repeat provider IO. This delivery does not claim native Iceberg pagination, catalog snapshot isolation across external mutations, or live-cloud qualification. Provider-native discovery/search, larger-schema contracts, worker budgets, operator initialization/recovery, additional formats/catalogs, and the remaining plan are still outstanding.
+
+
+## 12. Second implementation delivery — exact long field identities
+
+This atomic delivery addresses the field-name and path-shape portions of E01 and the text-index issue identified while implementing them. The schema compiler's depth/work envelope and the catalog/SDK dimensions of E02 remain separate work.
+
+- Policy paths no longer impose a 256-character field-name or 64-segment shape ceiling. They validate non-empty printable names without trimming and account for canonical UTF-8 text, including JSON quoting, plus segment work against a 2 MiB budget. Only small paths enter the existing bounded parse cache. Quoted-path parsing reads offsets from the original string instead of copying every remaining suffix.
+- Flight retains its 64 KiB descriptor budget and 1,024-column work limit while removing the independent 256-character column restriction. Typed paths must still match their human columns exactly.
+- Schema admission preserves exact names and path segments, including whitespace, and charges each normalized field against an aggregate 2 MiB JSON encoding budget before replacing stored rows. HTTP and direct storage callers share the 5,000-field admission limit. Over-budget attempts preserve previous rows and revision.
+- Stored fields are unique by asset and bounded field identity, rather than indexing displayed names. This avoids PostgreSQL's index-entry size restriction on long incompressible text and allows identical leaf names at different paths. Unique path and field-ID validation remains in the owning storage boundary.
+- The sole database baseline changes to `20261011_0001`. Earlier databases are intentionally unsupported; initialize a fresh database and republish configuration. No destructive automatic reset or compatibility migration is provided.
+
+Qualification covers 257-character ASCII, 1,024-character Unicode, and 16,384-character names through typed paths, HTTP admission, signed plan/fetch, exact output schemas, NULL-preserving masks, and hidden row-filter dependencies. Real local Parquet, native Iceberg, and Delta deletion-vector fixtures pass authenticated Flight/Python consumer reads. A disposable real PostgreSQL instance qualifies the packaged baseline and a 16,384-character incompressible name; SQLite alone is not the index evidence.
+
+Isolated-process probes on PyArrow 23.0.1 round-trip Arrow IPC schemas at depths 64 and 65. Depths 128 and 256 fail with `OSError: Invalid flatbuffers message.` These are dependency probe results, not governed-read support claims. Default schema admission still enforces 64 levels, 10,000 nodes, and a 2 MiB Arrow encoding; the conformance kit, recursive projection/type construction, HTTP tree serialization, and consumer nesting limits remain to be coordinated. Changing the path representation does not make deep schemas readable.
+
+E01 is **partially resolved**. Field names beyond the old cap now preserve identity; arbitrary nesting, larger schemas and values, configurable/visible resource budgets, incremental schema authoring, and live-cloud format qualification remain outstanding. This delivery does not expand the advertised catalog, format, storage, or consumer inventory.

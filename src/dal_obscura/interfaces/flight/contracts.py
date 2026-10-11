@@ -28,7 +28,6 @@ SUPPORTED_PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
 MAX_DESCRIPTOR_BYTES = 64 * 1024
 MAX_TARGET_LENGTH = 512
 MAX_COLUMNS = 1024
-MAX_COLUMN_LENGTH = 256
 MAX_ROW_FILTER_LENGTH = 8192
 SECURITY_SENSITIVE_HEADERS = {
     "authorization",
@@ -150,8 +149,6 @@ def _required_columns(raw: object) -> list[str]:
         if not isinstance(item, str) or not item.strip():
             raise ValueError("Descriptor columns must be a non-empty list of strings")
         column = item.strip()
-        if len(column) > MAX_COLUMN_LENGTH:
-            raise ValueError("Descriptor column name is too long")
         columns.append(column)
     return columns
 

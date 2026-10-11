@@ -7308,7 +7308,6 @@
                   "type": "string"
                 },
                 "type": "array",
-                "maxItems": 64,
                 "minItems": 1
               },
               {

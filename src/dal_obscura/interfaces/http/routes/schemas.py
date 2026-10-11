@@ -24,6 +24,8 @@ from pydantic import (
     model_serializer,
 )
 
+from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ADMISSION_FIELDS
+
 
 class StrictModel(BaseModel):
     """Base model that rejects unknown request fields.
@@ -640,7 +642,7 @@ class AssetSchemaFieldRequest(StrictModel):
 
     name: str = Field(min_length=1)
     field_id: str | None = Field(default=None, min_length=1, max_length=128)
-    path: list[str] | None = Field(default=None, min_length=1, max_length=64)
+    path: list[str] | None = Field(default=None, min_length=1)
     type: str = Field(default="string", min_length=1)
     nullable: bool = Field(default=True, strict=True)
 
@@ -654,7 +656,9 @@ class AssetSchemaFieldsRequest(StrictModel):
         ```
     """
 
-    fields: list[AssetSchemaFieldRequest] = Field(default_factory=list, max_length=5_000)
+    fields: list[AssetSchemaFieldRequest] = Field(
+        default_factory=list, max_length=MAX_SCHEMA_ADMISSION_FIELDS
+    )
     expected_revision: int | None = Field(default=None, ge=0)
 
 

@@ -13,6 +13,7 @@ from dal_obscura.control.errors import (
     ConfigurationConflictError,
     RevisionPreconditionRequired,
 )
+from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ADMISSION_BYTES, MAX_SCHEMA_ADMISSION_FIELDS
 from dal_obscura.policy.schema_identity import canonical_provider_field_id
 from dal_obscura.storage.database.orm import (
     AssetGrantRecord,
@@ -493,34 +494,38 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
 
     These values are persisted as asset schema admission metadata and later used
     for schema-drift checks. Accept only bounded printable strings so direct
-    service callers cannot bypass the HTTP model's limits.
+    service callers cannot bypass the HTTP model's limits. Names and paths retain
+    exact whitespace; the aggregate encoding budget owns their size.
     """
 
+    if len(fields) > MAX_SCHEMA_ADMISSION_FIELDS:
+        raise ValueError("Schema admission exceeds the field-count budget")
     normalized: list[dict[str, object]] = []
+    remaining = MAX_SCHEMA_ADMISSION_BYTES - 2  # JSON list brackets.
     seen_paths: set[tuple[str, ...]] = set()
     seen_ids: set[str] = set()
     for field in fields:
         raw_name = field.get("name")
         if not isinstance(raw_name, str):
             raise ValueError("Schema field name must be text")
-        name = raw_name.strip()
+        name = raw_name
         if not name:
             raise ValueError("Schema field name must be non-empty")
-        _validate_schema_text(name, "Schema field name", max_length=256)
+        _validate_schema_text(name, "Schema field name", max_length=MAX_SCHEMA_ADMISSION_BYTES)
         raw_path = field.get("path")
         if (
             not isinstance(raw_path, list)
             or not raw_path
             or any(
                 not isinstance(segment, str)
-                or not segment.strip()
-                or len(segment.strip()) > 256
+                or not segment
+                or len(segment) > MAX_SCHEMA_ADMISSION_BYTES
                 or any(ord(char) < 0x20 or ord(char) == 0x7F for char in segment)
                 for segment in raw_path
             )
         ):
             raise ValueError("Schema field path must contain bounded printable text segments")
-        path = [segment.strip() for segment in raw_path]
+        path = list(cast(list[str], raw_path))
         path_key = tuple(path)
         if path_key in seen_paths:
             raise ValueError("Schema field paths must be unique")
@@ -536,18 +541,27 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
         if field_id in seen_ids:
             raise ValueError("Schema field ids must be unique")
         data_type, nullable = _schema_field_type(field)
-        normalized.append(
-            {
-                "name": name,
-                "field_id": field_id,
-                "path": path,
-                "type": data_type.strip(),
-                "nullable": nullable,
-            }
-        )
+        entry: dict[str, object] = {
+            "name": name,
+            "field_id": field_id,
+            "path": path,
+            "type": data_type.strip(),
+            "nullable": nullable,
+        }
+        remaining = _consume_schema_admission_bytes(entry, remaining - bool(normalized))
+        normalized.append(entry)
         seen_paths.add(path_key)
         seen_ids.add(field_id)
     return normalized
+
+
+def _consume_schema_admission_bytes(field: dict[str, object], remaining: int) -> int:
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    for chunk in encoder.iterencode(field):
+        remaining -= len(chunk.encode("utf-8"))
+        if remaining < 0:
+            raise ValueError("Schema admission exceeds the encoded-byte budget")
+    return remaining
 
 
 def _schema_field_type(field: dict[str, Any]) -> tuple[str, bool]:

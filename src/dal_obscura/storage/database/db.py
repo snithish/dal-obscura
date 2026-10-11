@@ -104,10 +104,16 @@ def check_config_store_schema(engine: Engine) -> ConfigStoreMigrationStatus:
     if not status.is_current:
         current = ", ".join(status.current_heads) if status.current_heads else "none"
         expected = ", ".join(status.expected_heads) if status.expected_heads else "none"
+        remedy = (
+            "Earlier database baselines are unsupported; initialize a fresh database "
+            "with `dal-obscura-migrate upgrade` and republish configuration."
+            if status.current_heads
+            else "Run `dal-obscura-migrate upgrade` before starting services."
+        )
         raise ConfigStoreMigrationRequired(
             "Config-store database schema is not current "
             f"(current: {current}; expected: {expected}). "
-            "Run `dal-obscura-migrate upgrade` before starting services."
+            f"{remedy}"
         )
     return status
 

@@ -73,10 +73,21 @@ scan execution and ticket fan-out remain independent. Provider factory/close and
 backend calls need their own IO timeouts: the provider-pool timeout bounds waiting
 for a slot or another constructor, not arbitrary blocking plugin IO.
 
-The sole packaged baseline is `20261003_0001`, including nested types as text.
+The sole packaged baseline is `20261011_0001`, including nested types as text and schema-field uniqueness by asset/field ID.
 Initialize a fresh database before starting services; earlier schemas are unsupported.
 No alteration or data-conversion migrations are shipped. Runtime/auth/path
 settings require worker restart. Run the PostgreSQL regressions with
 `DAL_OBSCURA_POSTGRES_TEST_URL` pointing to a disposable PostgreSQL database;
 each test creates and cleans up a unique schema instead of touching existing
 application tables.
+
+
+### Exact schema field text
+
+Schema admission preserves full printable field names and path segments, including
+leading/trailing spaces. Display labels do not define identity. Fields at distinct
+paths may share a leaf name; their field IDs and paths must remain distinct.
+Admission has a 5,000-field work budget and 2 MiB aggregate normalized JSON budget,
+checked before replacing previous fields. Path parsing uses a separate 2 MiB
+canonical UTF-8/segment-work budget. Arrow schema depth, node, encoding, HTTP body,
+Flight descriptor, ticket, and streaming limits still apply at their owning boundaries.

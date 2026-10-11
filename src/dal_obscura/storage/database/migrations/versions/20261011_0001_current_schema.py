@@ -1,6 +1,6 @@
 """Initial schema for the generation-free live configuration model.
 
-Revision ID: 20261003_0001
+Revision ID: 20261011_0001
 Revises: None
 
 This is the only supported baseline. Development databases must be recreated.
@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20261003_0001"
+revision = "20261011_0001"
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -226,7 +226,7 @@ def upgrade() -> None:
             ["assets.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("asset_id", "name"),
+        sa.UniqueConstraint("asset_id", "field_id"),
     )
     op.create_index(
         op.f("ix_asset_schema_fields_asset_id"), "asset_schema_fields", ["asset_id"], unique=False

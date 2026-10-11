@@ -133,7 +133,7 @@ class AssetSchemaFieldRecord(Base):
     """Schema field metadata row for an asset."""
 
     __tablename__ = "asset_schema_fields"
-    __table_args__ = (UniqueConstraint("asset_id", "name"),)
+    __table_args__ = (UniqueConstraint("asset_id", "field_id"),)
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False, index=True)
