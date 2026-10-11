@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from dal_obscura_plugin_api import DiscoveryPage, TableIdentifier
+from fastapi.testclient import TestClient
 
 from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.sources.secrets import EnvSecretProvider
@@ -12,6 +14,167 @@ from tests.interfaces.control_plane.workspace_helpers import (
     ICEBERG_CATALOG_ID,
     _keys_recursive,
 )
+from tests.support.postgres import isolated_postgres_sessions
+
+
+@pytest.fixture(params=["sqlite", pytest.param("postgres", marks=pytest.mark.integration)])
+def publication_client(request, client_factory):
+    if request.param == "sqlite":
+        yield client_factory()
+    else:
+        with (
+            isolated_postgres_sessions() as factory,
+            TestClient(
+                create_app(
+                    factory, admin_token=ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
+                )
+            ) as client,
+        ):
+            yield client
+
+
+def test_catalog_release_publication_commits_every_change_and_audit(publication_client):
+    client = publication_client
+    drafts = {
+        name: {
+            "plugin_id": ICEBERG_CATALOG_ID,
+            "options": {"uri": f"sqlite:///{name}.db"},
+            "expected_revision": 0,
+        }
+        for name in ("warehouse-b", "warehouse-a")
+    }
+    response = client.post("/v1/catalogs/publish", json={"catalogs": drafts}, headers=ADMIN_HEADERS)
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()] == ["warehouse-a", "warehouse-b"]
+    inventory = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
+    assert {item["name"]: item["options"] for item in inventory} == {
+        name: draft["options"] for name, draft in drafts.items()
+    }
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
+    assert {
+        event["details"]["name"]
+        for event in events
+        if event["action"] == "workspace.catalog.update"
+    } == set(drafts)
+
+
+@pytest.mark.parametrize(
+    ("invalid", "status"),
+    [
+        pytest.param({"expected_revision": 9}, 409, id="late-revision-conflict"),
+        pytest.param({"plugin_id": "unadmitted.catalog"}, 400, id="late-admission-failure"),
+        pytest.param(
+            {"options": {"uri": "https://user:private@catalog.invalid"}},
+            400,
+            id="late-secret-validation",
+        ),
+    ],
+)
+def test_catalog_release_failure_rolls_back_earlier_changes_and_audit(
+    publication_client, invalid, status
+):
+    client = publication_client
+    original = {
+        "plugin_id": ICEBERG_CATALOG_ID,
+        "options": {"uri": "sqlite:///original.db"},
+        "expected_revision": 0,
+    }
+    assert (
+        client.put("/v1/catalogs/z-existing", json=original, headers=ADMIN_HEADERS).status_code
+        == 200
+    )
+    before = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
+    audit = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
+    replacement = {**original, "options": {"uri": "sqlite:///changed.db"}, **invalid}
+    response = client.post(
+        "/v1/catalogs/publish",
+        json={"catalogs": {"a-new": original, "z-existing": replacement}},
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == status
+    assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json() == before
+    assert client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"] == audit
+    assert "private" not in response.text
+
+
+@pytest.mark.parametrize(
+    "drafts",
+    [
+        {},
+        {str(i): {"plugin_id": ICEBERG_CATALOG_ID, "expected_revision": 0} for i in range(101)},
+        {"warehouse": {"plugin_id": ICEBERG_CATALOG_ID}},
+    ],
+)
+def test_catalog_release_requires_bounded_explicit_revision_fences(publication_client, drafts):
+    client = publication_client
+    response = client.post("/v1/catalogs/publish", json={"catalogs": drafts}, headers=ADMIN_HEADERS)
+    assert response.status_code == 422
+    assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json() == []
+
+
+def test_catalog_release_publication_requires_authenticated_admin(publication_client):
+    client = publication_client
+    response = client.post(
+        "/v1/catalogs/publish",
+        json={"catalogs": {"warehouse": {"plugin_id": ICEBERG_CATALOG_ID, "expected_revision": 0}}},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.integration
+def test_postgres_catalog_release_is_not_visible_until_complete(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from dal_obscura.control import catalog_service
+
+    token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
+    with (
+        isolated_postgres_sessions() as factory,
+        TestClient(create_app(factory, admin_token=token)) as client,
+    ):
+        original = {
+            "plugin_id": ICEBERG_CATALOG_ID,
+            "options": {"uri": "sqlite:///original.db"},
+            "expected_revision": 0,
+        }
+        for name in ("a-existing", "z-existing"):
+            assert (
+                client.put(f"/v1/catalogs/{name}", json=original, headers=ADMIN_HEADERS).status_code
+                == 200
+            )
+        before = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
+        entered, release = Event(), Event()
+        upsert = catalog_service.upsert_workspace_catalog
+
+        def pause_after_first_write(store, **kwargs):
+            result = upsert(store, **kwargs)
+            if kwargs["name"] == "a-existing":
+                entered.set()
+                assert release.wait(10), "Publication was not released"
+            return result
+
+        monkeypatch.setattr(catalog_service, "upsert_workspace_catalog", pause_after_first_write)
+        drafts = {
+            name: {**original, "options": {"uri": "sqlite:///changed.db"}}
+            for name in ("z-existing", "a-existing")
+        }
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                client.post,
+                "/v1/catalogs/publish",
+                json={"catalogs": drafts},
+                headers=ADMIN_HEADERS,
+            )
+            try:
+                assert entered.wait(10), "Publication did not reach its first write"
+                assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json() == before
+            finally:
+                release.set()
+            assert future.result(timeout=10).status_code == 200
+        after = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
+        assert [item["revision"] for item in after] == [1, 1]
+        assert all(item["options"] == {"uri": "sqlite:///changed.db"} for item in after)
 
 
 def test_workspace_catalog_upsert_bootstraps_default_workspace(client_factory):

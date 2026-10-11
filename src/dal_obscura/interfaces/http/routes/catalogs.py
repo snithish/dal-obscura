@@ -15,6 +15,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     CatalogDiagnosticResponse,
     CatalogInventoryResponse,
     CatalogMutationResponse,
+    CatalogPublicationBatch,
     CatalogRequest,
     CatalogTablesResponse,
 )
@@ -24,6 +25,32 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     """Builds workspace catalog routes."""
 
     api = APIRouter()
+
+    @api.post(
+        "/v1/catalogs/publish",
+        response_model=list[CatalogMutationResponse],
+    )
+    def publish_workspace_catalogs(
+        request: CatalogPublicationBatch,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> list[CatalogMutationResponse]:
+        # One transaction owns all configuration changes and their audit records.
+        # A deterministic lock order prevents opposite-order releases deadlocking.
+        return deps.with_transaction(
+            lambda service: [
+                catalog_service.upsert_workspace_catalog(
+                    service.session,
+                    name=name,
+                    plugin_id=request.catalogs[name].plugin_id,
+                    options=request.catalogs[name].options,
+                    expected_revision=request.catalogs[name].expected_revision,
+                    egress_allowlist=service.catalog_egress_allowlist,
+                    actor_principal=actor.identity_key(),
+                    plugin_registry=service.plugin_registry,
+                )
+                for name in sorted(request.catalogs)
+            ]
+        )
 
     @api.get(
         "/v1/catalogs",

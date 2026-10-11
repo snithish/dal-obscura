@@ -15,7 +15,7 @@ import uuid
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from dal_obscura_plugin_api import PluginDescriptor
@@ -23,6 +23,7 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 from dal_obscura.control.catalog_service import (
+    MAX_CATALOG_PUBLICATION_SIZE,
     validate_catalog_options,
     validate_descriptor_options,
 )
@@ -298,6 +299,10 @@ def compose_arguments(workspace: Path, target: dict[str, Any], override: Path) -
 
 
 def prepare_release(workspace: Path, target: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+    catalogs_path = workspace / "catalogs.json"
+    catalogs = read_json(catalogs_path) if catalogs_path.exists() else {}
+    if len(catalogs) > MAX_CATALOG_PUBLICATION_SIZE:
+        raise ValueError(f"A release supports at most {MAX_CATALOG_PUBLICATION_SIZE} catalogs")
     candidate = read_json(workspace / "candidate.json")
     if candidate["base_image"] != target["base_image"]:
         raise ValueError("Base image changed; run plugin add again before deployment")
@@ -328,8 +333,6 @@ def prepare_release(workspace: Path, target: dict[str, Any]) -> tuple[Path, dict
     # Check the final image layer changed no installed plugin artifacts.
     if inspect_image(final_image, list(candidate["requirements"])) != actual:
         raise ValueError("Final image artifacts do not match prepared admission")
-    catalogs_path = workspace / "catalogs.json"
-    catalogs = read_json(catalogs_path) if catalogs_path.exists() else {}
     descriptors = {
         item["plugin_id"]: item for item in candidate["descriptors"] if item["kind"] == "catalog"
     }
@@ -382,9 +385,11 @@ def api_request(
 def publish_catalogs(target: dict[str, Any], catalogs: dict[str, Any]) -> None:
     if not catalogs:
         return
+    if len(catalogs) > MAX_CATALOG_PUBLICATION_SIZE:
+        raise ValueError(f"A release supports at most {MAX_CATALOG_PUBLICATION_SIZE} catalogs")
     inventory = {item["name"]: item for item in api_request(target, "GET", "/v1/catalogs")}
-    pending = []
-    # Check every revision before making changes. The API checks again atomically at each write.
+    pending = {}
+    # Preflight gives actionable conflicts; the API rechecks all fences in one transaction.
     for name, draft in catalogs.items():
         current = inventory.get(name)
         if (
@@ -398,9 +403,11 @@ def publish_catalogs(target: dict[str, Any], catalogs: dict[str, Any]) -> None:
             raise ValueError(
                 f"Catalog {name} revision changed; reconfigure with --expected-revision {revision}"
             )
-        pending.append((name, draft))
-    for name, draft in pending:
-        api_request(target, "PUT", "/v1/catalogs/" + quote(name, safe=""), draft)
+        pending[name] = draft
+    if not pending:
+        return
+    api_request(target, "POST", "/v1/catalogs/publish", {"catalogs": pending})
+    for name in sorted(pending):
         print(f"Published catalog {name}")
 
 

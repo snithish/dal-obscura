@@ -123,10 +123,17 @@ uses `--no-deps` and never invokes migration jobs.
 Every running control-plane and data-plane replica must have the selected image identity,
 embedded lock path and exact lock bytes. An in-container verifier reruns static admission
 and queries that replica's readiness endpoint. Only then does deploy publish catalog
-drafts through the authenticated API with revision fences. It checks all known revision
-conflicts before the first write; concurrent changes are still checked atomically by each
-API mutation. Catalog updates across several instances are not one transaction: a later
-failure can leave earlier updates published, and retry recognizes identical configurations.
+drafts through one authenticated `POST /v1/catalogs/publish` change set, with explicit
+revision fences on every changed instance. Releases contain at most 100 catalog drafts;
+this limit is checked before container preparation. The existing HTTP request-byte budget
+and catalog option validation also apply. An unchanged published configuration is skipped.
+
+The server applies changed instances in deterministic name order inside one database
+transaction, including their audit records. A revision conflict, admission failure, or
+invalid option on any instance rolls back the entire change set. Successful catalog
+publication is atomic across these changes. A committed publication followed by a failed
+smoke read still needs recovery; image rollout and catalog publication are separate stages.
+Retry reads current revisions and recognizes identical published configurations.
 
 Finally, a real authenticated Flight read checks schema/plan/batch agreement with metadata,
 exact synthetic values and duplicate counts. Row order may differ across tasks. The probe

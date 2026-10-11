@@ -174,6 +174,38 @@ def test_catalog_publication_is_idempotent_with_same_options(monkeypatch):
     assert calls == ["GET"]
 
 
+def test_catalog_publication_sends_one_atomic_change_set(monkeypatch):
+    calls = []
+    drafts = {
+        name: {
+            "plugin_id": "acme.delta",
+            "options": {"root": f"s3://bucket/{name}"},
+            "expected_revision": 0,
+        }
+        for name in ("warehouse-b", "warehouse-a")
+    }
+
+    def api(target, method, path, body=None):
+        calls.append((method, path, body))
+        return []
+
+    monkeypatch.setattr(operator, "api_request", api)
+    operator.publish_catalogs({}, drafts)
+    assert calls == [
+        ("GET", "/v1/catalogs", None),
+        ("POST", "/v1/catalogs/publish", {"catalogs": drafts}),
+    ]
+
+
+def test_oversized_catalog_release_fails_before_container_work(tmp_path, monkeypatch):
+    (tmp_path / "catalogs.json").write_text(json.dumps({str(index): {} for index in range(101)}))
+    monkeypatch.setattr(
+        operator, "run", lambda *args, **kwargs: pytest.fail("Container work must not run")
+    )
+    with pytest.raises(ValueError, match="at most 100 catalogs"):
+        operator.prepare_release(tmp_path, {})
+
+
 @pytest.mark.parametrize("bad_worker", ["different_image", "wrong_lock", "stopped"])
 def test_every_scaled_worker_must_run_selected_image_and_lock(monkeypatch, bad_worker):
     image = "sha256:" + "a" * 64

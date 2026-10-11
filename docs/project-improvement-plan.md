@@ -435,3 +435,35 @@ provider-backed schema search/paging, and other policy summaries remain open.
 These synthetic UI fixtures do not change backend schema/policy/Flight limits or
 prove provider qualification. E05 still requires representative-operator studies
 and live device/keyboard evidence. Remaining release gates are unchanged.
+
+## 18. Eighth implementation delivery — atomic catalog publication
+
+Related catalog changes now publish through one authenticated, bounded
+`POST /v1/catalogs/publish` request. Every changed instance supplies an explicit
+revision fence; the server reuses admitted-plugin, egress, option, and audit
+validation inside one transaction. Sorted catalog names establish deterministic
+row-lock order. Success commits all changes and audit records; a late validation,
+admission, or revision failure rolls them all back.
+
+The deployment CLI retains its conflict preflight and unchanged-configuration
+retry behavior, then sends one change set instead of individual PUTs. A release
+may contain at most 100 catalog drafts, checked before container preparation; the
+API also enforces batch shape and the existing HTTP byte budget. There is no
+fallback to older servers or partial-batch splitting. Generated OpenAPI and
+browser contract types include the new endpoint. Existing individual catalog
+editing remains available.
+
+Qualification: 113 installed-wheel catalog, operator, API-contract, and schema
+tests passed with no skips in a fresh environment. Nine PostgreSQL cases use
+disposable schemas, including proof that another reader sees the old complete
+inventory while publication pauses after its first write, then sees both changed
+revisions after commit. SQLite and PostgreSQL independently qualify rollback of
+catalogs and audits on late failures. Exact plugin locks were regenerated from
+the installed artifacts; plugin contracts are unchanged. UI types, generated
+contract checks, and unit tests pass; repository fast checks run at commit.
+
+The catalog-publication portion of E11 is resolved. Image replacement, database
+schema installation, catalog publication, and smoke verification remain separate
+stages. This delivery does not implement automatic rollback, ticket draining,
+target initialization, provenance signing, another orchestrator, or a live image
+push/rollout. Live infrastructure and provider qualification remain open.

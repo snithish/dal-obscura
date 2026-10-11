@@ -24,6 +24,7 @@ from pydantic import (
     model_serializer,
 )
 
+from dal_obscura.control.catalog_service import MAX_CATALOG_PUBLICATION_SIZE
 from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ADMISSION_FIELDS
 
 
@@ -527,6 +528,16 @@ class CatalogRequest(StrictModel):
     plugin_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
     options: dict[str, Any] = Field(default_factory=dict)
     expected_revision: int | None = Field(default=None, ge=0)
+
+
+class CatalogPublicationRequest(CatalogRequest):
+    expected_revision: int = Field(ge=0, strict=True)
+
+
+class CatalogPublicationBatch(StrictModel):
+    catalogs: dict[
+        Annotated[str, Field(min_length=1, max_length=255)], CatalogPublicationRequest
+    ] = Field(min_length=1, max_length=MAX_CATALOG_PUBLICATION_SIZE)
 
 
 class AssetRequest(StrictModel):
