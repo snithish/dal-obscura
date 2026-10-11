@@ -37,3 +37,12 @@ test("forceExpanded exposes all descendants for search", () => {
   const tree = [node("root", [node("root.child", [node("root.child.leaf")])])];
   assert.equal(flattenSchemaTree(tree, new Set(), true).length, 3);
 });
+
+test("flattening a synthetic deep chain does not use the JavaScript call stack", () => {
+  let root = node("leaf");
+  for (let depth = 19_999; depth >= 0; depth--) root = node(`level_${depth}`, [root]);
+  const rows = flattenSchemaTree([root], new Set(), true);
+  assert.equal(rows.length, 20_001);
+  assert.equal(rows.at(-1).depth, 20_000);
+  assert.equal(rows.at(-1).node.human_path, "leaf");
+});

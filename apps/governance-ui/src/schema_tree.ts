@@ -15,12 +15,15 @@ export function flattenSchemaTree(
   forceExpanded = false,
 ): FlatSchemaNode[] {
   const result: FlatSchemaNode[] = [];
-  const visit = (node: SchemaNode, depth: number, posinset: number, setsize: number) => {
+  const stack = nodes.map((node, index) => ({ node, depth: 0, posinset: index + 1, setsize: nodes.length })).reverse();
+  while (stack.length) {
+    const { node, depth, posinset, setsize } = stack.pop()!;
     result.push({ node, depth, index: result.length, posinset, setsize });
     if (node.children?.length && (forceExpanded || expanded.has(node.human_path))) {
-      node.children.forEach((child, index) => visit(child, depth + 1, index + 1, node.children!.length));
+      for (let index = node.children.length - 1; index >= 0; index--) {
+        stack.push({ node: node.children[index], depth: depth + 1, posinset: index + 1, setsize: node.children.length });
+      }
     }
-  };
-  nodes.forEach((node, index) => visit(node, 0, index + 1, nodes.length));
+  }
   return result;
 }

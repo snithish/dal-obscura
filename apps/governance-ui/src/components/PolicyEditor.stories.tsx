@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { PolicyRule, SchemaNode } from "../api";
 import { authoritativeColumnOptions } from "../policy_editor";
 import { BulkMaskEditor } from "./BulkMaskEditor";
@@ -27,7 +27,8 @@ export const MultiColumnKeyboard: Story = {
     await userEvent.keyboard("{ArrowDown}{Enter}");
     await expect(args.onChange).toHaveBeenCalledWith(["email", "phone"]);
     await userEvent.keyboard("{Escape}");
-    await expect(trigger).toHaveFocus();
+    // Focus returns on the modal's exit-transition event, not on key dispatch.
+    await waitFor(() => expect(trigger).toHaveFocus());
   },
 };
 

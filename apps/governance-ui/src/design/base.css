@@ -169,6 +169,15 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .schema-reference-row[aria-expanded=false] > svg { transform: rotate(-90deg); }
 .schema-field-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mantine-font-family-monospace); max-width: 100%; }
 .schema-field-meta { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-secondary); }
+.schema-field-meta .column-type-tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schema-field-meta > span:last-child { flex-shrink: 0; }
+.schema-reference-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.schema-reference-row.inspectable:hover { background: var(--selection); }
+.schema-field-details { margin-top: 12px; padding: 12px; max-height: 200px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
+.schema-field-details:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.schema-field-details dl { margin: 0; }
+.schema-field-details dt { color: var(--text-secondary); font-size: 11px; margin: 10px 0 4px; }
+.schema-field-details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px var(--mantine-font-family-monospace); }
 .schema-reference-note { display: flex; align-items: start; gap: 8px; font-size: 11px; color: var(--text-secondary); padding-top: 12px; }
 .schema-reference-note svg { flex-shrink: 0; }
 .schema-empty { padding: 12px; color: var(--text-secondary); font-size: 13px; }

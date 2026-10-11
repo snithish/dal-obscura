@@ -334,3 +334,39 @@ projection compilation, HTTP schema trees, UI schema browsing, provider/native
 depth ceilings, wider schemas, and configurable coordinated work budgets still
 need implementation. The advertised CoW/MoR storage and catalog matrix remains
 subject to the plan's separate qualification gates.
+
+## 15. Fifth implementation delivery — usable schema reference inspection
+
+This UI delivery addresses the long/deep field browsing portion of E01. Schema
+flattening uses an explicit stack, preserving node order, visibility, sibling
+positions, and existing row virtualization. A synthetic 20,000-level chain no
+longer exhausts JavaScript's call stack; this does not change source/native depth
+admission or establish end-to-end support for that nesting depth.
+
+Indentation is capped at 48 pixels so deeper fields keep readable labels on
+mobile. Deep rows show leaf names while inspection retains the exact full human
+path and name, including Unicode and literal dots. Native disclosure controls
+expand/collapse containers. Keyboard-operable inspection buttons expose type,
+nullability, full path, and name in a bounded, scrollable reference panel. The
+panel is not policy selection; inspection leaves rule state unchanged and makes
+no policy writes. Schema identity changes reset expansion/search/inspection state;
+matching identities preserve the reference context.
+
+The interaction remains a disclosure list rather than claiming the complete
+[W3C tree-view model](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/). A full
+arrow-key navigator, subtree focus, provider-backed schema paging, and bounded
+HTTP schema response construction remain open. The browser still receives and
+indexes the entire admitted schema; virtualization only bounds rendered rows.
+
+[Before/after review](ui-review/schema-reference/README.md) includes desktop and
+mobile captures. Qualification covers 58 unit tests, rendered keyboard/exact
+identity/layout/accessibility cases at 1440/390/320 pixels, existing expansion
+focus and scroll checks, 10,000-field virtualization/search, component stories,
+TypeScript, and production bundle budgets. A pre-existing component-story focus
+assertion now waits for the modal's exit-transition focus restoration rather than
+asserting immediately after Escape; no production picker behavior changed.
+
+Core/SDK/API contracts are unchanged. No new PostgreSQL, installed service wheel,
+live SSO, consumer, or CoW/MoR cloud support claims are made. E01 is still partially
+resolved, and the remaining storage/catalog/resource/operator work retains its
+separate acceptance gates.
