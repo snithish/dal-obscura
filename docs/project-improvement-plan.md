@@ -535,3 +535,20 @@ values and selected columns are checked independently of the timed interval.
 See [measurement and limits](mask-edit-performance.md). Synthetic deep traversal
 does not remove the native Arrow depth limit. Full-schema transfer, prefix work,
 mask-summary rendering, provider coverage, and the remaining plan stay open.
+
+## 22. Twelfth implementation delivery — bounded operator control responses
+
+Deployment control requests now read at most 8 MiB plus a rejection sentinel,
+without trusting Content-Length, and close responses on success or failure. The
+maintained parser rejects malformed UTF-8/JSON and excessive nesting; an iterative
+check also rejects numeric exponent overflow. Errors omit response bodies. The
+parser's nesting bound remains an upstream constraint, and decoded-object memory
+can exceed transport byte size; this is not an RSS or unlimited-input claim.
+
+Nine owning transport cases first exposed eight failures. After implementation,
+47 installed-wheel operator/target/transport cases pass without skips, including
+three real loopback HTTP cases: authenticated inventory, an oversized body without
+Content-Length, and rejection before a redirect credential destination is reached.
+The service wheel was rebuilt in a fresh source-disabled environment, six unchanged
+plugin artifacts were locked and admitted, and Ruff/type/fast checks apply. Live
+TLS/proxy/identity renewal and cloud-provider qualification remain separate gates.

@@ -53,6 +53,13 @@ plugin inventory. Worker image, admission-lock, readiness, and exact Flight valu
 remain the deployment verification stage. Captured container errors and service bodies
 are omitted from diagnostic output.
 
+Control responses are limited to 8 MiB of actual bytes read, including responses
+without Content-Length. Invalid UTF-8/JSON, excessive parser nesting, and
+non-finite numbers fail with sanitized messages; readers close on rejection.
+The maintained JSON parser owns its nesting limit. This byte limit bounds
+transport input, not total decoded-object memory or an operator RSS SLA. The CLI
+never follows control redirects with deployment credentials.
+
 The resulting `.dal-obscura-deploy/target.json` is available for operator review.
 The equivalent shape follows. Replace both digest placeholders with verified
 SHA-256 digests; mutable base/tool tags are rejected. Paths for `compose_file` and

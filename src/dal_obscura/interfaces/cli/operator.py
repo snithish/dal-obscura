@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -21,6 +22,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from dal_obscura_plugin_api import PluginDescriptor
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
+from pydantic_core import from_json
 
 from dal_obscura.control.catalog_service import (
     MAX_CATALOG_PUBLICATION_SIZE,
@@ -33,6 +35,7 @@ _IMAGE_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}\Z")
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _INTERNAL = "dal_obscura.interfaces.cli.plugin_image"
 _LOCK_PATH = "/app/plugin-lock.json"
+MAX_CONTROL_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 def run(arguments: list[str], *, capture: bool = False) -> str:
@@ -382,7 +385,24 @@ def api_request(
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
     with build_opener(NoRedirect()).open(request, timeout=30) as response:
-        return json.load(response)
+        payload = response.read(MAX_CONTROL_RESPONSE_BYTES + 1)
+        if len(payload) > MAX_CONTROL_RESPONSE_BYTES:
+            raise ValueError("Control API response exceeds the 8 MiB limit")
+        try:
+            # The maintained parser also rejects excessive nesting without Python recursion.
+            result = from_json(payload, allow_inf_nan=False, cache_strings=False)
+            pending = [result]
+            while pending:
+                value = pending.pop()
+                if isinstance(value, float) and not math.isfinite(value):
+                    raise ValueError("Non-finite number")
+                if isinstance(value, dict):
+                    pending.extend(value.values())
+                elif isinstance(value, list):
+                    pending.extend(value)
+            return result
+        except ValueError:
+            raise ValueError("Control API returned invalid JSON") from None
 
 
 def validate_control_url(value: str) -> str:
