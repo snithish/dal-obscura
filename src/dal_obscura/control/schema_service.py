@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, cast
+from typing import cast
 from uuid import UUID
 
 import pyarrow as pa
@@ -39,6 +39,7 @@ from dal_obscura.policy.schema_identity import (
     schema_shape,
 )
 from dal_obscura.policy.schema_index import field_children
+from dal_obscura.sources.plugins import PluginRegistry
 from dal_obscura.sources.schema import load_source_schema
 from dal_obscura.sources.secrets import (
     EnvSecretProvider,
@@ -56,7 +57,7 @@ def get_asset_schema(
     actor: ControlPlaneActor,
     *,
     egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: Any | None = None,
+    plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
     ensure_asset_capability(store, asset_id, actor, "read")
@@ -93,7 +94,7 @@ def load_asset_schema(
     actor: ControlPlaneActor,
     *,
     egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: Any | None = None,
+    plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> pa.Schema:
     """Loads the authoritative admitted schema without reading table rows."""
@@ -104,11 +105,11 @@ def load_asset_schema(
     if context is None:
         raise LookupError("No workspace has been configured")
     catalog = _db_catalogs.get_workspace_catalog(store, str(asset["catalog"]))
-    options = cast(dict[str, Any], catalog["options"])
+    options = cast(dict[str, object], catalog["options"])
     validate_admitted_catalog_options(str(catalog["plugin_id"]), options, plugin_registry)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     options = cast(
-        dict[str, Any],
+        dict[str, object],
         resolve_secret_refs(
             options,
             provider=secret_provider or EnvSecretProvider(),

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import base64
 import heapq
-from collections.abc import Iterator
-from typing import Any, cast
+from collections.abc import Iterator, Sequence
+from types import TracebackType
+from typing import Self, TypedDict, cast
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -48,22 +49,31 @@ _KEEP_SCHEMA = pa.schema([pa.field("keep", pa.bool_(), nullable=False)])
 _BATCH_ROWS = 8192
 
 
+class _RowGroup(TypedDict):
+    path: str
+    row_group: int
+    rows: int
+    keep: object
+
+
 class DeltaFormat:
     descriptor = FORMAT_DESCRIPTOR
 
-    def __init__(self, handle: TableHandle, context: ExecutionContext):
+    def __init__(self, handle: TableHandle, context: ExecutionContext) -> None:
         if handle.format_plugin_id != "delta" or handle.handle_version != 1:
             raise ValueError("Incompatible Delta handle")
-        metadata = cast(dict[str, Any], dict(handle.metadata))
+        metadata = handle.metadata
+        location, version = metadata.get("location"), metadata.get("version")
         if (
             set(metadata) != {"location", "version", "table_id"}
-            or any(not isinstance(metadata[k], str) for k in ("location", "table_id"))
-            or type(metadata["version"]) is not int
-            or metadata["version"] < 0
+            or not isinstance(location, str)
+            or not isinstance(metadata["table_id"], str)
+            or type(version) is not int
+            or version < 0
         ):
             raise ValueError("Invalid Delta handle metadata")
-        self._storage = DeltaStorage(metadata["location"])
-        self._table = open_snapshot(self._storage, context, metadata["version"])
+        self._storage = DeltaStorage(location)
+        self._table = open_snapshot(self._storage, context, version)
         if (
             self._table.metadata().id != metadata["table_id"]
             or handle.snapshot_id != f"{metadata['table_id']}@{metadata['version']}"
@@ -163,7 +173,7 @@ class DeltaFormat:
         context.check_active()
         return masks
 
-    def _projection(self, columns) -> pa.Schema:
+    def _projection(self, columns: Sequence[str]) -> pa.Schema:
         if any(name not in self._schema.names for name in columns) or len(set(columns)) != len(
             columns
         ):
@@ -172,42 +182,52 @@ class DeltaFormat:
             [self._schema.field(name) for name in columns], metadata=self._schema.metadata
         )
 
-    def execute(self, task: ScanTask, context: ExecutionContext):
+    def execute(
+        self, task: ScanTask, context: ExecutionContext
+    ) -> tuple[pa.Schema, Iterator[pa.RecordBatch]]:
         context.check_active()
-        payload = cast(dict[str, Any], task.to_json())
+        payload = task.to_json()
         if (
             set(payload) != {"columns", "row_groups"}
             or not isinstance(payload["columns"], list)
-            or not all(isinstance(name, str) for name in payload["columns"])
             or not isinstance(payload["row_groups"], list)
             or not payload["row_groups"]
         ):
             raise ValueError("Invalid Delta task")
-        schema = self._projection(payload["columns"])
+        columns: list[str] = []
+        for column in payload["columns"]:
+            if not isinstance(column, str):
+                raise ValueError("Invalid Delta task")
+            columns.append(column)
+        schema = self._projection(columns)
         seen = set()
+        groups: list[_RowGroup] = []
         for raw_group in payload["row_groups"]:
-            group = cast(dict[str, Any], raw_group)
+            if not isinstance(raw_group, dict):
+                raise ValueError("Delta task is not a member of its pinned snapshot")
+            group = cast(dict[str, object], raw_group)
+            path, index, rows = group.get("path"), group.get("row_group"), group.get("rows")
             if (
-                not isinstance(group, dict)
-                or set(group) != {"path", "row_group", "rows", "keep"}
-                or not isinstance(group["path"], str)
-                or group["path"] not in self._actions
-                or type(group["row_group"]) is not int
-                or group["row_group"] < 0
-                or type(group["rows"]) is not int
-                or group["rows"] <= 0
+                set(group) != {"path", "row_group", "rows", "keep"}
+                or not isinstance(path, str)
+                or path not in self._actions
+                or type(index) is not int
+                or index < 0
+                or type(rows) is not int
+                or rows <= 0
             ):
                 raise ValueError("Delta task is not a member of its pinned snapshot")
-            key = (group["path"], group["row_group"])
+            key = (path, index)
             if key in seen:
                 raise ValueError("Duplicate Delta row group")
             seen.add(key)
-        return schema, self._batches(payload, schema, context)
+            groups.append({"path": path, "row_group": index, "rows": rows, "keep": group["keep"]})
+        return schema, self._batches(groups, schema, context)
 
     def _batches(
-        self, task: dict, schema: pa.Schema, context: ExecutionContext
+        self, groups: Sequence[_RowGroup], schema: pa.Schema, context: ExecutionContext
     ) -> Iterator[pa.RecordBatch]:
-        for group in task["row_groups"]:
+        for group in groups:
             context.check_active()
             path = self._storage.member(group["path"], encoded=True)
             with pq.ParquetFile(path, filesystem=self._storage.filesystem) as parquet:
@@ -264,15 +284,20 @@ class DeltaFormat:
             finally:
                 batches.close()
 
-    def close(self):
+    def close(self) -> None:
         self._table = None
         self._actions.clear()
         self._fragments = None
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
 

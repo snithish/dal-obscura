@@ -15,7 +15,14 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_serializer
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    StringConstraints,
+    model_serializer,
+)
 
 
 class StrictModel(BaseModel):
@@ -245,8 +252,9 @@ class PolicyMaskSchema(BaseModel):
     value: str | int | float | bool | None = None
     exempt_principals: list[str] = Field(default_factory=list)
 
+    # A return annotation replaces the model response schema with the serializer type.
     @model_serializer(mode="wrap")
-    def omit_absent_optional_metadata(self, handler):
+    def omit_absent_optional_metadata(self, handler: SerializerFunctionWrapHandler):
         payload = handler(self)
         if "value" not in self.model_fields_set:
             payload.pop("value", None)

@@ -25,6 +25,27 @@ def test_official_catalog_backend_resolves_without_a_sql_only_contract(tmp_path,
         assert catalog.list_tables(ctx).entries == (identifier,)
         captured = catalog.resolve_table(identifier, ctx)
         assert captured.metadata == {"metadata_location": table.metadata_location}
-        assert captured.snapshot_id == str(table.current_snapshot().snapshot_id)
+        snapshot = table.current_snapshot()
+        assert snapshot is not None
+        assert captured.snapshot_id == str(snapshot.snapshot_id)
     finally:
         catalog.close()
+
+
+@pytest.mark.parametrize(
+    "warehouse", [None, 7, {"path": "s3://bucket"}], ids=["null", "number", "object"]
+)
+def test_catalog_rejects_non_string_provider_properties(monkeypatch, warehouse):
+    import pyiceberg.catalog
+
+    from dal_obscura.sources.iceberg_catalog import IcebergCatalog
+
+    monkeypatch.setattr(pyiceberg.catalog, "load_catalog", lambda name, **properties: object())
+    ctx = ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "invalid-properties")
+    with pytest.raises(ValueError, match="properties must be strings"):
+        IcebergCatalog(
+            CatalogConfig(
+                "iceberg.catalog", "fixture", 1, {"type": "in-memory", "warehouse": warehouse}
+            ),
+            ctx,
+        )

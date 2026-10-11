@@ -439,7 +439,7 @@ def test_one_file_splits_row_groups_with_exact_delete_coverage(tmp_path, mode):
 
 
 @pytest.mark.parametrize("stop", ["exhaustion", "early-close", "cancel", "failure"])
-def test_native_stream_owns_reader(table, stop):
+def test_native_stream_owns_reader(table, stop, monkeypatch):
     from threading import Event
 
     cancelled = Event()
@@ -452,7 +452,7 @@ def test_native_stream_owns_reader(table, stop):
     from tests.support.iceberg import NativeReaderStub
 
     reader = NativeReaderStub(batch, fail=stop == "failure")
-    plugin._reader = reader
+    monkeypatch.setattr(plugin, "_native", lambda context: reader)
     _, batches = plugin.execute(task, operation)
     if stop == "failure":
         with pytest.raises(RuntimeError, match="native read failed"):

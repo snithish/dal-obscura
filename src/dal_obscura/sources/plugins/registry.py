@@ -9,13 +9,15 @@ from collections.abc import Callable, Mapping
 from importlib import metadata
 from pathlib import Path
 from threading import RLock
-from typing import Literal, cast
+from typing import Literal, cast, overload
 
 from dal_obscura_plugin_api import (
     PLUGIN_API_VERSION,
     PLUGIN_CONFIG_VERSION,
+    CatalogFactory,
     PluginDescriptor,
     PluginKind,
+    TableFormatFactory,
 )
 
 from dal_obscura.sources.plugins.lifecycle import (
@@ -75,7 +77,13 @@ class PluginRegistry:
         descriptors, _, _ = self._discover_with_entries()
         return descriptors
 
-    def load(self, kind: PluginKind, plugin_id: str) -> object:
+    @overload
+    def load(self, kind: Literal["catalog"], plugin_id: str) -> CatalogFactory: ...
+
+    @overload
+    def load(self, kind: Literal["table_format"], plugin_id: str) -> TableFormatFactory: ...
+
+    def load(self, kind: PluginKind, plugin_id: str) -> CatalogFactory | TableFormatFactory:
         """Loads one admitted factory; never accepts a request import string."""
 
         self._validate_id(plugin_id)
@@ -89,13 +97,18 @@ class PluginRegistry:
             entry = self._snapshot_entries.get(key)
             builtin = self._snapshot_builtins.get(key)
             admitted = key in self._snapshot
-        if entry is None or not admitted:
-            if builtin is not None:
-                return builtin
-            raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
         if builtin is not None:
-            return builtin
-        return self._factory_loader(entry)
+            factory = builtin
+        elif entry is not None and admitted:
+            factory = self._factory_loader(entry)
+        else:
+            raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
+        if not callable(factory):
+            raise PluginAdmissionError(
+                f"Admitted plugin factory is not callable: {kind}:{plugin_id}"
+            )
+        # Entry-point imports have no static type; admission establishes the SDK boundary.
+        return cast(CatalogFactory | TableFormatFactory, factory)
 
     def set_lifecycle(
         self,

@@ -16,7 +16,7 @@ import pyarrow.fs as fs
 class StorageRoot:
     """One admitted root and its runtime filesystem; member paths stay contained."""
 
-    def __init__(self, uri: object):
+    def __init__(self, uri: object) -> None:
         if not isinstance(uri, str) or not uri or len(uri) > 4096:
             raise ValueError("Invalid storage root")
         self.remote = uri.startswith("s3:")

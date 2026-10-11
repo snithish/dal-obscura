@@ -6,9 +6,10 @@ import json
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from http.client import HTTPMessage
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import IO, Any
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import jwt
@@ -280,5 +281,7 @@ def _fetch_json(url: str) -> JsonObject:
 
 
 class _NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self, req: Request, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str
+    ) -> None:
         return None

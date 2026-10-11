@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from alembic.config import Config
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import NoSuchModuleError
@@ -112,7 +113,6 @@ def check_config_store_schema(engine: Engine) -> ConfigStoreMigrationStatus:
 
 
 def _alembic_config(engine: Engine):
-    from alembic.config import Config
 
     config = Config()
     config.set_main_option("script_location", _migration_script_location())

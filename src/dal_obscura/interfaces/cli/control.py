@@ -6,12 +6,14 @@ import argparse
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 import uvicorn
 from sqlalchemy.exc import SQLAlchemyError
 
 from dal_obscura.identity.http_session import (
+    OidcActorResolver,
+    OidcNonceActorResolver,
     create_oidc_actor_resolver,
     create_oidc_nonce_actor_resolver,
 )
@@ -213,7 +215,7 @@ def _origin(value: str | None) -> str:
     return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
 
 
-def _safe_urlsplit(value: str):
+def _safe_urlsplit(value: str) -> SplitResult | None:
     try:
         return urlsplit(value.strip())
     except ValueError:
@@ -328,7 +330,7 @@ def _validate_profile(  # noqa: C901
         raise ValueError("Production OIDC redirect origins must be listed in CORS origins")
 
 
-def _oidc_resolver(values: Mapping[str, str]):
+def _oidc_resolver(values: Mapping[str, str]) -> OidcActorResolver | None:
     issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER")
     if issuer is None:
         return None
@@ -389,7 +391,7 @@ def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:
     return {key: value for key, value in config.items() if value is not None}
 
 
-def _ui_nonce_resolver(values: Mapping[str, str]):
+def _ui_nonce_resolver(values: Mapping[str, str]) -> OidcNonceActorResolver | None:
     issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")
     client_id = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID")
     if issuer is None or client_id is None:

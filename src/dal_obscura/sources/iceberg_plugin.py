@@ -5,9 +5,13 @@ from __future__ import annotations
 import heapq
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Generator, Mapping, Sequence
 from datetime import UTC, datetime
 from itertools import pairwise
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dal_obscura_iceberg_reader import Reader
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
@@ -19,12 +23,13 @@ from dal_obscura_plugin_api import (
     TableHandle,
 )
 from pyiceberg.catalog.noop import NoopCatalog
-from pyiceberg.io import load_file_io
+from pyiceberg.io import FileIO, InputFile, load_file_io
 from pyiceberg.io.pyarrow import ArrowAccessor, ArrowProjectionVisitor, pyarrow_to_schema
 from pyiceberg.manifest import DataFileContent
 from pyiceberg.schema import visit_with_partner
 from pyiceberg.serializers import FromInputFile
 from pyiceberg.table import StaticTable
+from pyiceberg.types import ListType, MapType
 
 from dal_obscura import __version__
 from dal_obscura.policy.schema_bounds import validate_arrow_schema_bounds
@@ -62,7 +67,7 @@ class IcebergFormatPlugin:
         context: ExecutionContext,
         *,
         path_enforcer: PathRuleEnforcer | None = None,
-    ):
+    ) -> None:
         context.check_active()
         if handle.format_plugin_id != "iceberg" or handle.handle_version != 1:
             raise ValueError("Unsupported Iceberg handle")
@@ -74,16 +79,16 @@ class IcebergFormatPlugin:
         self._handle = handle
         self._location = location
         self._enforcer = path_enforcer
-        self._table = None
-        self._files = None
-        self._reader = None
-        self._reader_context = None
+        self._table: StaticTable | None = None
+        self._files: dict[str, tuple[int, tuple[int, ...]]] | None = None
+        self._reader: Reader | None = None
+        self._reader_context: ExecutionContext | None = None
 
-    def _check_path(self, location):
+    def _check_path(self, location: str) -> None:
         if self._enforcer is not None:
             self._enforcer.check(location)
 
-    def _load(self, context):
+    def _load(self, context: ExecutionContext) -> StaticTable:
         if self._table is None:
             context.check_active()
             self._check_path(self._location)
@@ -123,7 +128,7 @@ class IcebergFormatPlugin:
         validate_arrow_schema_bounds(schema)
         return SchemaDescriptor(schema, self._handle.snapshot_id, schema_has_stable_ids(schema))
 
-    def _members(self, context):
+    def _members(self, context: ExecutionContext) -> dict[str, tuple[int, tuple[int, ...]]]:
         if self._files is None:
             table = self._load(context)
             snapshot = table.current_snapshot()
@@ -188,7 +193,9 @@ class IcebergFormatPlugin:
             for group in groups
         ]
 
-    def execute(self, task: ScanTask, context: ExecutionContext):
+    def execute(
+        self, task: ScanTask, context: ExecutionContext
+    ) -> tuple[pa.Schema, Generator[pa.RecordBatch, None, None]]:
         context.check_active()
         payload = task.to_json()
         if (
@@ -201,7 +208,12 @@ class IcebergFormatPlugin:
             or len(payload["ranges"]) != len(payload["files"])
         ):
             raise ValueError("Invalid Iceberg task")
-        schema = _projection(self.schema(context).arrow_schema, payload["columns"])
+        columns: list[str] = []
+        for column in payload["columns"]:
+            if not isinstance(column, str):
+                raise ValueError("Invalid Iceberg projection")
+            columns.append(column)
+        schema = _projection(self.schema(context).arrow_schema, columns)
         members = self._members(context)
         if any(path not in members for path in payload["files"]):
             raise ValueError("Iceberg task is outside its pinned snapshot")
@@ -221,9 +233,12 @@ class IcebergFormatPlugin:
             ranges.sort()
             if any(left[1] > right[0] for left, right in pairwise(ranges)):
                 raise ValueError("Overlapping Iceberg task ranges")
-        return schema, self._batches(payload, schema, context)
+        fragments = [
+            (path, *pair) for path, pair in zip(payload["files"], payload["ranges"], strict=True)
+        ]
+        return schema, self._batches(fragments, schema, context)
 
-    def _native(self, context):
+    def _native(self, context: ExecutionContext) -> Reader:
         if self._reader is None or self._reader_context is not context:
             from dal_obscura_iceberg_reader import Reader
 
@@ -247,11 +262,11 @@ class IcebergFormatPlugin:
             self._reader_context = context
         return self._reader
 
-    def _batches(self, payload, schema, context) -> Iterator[pa.RecordBatch]:
+    def _batches(
+        self, fragments: list[tuple[str, int, int]], schema: pa.Schema, context: ExecutionContext
+    ) -> Generator[pa.RecordBatch, None, None]:
         context.check_active()
-        reader = self._native(context).start(
-            [(path, *pair) for path, pair in zip(payload["files"], payload["ranges"], strict=True)]
-        )
+        reader = self._native(context).start(fragments)
         try:
             while True:
                 context.check_active()
@@ -283,7 +298,7 @@ class IcebergFormatPlugin:
         finally:
             _close_plugin_preserving_error(reader)
 
-    def close(self):
+    def close(self) -> None:
         self._table = None
         self._files = None
         self._reader = None
@@ -297,33 +312,35 @@ class _FileIOBridge:
     closes its stream, including failures. Native Iceberg owns protocol/deletes.
     """
 
-    def __init__(self, io, context, check_path):
+    def __init__(
+        self, io: FileIO, context: ExecutionContext, check_path: Callable[[str], None]
+    ) -> None:
         self._io = io
         self._context = context
         self._check_path = check_path
 
-    def _input(self, path):
+    def _input(self, path: str) -> InputFile:
         self._context.check_active()
         self._check_path(path)
         return self._io.new_input(path)
 
-    def exists(self, path):
+    def exists(self, path: str) -> bool:
         value = self._input(path).exists()
         self._context.check_active()
         return value
 
-    def size(self, path):
+    def size(self, path: str) -> int:
         value = len(self._input(path))
         self._context.check_active()
         return value
 
-    def read(self, path):
+    def read(self, path: str) -> bytes:
         with self._input(path).open() as stream:
             value = stream.read()
         self._context.check_active()
         return value
 
-    def read_range(self, path, start, length):
+    def read_range(self, path: str, start: int, length: int) -> bytes:
         with self._input(path).open() as stream:
             stream.seek(start)
             value = stream.read(length)
@@ -339,18 +356,26 @@ class _NullableProjectionVisitor(ArrowProjectionVisitor):
     This bridges Arrow representation only; native Iceberg owns deletes.
     """
 
-    def list(self, list_type, list_array, value_array):
+    def list(
+        self, list_type: ListType, list_array: pa.Array | None, value_array: pa.Array | None
+    ) -> pa.Array | None:
         result = super().list(list_type, list_array, value_array)
-        if result is None or list_array.null_count == 0:
+        if result is None or list_array is None or list_array.null_count == 0:
             return result
         constructor = pa.LargeListArray if isinstance(result, pa.LargeListArray) else pa.ListArray
         return constructor.from_arrays(
             result.offsets, result.values, type=result.type, mask=list_array.is_null()
         )
 
-    def map(self, map_type, map_array, key_result, value_result):
+    def map(
+        self,
+        map_type: MapType,
+        map_array: pa.Array | None,
+        key_result: pa.Array | None,
+        value_result: pa.Array | None,
+    ) -> pa.Array | None:
         result = super().map(map_type, map_array, key_result, value_result)
-        if result is None or map_array.null_count == 0:
+        if result is None or map_array is None or map_array.null_count == 0:
             return result
         return pa.MapArray.from_arrays(
             result.offsets,
@@ -361,7 +386,7 @@ class _NullableProjectionVisitor(ArrowProjectionVisitor):
         )
 
 
-def _projection(schema, columns):
+def _projection(schema: pa.Schema, columns: Sequence[str]) -> pa.Schema:
     if any(not isinstance(name, str) or name not in schema.names for name in columns) or len(
         set(columns)
     ) != len(columns):
@@ -369,12 +394,14 @@ def _projection(schema, columns):
     return pa.schema([schema.field(name) for name in columns], metadata=schema.metadata)
 
 
-def _remaining(context):
+def _remaining(context: ExecutionContext) -> float:
     context.check_active()
     return (context.deadline - datetime.now(UTC)).total_seconds()
 
 
-def _split_work(files, budget):
+def _split_work(
+    files: Mapping[str, tuple[int, tuple[int, ...]]], budget: int
+) -> list[tuple[str, int, int]]:
     units = [(path, 0, size) for path, (size, _) in files.items()]
     while len(units) < budget:
         candidates = []
@@ -394,7 +421,7 @@ def _split_work(files, budget):
     return units
 
 
-def _storage_options():
+def _storage_options() -> dict[str, str]:
     # Operator-owned FileIO configuration, never passive table/ticket metadata.
     options = json.loads(os.environ.get("DAL_OBSCURA_ICEBERG_IO_PROPERTIES", "{}"))
     if not isinstance(options, dict) or any(

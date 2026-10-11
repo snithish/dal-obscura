@@ -20,6 +20,7 @@ from dal_obscura.control.schema_service import (
 )
 from dal_obscura.policy.schema_identity import numeric_field_id, schema_scope_digest
 from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
+from dal_obscura.sources.plugins import PluginRegistry
 from dal_obscura.sources.secrets import EnvSecretProvider
 from tests.support.schema_catalog import schema_registry
 
@@ -275,7 +276,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             if format_close_fails:
                 raise RuntimeError("format close failed")
 
-    class Registry:
+    class Registry(PluginRegistry):
         def admitted(self):
             return {("catalog", "fixture.catalog"): PublicCatalog.descriptor}
 
@@ -379,7 +380,7 @@ def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factor
     )
     loaded = False
 
-    class Registry:
+    class Registry(PluginRegistry):
         def admitted(self):
             return {("catalog", "fixture.catalog"): descriptor}
 

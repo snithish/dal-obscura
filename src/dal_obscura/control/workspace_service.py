@@ -17,9 +17,10 @@ from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.storage import assets as _db_assets
 from dal_obscura.storage import audit as _db_audit
 from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.storage.database.orm import WorkspaceRecord
 
 
-def required_workspace(store: Session):
+def required_workspace(store: Session) -> WorkspaceRecord:
     """Returns the default workspace context or raises when none exists."""
 
     context = _db_workspace.get_workspace(store)

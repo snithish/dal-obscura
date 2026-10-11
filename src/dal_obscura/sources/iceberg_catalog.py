@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from time import monotonic
-from typing import Any
 
 from dal_obscura_plugin_api import (
     CatalogConfig,
@@ -14,6 +13,7 @@ from dal_obscura_plugin_api import (
     TableHandle,
     TableIdentifier,
 )
+from pyiceberg.catalog import Catalog
 
 from dal_obscura import __version__
 from dal_obscura.sources.discovery import (
@@ -70,14 +70,13 @@ class IcebergCatalog:
 
     def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
         self.config = config
-        self._closed = False
         self._listing_context: ExecutionContext | None = None
         self._listing: tuple[str, ...] = ()
         context.check_active()
         if config.plugin_id != self.descriptor.plugin_id:
             raise ValueError("Iceberg catalog received an incompatible plugin ID")
         options = dict(config.options)
-        self._catalog = _load_iceberg_catalog(
+        self._catalog: Catalog | None = _load_iceberg_catalog(
             _provider_catalog_name(config.instance_id, options), _catalog_options(options)
         )
         try:
@@ -86,9 +85,9 @@ class IcebergCatalog:
             _close_plugin_preserving_error(self)
             raise
 
-    def _provider(self, context: ExecutionContext):
+    def _provider(self, context: ExecutionContext) -> Catalog:
         context.check_active()
-        if self._closed:
+        if self._catalog is None:
             raise ValueError("Iceberg catalog is closed")
         return self._catalog
 
@@ -98,7 +97,7 @@ class IcebergCatalog:
         location = table.metadata_location
         if not isinstance(location, str) or not location.strip():
             raise ValueError("Iceberg catalog returned no metadata location")
-        snapshot = getattr(getattr(table, "metadata", None), "current_snapshot_id", None)
+        snapshot = table.metadata.current_snapshot_id
         return TableHandle(
             catalog_plugin_id=self.descriptor.plugin_id,
             catalog_instance_id=self.config.instance_id,
@@ -110,7 +109,9 @@ class IcebergCatalog:
             metadata={"metadata_location": location},
         )
 
-    def list_namespaces(self, context: ExecutionContext, *, namespace=()):
+    def list_namespaces(
+        self, context: ExecutionContext, *, namespace: tuple[str, ...] = ()
+    ) -> tuple[tuple[str, ...], ...]:
         provider = self._provider(context)
         values = provider.list_namespaces(namespace)
         return tuple(
@@ -125,7 +126,7 @@ class IcebergCatalog:
         )
 
     def list_tables(
-        self, context: ExecutionContext, *, continuation=None, limit=500
+        self, context: ExecutionContext, *, continuation: str | None = None, limit: int = 500
     ) -> DiscoveryPage:
         provider = self._provider(context)
         if not 1 <= limit <= 500:
@@ -162,9 +163,8 @@ class IcebergCatalog:
         )
 
     def close(self) -> None:
-        if self._closed:
+        if self._catalog is None:
             return
-        self._closed = True
         self._listing_context = None
         self._listing = ()
         catalog, self._catalog = self._catalog, None
@@ -177,20 +177,25 @@ def _deadline_at(context: ExecutionContext) -> float:
     return monotonic() + (context.deadline - datetime.now(UTC)).total_seconds()
 
 
-def _provider_catalog_name(logical_name: str, options: dict[str, Any]) -> str:
+def _provider_catalog_name(logical_name: str, options: dict[str, object]) -> str:
     if "catalog_name" in options:
         raise ValueError("Unsupported catalog option: catalog_name")
     provider_name = options.get("provider_catalog_name")
     return str(provider_name) if provider_name else logical_name
 
 
-def _catalog_options(options: dict[str, Any]) -> dict[str, Any]:
-    cleaned = dict(options)
-    cleaned.pop("provider_catalog_name", None)
-    return cleaned
+def _catalog_options(options: dict[str, object]) -> dict[str, str]:
+    properties: dict[str, str] = {}
+    for key, value in options.items():
+        if key == "provider_catalog_name":
+            continue
+        if not isinstance(value, str):
+            raise ValueError("Iceberg provider properties must be strings")
+        properties[key] = value
+    return properties
 
 
-def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) -> Any:
+def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, str]) -> Catalog:
     from pyiceberg.catalog import CatalogType, load_catalog
 
     try:

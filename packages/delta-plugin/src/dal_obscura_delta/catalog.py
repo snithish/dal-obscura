@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from types import TracebackType
+from typing import Self, cast
 from urllib.parse import urlsplit
 
 from dal_obscura_plugin_api import (
@@ -59,7 +60,7 @@ LOCATION_DESCRIPTOR = PluginDescriptor(
 class DeltaDirectoryCatalog:
     descriptor = CATALOG_DESCRIPTOR
 
-    def __init__(self, config: CatalogConfig, context: ExecutionContext):
+    def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
         context.check_active()
         if config.plugin_id != self.descriptor.plugin_id or set(config.options) != {
             "root",
@@ -79,8 +80,16 @@ class DeltaDirectoryCatalog:
         for entry in entries:
             if not isinstance(entry, Mapping) or set(entry) != {"namespace", "name", "path"}:
                 raise ValueError("Invalid Delta table entry")
-            entry = cast(Mapping[str, Any], entry)
-            identifier = TableIdentifier(entry["namespace"], entry["name"])
+            entry = cast(Mapping[str, object], entry)
+            namespace, name = entry["namespace"], entry["name"]
+            if not isinstance(namespace, (list, tuple)) or not isinstance(name, str):
+                raise ValueError("Invalid Delta table identifier")
+            parts: list[str] = []
+            for part in namespace:
+                if not isinstance(part, str):
+                    raise ValueError("Invalid Delta table namespace")
+                parts.append(part)
+            identifier = TableIdentifier(tuple(parts), name)
             path = entry["path"]
             if not isinstance(path, str) or Path(path).is_absolute() or "://" in path:
                 raise ValueError("Delta table path must be relative to root")
@@ -91,7 +100,9 @@ class DeltaDirectoryCatalog:
         self._identifiers = tuple(sorted(tables, key=lambda i: (*i.namespace, i.name)))
         self._config = config
 
-    def list_namespaces(self, context: ExecutionContext, namespace=()):
+    def list_namespaces(
+        self, context: ExecutionContext, *, namespace: tuple[str, ...] = ()
+    ) -> tuple[tuple[str, ...], ...]:
         context.check_active()
         prefix = tuple(namespace)
         return tuple(
@@ -104,7 +115,9 @@ class DeltaDirectoryCatalog:
             )
         )
 
-    def list_tables(self, context: ExecutionContext, *, continuation=None, limit=100):
+    def list_tables(
+        self, context: ExecutionContext, *, continuation: str | None = None, limit: int = 100
+    ) -> DiscoveryPage:
         context.check_active()
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Delta discovery page size must be between 1 and 500")
@@ -142,16 +155,21 @@ class DeltaDirectoryCatalog:
             {"location": str(path), "version": version, "table_id": table_id},
         )
 
-    def _location(self, identifier, context):
+    def _location(self, identifier: TableIdentifier, context: ExecutionContext) -> str:
         return self._storage.location(self._tables[identifier])
 
-    def close(self):
+    def close(self) -> None:
         pass
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
 
@@ -170,7 +188,7 @@ class DeltaLocationCatalog(DeltaDirectoryCatalog):
 
     descriptor = LOCATION_DESCRIPTOR
 
-    def __init__(self, config: CatalogConfig, context: ExecutionContext):
+    def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
         context.check_active()
         if config.plugin_id != self.descriptor.plugin_id or set(config.options) != {"tables"}:
             raise ValueError("Delta location catalog requires tables")
@@ -181,8 +199,16 @@ class DeltaLocationCatalog(DeltaDirectoryCatalog):
         for entry in entries:
             if not isinstance(entry, Mapping) or set(entry) != {"namespace", "name", "location"}:
                 raise ValueError("Invalid Delta catalog entry")
-            entry = cast(Mapping[str, Any], entry)
-            identifier = TableIdentifier(entry["namespace"], entry["name"])
+            entry = cast(Mapping[str, object], entry)
+            namespace, name = entry["namespace"], entry["name"]
+            if not isinstance(namespace, (list, tuple)) or not isinstance(name, str):
+                raise ValueError("Invalid Delta table identifier")
+            parts: list[str] = []
+            for part in namespace:
+                if not isinstance(part, str):
+                    raise ValueError("Invalid Delta table namespace")
+                parts.append(part)
+            identifier = TableIdentifier(tuple(parts), name)
             location = entry["location"]
             if not isinstance(location, str) or not location or len(location) > 4096:
                 raise ValueError("Invalid Delta table location")
@@ -201,7 +227,7 @@ class DeltaLocationCatalog(DeltaDirectoryCatalog):
         self._identifiers = tuple(sorted(tables, key=lambda i: (*i.namespace, i.name)))
         self._config = config
 
-    def _location(self, identifier, context):
+    def _location(self, identifier: TableIdentifier, context: ExecutionContext) -> str:
         location = self._tables[identifier]
         if location.startswith("uc://"):
             context.check_active()
@@ -211,5 +237,7 @@ class DeltaLocationCatalog(DeltaDirectoryCatalog):
         return DeltaStorage(location).uri
 
 
-def delta_location_catalog_factory(config: CatalogConfig, context: ExecutionContext):
+def delta_location_catalog_factory(
+    config: CatalogConfig, context: ExecutionContext
+) -> DeltaLocationCatalog:
     return DeltaLocationCatalog(config, context)

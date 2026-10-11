@@ -5,9 +5,18 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime, timedelta
 from threading import BoundedSemaphore
 from time import monotonic
-from typing import Any, cast
+from typing import cast
 
-from dal_obscura_plugin_api import CatalogFactory, DiscoveryPage, TableIdentifier
+from dal_obscura_plugin_api import (
+    CatalogConfig,
+    CatalogPlugin,
+    DiscoveryPage,
+    ExecutionContext,
+    TableIdentifier,
+)
+from pyiceberg.catalog import Catalog
+
+from dal_obscura.sources.plugins import PluginRegistry
 
 ICEBERG_CATALOG_ID = "iceberg.catalog"
 
@@ -24,10 +33,10 @@ _DISCOVERY_SLOTS = BoundedSemaphore(DEFAULT_MAX_ACTIVE_DISCOVERIES)
 def discover_public_catalog_tables(
     catalog_name: str,
     plugin_id: str,
-    options: dict[str, Any],
+    options: dict[str, object],
     *,
     revision: int = 0,
-    plugin_registry: Any,
+    plugin_registry: PluginRegistry | None,
 ) -> list[CatalogTable]:
     """Discover tables through one admitted public catalog plugin."""
 
@@ -37,18 +46,14 @@ def discover_public_catalog_tables(
         plugin_registry = create_builtin_plugin_registry()
     if not _DISCOVERY_SLOTS.acquire(blocking=False):
         raise RuntimeError("Catalog discovery capacity is exhausted; retry later")
-    plugin: Any | None = None
+    plugin: CatalogPlugin | None = None
     try:
         factory = plugin_registry.load("catalog", plugin_id)
-        if not callable(factory):
-            raise ValueError("Admitted catalog factory is invalid")
-        from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
-
         context = ExecutionContext(
             deadline=datetime.now(UTC) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
             correlation_id=f"catalog-discovery-{catalog_name}",
         )
-        plugin = cast(CatalogFactory, factory)(
+        plugin = factory(
             CatalogConfig(
                 plugin_id=plugin_id,
                 instance_id=catalog_name,
@@ -90,17 +95,17 @@ def discover_public_catalog_tables(
             continuation = token
         raise ValueError("Catalog discovery exceeded the page limit")
     finally:
-        close = getattr(plugin, "close", None)
+        from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
+
         try:
-            if callable(close):
-                close()
+            _close_plugin_preserving_error(plugin)
         finally:
             _DISCOVERY_SLOTS.release()
 
 
 def _validate_public_catalog_lifecycle(
-    plugin: Any,
-    context: Any,
+    plugin: CatalogPlugin,
+    context: ExecutionContext,
     deadline_at: float,
 ) -> None:
     required = ("list_namespaces", "list_tables", "close")
@@ -133,7 +138,7 @@ def _public_page_entries(page: object) -> tuple[TableIdentifier, ...]:
 
 
 def _walk_namespaces(
-    catalog: Any,
+    catalog: Catalog,
     *,
     max_namespaces: int = DEFAULT_MAX_NAMESPACES,
     deadline_at: float | None = None,
@@ -162,7 +167,7 @@ def _walk_namespaces(
     return namespaces
 
 
-def _list_tables(catalog: Any, namespace: Namespace) -> Iterable[object]:
+def _list_tables(catalog: Catalog, namespace: Namespace) -> Iterable[object]:
     try:
         return catalog.list_tables(namespace)
     except ValueError as exc:

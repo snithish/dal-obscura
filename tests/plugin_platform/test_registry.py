@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any, Protocol, cast
 
 import pytest
-from dal_obscura_plugin_api import PluginDescriptor
+from dal_obscura_plugin_api import PluginDescriptor, PluginKind
 
 from dal_obscura.sources.plugins import (
     PluginAdmissionError,
@@ -39,7 +39,9 @@ def test_plugin_discovery_requires_selectable_entry_points() -> None:
 
 
 def _entry(name: str, group: str, distribution: str = "plugin-wheel", version: str = "1.2.3"):
-    loaded = {"name": name}
+    def loaded(config, context):
+        return {"name": name}
+
     kind = "catalog" if group.endswith("catalogs.v2") else "table_format"
     descriptor_json = json.dumps(
         {
@@ -128,7 +130,7 @@ def test_admitted_entry_point_loads_only_after_lock_match() -> None:
     with pytest.raises(PluginAdmissionError, match="not admitted"):
         registry.load("catalog", "iceberg.catalog")
     registry.reload()
-    assert registry.load("catalog", "iceberg.catalog") == {"name": "iceberg.catalog"}
+    assert registry.load("catalog", "iceberg.catalog") is entry.load()
 
 
 def test_unapproved_entry_point_cannot_be_loaded_on_request() -> None:
@@ -222,7 +224,7 @@ def test_load_uses_entry_point_captured_by_admitted_generation() -> None:
     cast(Any, replacement).load = lambda: {"name": "replacement"}
     entries[:] = [replacement]
 
-    assert registry.load("catalog", "iceberg.catalog") == {"name": "iceberg.catalog"}
+    assert registry.load("catalog", "iceberg.catalog") is first.load()
 
 
 def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
@@ -234,15 +236,19 @@ def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
         distribution="dal-obscura",
         version="0.1.0",
     )
+
+    def builtin(config, context):
+        return {"builtin": True}
+
     registry = PluginRegistry(
         entry_points_fn=lambda: _EntryPoints([]),
-        builtins={("catalog", "iceberg.catalog"): (descriptor, {"builtin": True})},
+        builtins={("catalog", "iceberg.catalog"): (descriptor, builtin)},
     )
 
     admitted = registry.reload()
 
     assert admitted[("catalog", "iceberg.catalog")] == descriptor
-    assert registry.load("catalog", "iceberg.catalog") == {"builtin": True}
+    assert registry.load("catalog", "iceberg.catalog") is builtin
 
 
 def test_builtin_registration_wins_over_same_installed_entry_point() -> None:
@@ -255,15 +261,19 @@ def test_builtin_registration_wins_over_same_installed_entry_point() -> None:
         version="0.1.0",
     )
     installed = _entry("manifest", "dal_obscura.catalogs.v2")
+
+    def builtin(config, context):
+        return {"builtin": True}
+
     registry = PluginRegistry(
         entry_points_fn=lambda: _EntryPoints([installed]),
-        builtins={("catalog", "manifest"): (descriptor, {"builtin": True})},
+        builtins={("catalog", "manifest"): (descriptor, builtin)},
     )
 
     admitted = registry.reload()
 
     assert admitted[("catalog", "manifest")] == descriptor
-    assert registry.load("catalog", "manifest") == {"builtin": True}
+    assert registry.load("catalog", "manifest") is builtin
 
 
 def test_status_report_distinguishes_enabled_missing_and_incompatible_without_import() -> None:
@@ -669,3 +679,18 @@ def test_static_descriptor_loader_rejects_unreadable_metadata() -> None:
 
     with pytest.raises(PluginAdmissionError, match="unreadable"):
         load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))
+
+
+@pytest.mark.parametrize("kind", ["catalog", "table_format"])
+def test_registry_rejects_non_callable_admitted_factory(kind: PluginKind) -> None:
+    group = "dal_obscura.catalogs.v2" if kind == "catalog" else "dal_obscura.table_formats.v2"
+    entry = _entry("invalid", group)
+    registry = PluginRegistry(
+        allowlist={(kind, "invalid"): _lock("invalid", group=group)},
+        entry_points_fn=lambda: _EntryPoints([entry]),
+        factory_loader=lambda entry: object(),
+    )
+    registry.reload()
+
+    with pytest.raises(PluginAdmissionError, match="not callable"):
+        registry.load(kind, "invalid")

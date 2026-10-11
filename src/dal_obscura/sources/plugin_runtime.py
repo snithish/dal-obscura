@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import cast
 from uuid import uuid4
 
 import pyarrow as pa
@@ -233,10 +233,10 @@ class PublicPluginCatalogAdapter:
     def __init__(
         self,
         name: str,
-        options: dict[str, Any],
+        options: Mapping[str, object],
         catalog_plugin_id: str,
         catalog_factory: CatalogFactory,
-        format_factory_loader: Callable[[str], object],
+        format_factory_loader: Callable[[str], TableFormatFactory],
         path_enforcer: PathRuleEnforcer | None = None,
         revision: int = 0,
     ) -> None:
@@ -279,7 +279,7 @@ class PublicPluginCatalogAdapter:
     def name(self) -> str:
         return self._name
 
-    def resolve_table(self, target: str) -> Source:
+    def resolve_table(self, target: str) -> PublicPluginTableFormat:
         self._ensure_open()
         identifier = _table_identifier(target)
         context = _context()
@@ -304,10 +304,7 @@ class PublicPluginCatalogAdapter:
             for location in _nested_strings(dict(handle.metadata)):
                 if "://" in location or location.startswith("/"):
                     self._path_enforcer.check(location)
-        raw_factory = self._format_factory_loader(handle.format_plugin_id)
-        if not callable(raw_factory):
-            raise ValueError("Public format factory is not callable")
-        format_factory = cast(TableFormatFactory, raw_factory)
+        format_factory = self._format_factory_loader(handle.format_plugin_id)
         return PublicPluginTableFormat(
             catalog_name=self._name,
             table_name=target,
@@ -477,7 +474,7 @@ def _checked_plugin_batches(
     return checked()
 
 
-def _nested_strings(value: object):
+def _nested_strings(value: object) -> Iterator[str]:
     if isinstance(value, Mapping):
         for item in value.values():
             yield from _nested_strings(item)

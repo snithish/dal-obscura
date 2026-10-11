@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
-from typing import Any, cast
+from typing import cast
 from uuid import UUID
 
 import pyarrow as pa
@@ -25,6 +25,7 @@ from dal_obscura.policy.schema_index import SchemaIndex
 from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.sources.plugins import PluginRegistry
 from dal_obscura.sources.secrets import SecretProvider
 from dal_obscura.storage import assets as _db_assets
 
@@ -44,7 +45,7 @@ def evaluate_asset_policy(
     rows: list[dict[str, object]] | None,
     provider_ordinal: int | None = None,
     egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: Any | None = None,
+    plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
     """Evaluates the current live policy over bounded synthetic rows."""

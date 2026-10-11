@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import Protocol, cast
+from typing import Protocol
 
 import pyarrow as pa
 from dal_obscura_plugin_api import ScanTask as PluginScanTask
-from dal_obscura_plugin_api import TableFormatFactory, TableHandle
+from dal_obscura_plugin_api import TableHandle
 
 from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ENCODING_BYTES, validate_arrow_schema_bounds
 from dal_obscura.sources.catalogs import _load_format_factory
@@ -78,7 +78,7 @@ class SourceTaskCodec:
                 table_name=".".join((*handle.identifier.namespace, handle.identifier.name)),
                 format=handle.format_plugin_id,
                 handle=handle,
-                format_factory=cast(TableFormatFactory, factory),
+                format_factory=factory,
                 path_roots=tuple(roots),
             )
             partition = PublicPluginPartition(

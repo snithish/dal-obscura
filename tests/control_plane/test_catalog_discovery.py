@@ -8,6 +8,7 @@ import dal_obscura.sources.discovery as discovery
 from dal_obscura.sources.discovery import (
     discover_public_catalog_tables,
 )
+from dal_obscura.sources.plugins import PluginRegistry
 from tests.support.discovery import _unchecked_discovery_page, discover_iceberg_tables
 
 
@@ -153,7 +154,7 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
         def close(self):
             closed.append(True)
 
-    class Registry:
+    class Registry(PluginRegistry):
         def load(self, kind, plugin_id):
             assert (kind, plugin_id) == ("catalog", "fixture.catalog")
 
@@ -197,7 +198,7 @@ def test_public_catalog_discovery_releases_capacity_when_close_fails() -> None:
         def close(self):
             return None
 
-    class Registry:
+    class Registry(PluginRegistry):
         def __init__(self) -> None:
             self.calls = 0
 
@@ -233,7 +234,7 @@ def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
         def close(self):
             return None
 
-    class Registry:
+    class Registry(PluginRegistry):
         def load(self, kind, plugin_id):
             del kind, plugin_id
             return lambda config, context: IncompleteCatalog()
@@ -258,7 +259,9 @@ def test_public_catalog_discovery_rejects_when_process_capacity_is_exhausted(
     monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", OccupiedSlots())
 
     with pytest.raises(RuntimeError, match="capacity is exhausted"):
-        discover_public_catalog_tables("analytics", "fixture.catalog", {}, plugin_registry=object())
+        discover_public_catalog_tables(
+            "analytics", "fixture.catalog", {}, plugin_registry=PluginRegistry()
+        )
 
 
 def test_public_catalog_discovery_releases_capacity_after_factory_failure(
@@ -279,7 +282,7 @@ def test_public_catalog_discovery_releases_capacity_after_factory_failure(
     slots = Slots()
     monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", slots)
 
-    class Registry:
+    class Registry(PluginRegistry):
         def load(self, kind, plugin_id):
             del kind, plugin_id
             raise RuntimeError("factory lookup failed")
@@ -309,7 +312,7 @@ def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
         def close(self):
             return None
 
-    class Registry:
+    class Registry(PluginRegistry):
         def load(self, kind, plugin_id):
             del kind, plugin_id
             return lambda config, context: PublicCatalog()
@@ -334,7 +337,7 @@ def test_public_catalog_discovery_rejects_oversized_page() -> None:
         def close(self):
             return None
 
-    class Registry:
+    class Registry(PluginRegistry):
         def load(self, kind, plugin_id):
             del kind, plugin_id
             return lambda config, context: PublicCatalog()
@@ -442,3 +445,22 @@ def test_workspace_discovery_limits_each_authenticated_session(
         first.__exit__(None, None, None)
     with catalog_service._admit_session_discovery("issuer|operator"):
         pass
+
+
+def test_public_discovery_preserves_failure_when_provider_close_also_fails() -> None:
+    class Catalog:
+        def list_namespaces(self, context, *, namespace=()):
+            return ()
+
+        def list_tables(self, context, *, continuation=None, limit):
+            raise ValueError("listing failed")
+
+        def close(self):
+            raise RuntimeError("cleanup failed")
+
+    class Registry(PluginRegistry):
+        def load(self, kind, plugin_id):
+            return lambda config, context: Catalog()
+
+    with pytest.raises(ValueError, match="listing failed"):
+        discover_public_catalog_tables("example", "fixture.catalog", {}, plugin_registry=Registry())

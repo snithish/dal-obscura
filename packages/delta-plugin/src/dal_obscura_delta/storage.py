@@ -16,7 +16,7 @@ from deltalake.fs import DeltaStorageHandler
 
 
 class DeltaStorage:
-    def __init__(self, uri: str):
+    def __init__(self, uri: str) -> None:
         parsed = urlsplit(uri)
         if not uri or len(uri) > 4096 or parsed.query or parsed.fragment or parsed.password:
             raise ValueError("Invalid Delta storage root")
@@ -34,7 +34,7 @@ class DeltaStorage:
             self.uri = str(path.resolve(strict=True))
         self.filesystem = fs.PyFileSystem(DeltaStorageHandler(self.uri, storage_options()))
 
-    def member(self, value: str, *, encoded=False, exists=True) -> str:
+    def member(self, value: str, *, encoded: bool = False, exists: bool = True) -> str:
         if not isinstance(value, str) or not value or len(value) > 4096:
             raise ValueError("Invalid Delta storage member")
         parsed = urlsplit(value)
@@ -59,13 +59,9 @@ class DeltaStorage:
         return member
 
     def location(self, member: str) -> str:
-        return self.uri + (
-            "/" + quote(member, safe="/")
-            if self.remote and member
-            else "/" + member
-            if member
-            else ""
-        )
+        if not member:
+            return self.uri
+        return self.uri + "/" + (quote(member, safe="/") if self.remote else member)
 
     def read(self, member: str, *, limit: int) -> bytes:
         with self.filesystem.open_input_stream(member) as stream:
@@ -75,12 +71,12 @@ class DeltaStorage:
         return value
 
 
-def _local(path: Path):
+def _local(path: Path) -> None:
     if any(item.is_symlink() for item in (path, *path.parents)):
         raise ValueError("Delta storage path contains a symlink")
 
 
-def _segments(value: str):
+def _segments(value: str) -> None:
     if "\\" in value or "//" in value or any(part in {".", ".."} for part in value.split("/")):
         raise ValueError("Delta member escapes its admitted root")
 

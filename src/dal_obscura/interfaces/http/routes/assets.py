@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from dal_obscura.control import asset_service, policy_service, schema_service
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.errors import AuthorizationFailure
+from dal_obscura.control.runtime import ControlContext
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AssetAccessResponse,
@@ -195,7 +196,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
 
 def _authorized_asset_grants(
-    service,
+    service: ControlContext,
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> object:
@@ -204,7 +205,7 @@ def _authorized_asset_grants(
 
 
 def _replace_authorized_asset_grants(
-    service,
+    service: ControlContext,
     asset_id: UUID,
     request: AssetGrantsRequest,
     actor: ControlPlaneActor,
@@ -241,12 +242,14 @@ def _replace_authorized_asset_grants(
     }
 
 
-def _ensure_grant_manager(service, asset_id: UUID, actor: ControlPlaneActor) -> None:
+def _ensure_grant_manager(
+    service: ControlContext, asset_id: UUID, actor: ControlPlaneActor
+) -> None:
     policy_service.ensure_asset_capability(service.session, asset_id, actor, "grant")
 
 
 def _reject_self_escalation(
-    service,
+    service: ControlContext,
     asset_id: UUID,
     actor: ControlPlaneActor,
     grants: list[dict[str, str]],

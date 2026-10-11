@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
 import pytest
@@ -257,6 +258,7 @@ def test_catalog_config_rejects_module_config():
 
 
 class FakePyIcebergTable:
+    metadata = SimpleNamespace(current_snapshot_id=None)
     metadata_location = "s3://warehouse/default/users/metadata.json"
 
     class io:
@@ -371,6 +373,7 @@ def test_catalog_registry_construction_preserves_build_failure_when_cleanup_fail
 
 def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roots(monkeypatch):
     class UnsafeTable:
+        metadata = SimpleNamespace(current_snapshot_id=None)
         metadata_location = "s3://other-bucket/metadata.json"
 
         class io:
@@ -394,6 +397,7 @@ def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roo
 
 def test_catalog_handle_never_copies_provider_credentials_or_redirect_properties(monkeypatch):
     class Table:
+        metadata = SimpleNamespace(current_snapshot_id=None)
         metadata_location = "s3://analytics-demo/warehouse/metadata.json"
 
         class io:

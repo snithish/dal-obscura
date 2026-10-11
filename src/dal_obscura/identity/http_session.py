@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Mapping
-from typing import cast
+from http.client import HTTPMessage, HTTPResponse
+from typing import IO, cast
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, build_opener
@@ -205,11 +206,13 @@ def _token_endpoint(config: Mapping[str, object]) -> str:
 class _RejectRedirects(HTTPRedirectHandler):
     """Keep an operator-configured token endpoint on its exact origin."""
 
-    def redirect_request(self, request, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+    def redirect_request(
+        self, req: UrlRequest, fp: IO[bytes], code: int, msg: str, headers: HTTPMessage, newurl: str
+    ) -> None:
         return None
 
 
-def _open_token_endpoint(request: UrlRequest):
+def _open_token_endpoint(request: UrlRequest) -> HTTPResponse:
     """Open a token request without following a cross-origin redirect."""
 
     return build_opener(_RejectRedirects()).open(request, timeout=10)

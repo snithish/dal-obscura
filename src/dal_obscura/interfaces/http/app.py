@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import cast
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.exceptions import HTTPException
+from starlette.types import Message
 
 from dal_obscura import __version__
 from dal_obscura.control.context import (
@@ -187,7 +188,7 @@ def create_app(  # noqa: C901
     )
 
     @app.exception_handler(HTTPException)
-    async def structured_http_error(request: Request, exc: HTTPException):
+    async def structured_http_error(request: Request, exc: HTTPException) -> JSONResponse:
         """Return one safe, correlated error shape for every API failure."""
 
         del request
@@ -221,7 +222,9 @@ def create_app(  # noqa: C901
         )
 
     @app.exception_handler(RequestValidationError)
-    async def structured_request_validation_error(request: Request, exc: RequestValidationError):
+    async def structured_request_validation_error(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         """Keep framework-level query/path validation on the public error contract."""
 
         del request
@@ -249,7 +252,9 @@ def create_app(  # noqa: C901
         )
 
     @app.middleware("http")
-    async def security_headers(request, call_next):
+    async def security_headers(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
         if request.url.path.startswith(("/v1/", "/auth/")):
             response.headers["cache-control"] = "no-store"
@@ -285,7 +290,9 @@ def create_app(  # noqa: C901
             )
         return response
 
-    async def request_correlation(request: Request, call_next):
+    async def request_correlation(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         supplied = request.headers.get("x-request-id", "").strip()
         request_id = supplied if _REQUEST_ID.fullmatch(supplied) else uuid4().hex
         token = set_request_id(request_id)
@@ -297,7 +304,9 @@ def create_app(  # noqa: C901
             reset_request_id(token)
 
     @app.middleware("http")
-    async def request_size_limit(request: Request, call_next):
+    async def request_size_limit(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         raw_length = request.headers.get("content-length")
         if raw_length:
             try:
@@ -309,7 +318,7 @@ def create_app(  # noqa: C901
         received = 0
         original_receive = request.receive
 
-        async def limited_receive():
+        async def limited_receive() -> Message:
             nonlocal received
             message = await original_receive()
             if message.get("type") == "http.request":

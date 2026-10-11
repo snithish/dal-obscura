@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import math
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from math import isfinite
@@ -30,6 +30,7 @@ from dal_obscura.storage import assets as _db_assets
 from dal_obscura.storage import audit as _db_audit
 from dal_obscura.storage import catalogs as _db_catalogs
 from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.storage.database.orm import WorkspaceRecord
 
 _MAX_OPTION_DEPTH = 16
 _MAX_OPTION_NODES = 1_024
@@ -50,7 +51,7 @@ _SESSION_DISCOVERY_LOCK = Lock()
 
 
 @contextmanager
-def _admit_session_discovery(session_key: str | None):
+def _admit_session_discovery(session_key: str | None) -> Iterator[None]:
     """Admit at most two concurrent discoveries for one authenticated session."""
 
     if not session_key:
@@ -253,7 +254,7 @@ def validate_admitted_catalog_options(
     validate_descriptor_options(descriptor, options)
 
 
-def _required_workspace(store: Session):
+def _required_workspace(store: Session) -> WorkspaceRecord:
     context = _db_workspace.get_workspace(store)
     if context is None:
         raise LookupError("No workspace has been configured")
@@ -444,7 +445,7 @@ def _validate_descriptor_value(  # noqa: C901
         raise ValidationFailure(f"{kind} option {name!r} has an unsupported field type")
 
 
-def _walk_strings(value: object, prefix: str = "options"):
+def _walk_strings(value: object, prefix: str = "options") -> Iterator[tuple[str, str]]:
     if isinstance(value, dict):
         for key, item in value.items():
             yield from _walk_strings(item, f"{prefix}.{key}")

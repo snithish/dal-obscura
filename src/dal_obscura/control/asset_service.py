@@ -17,6 +17,7 @@ from dal_obscura.storage import assets as _db_assets
 from dal_obscura.storage import audit as _db_audit
 from dal_obscura.storage import catalogs as _db_catalogs
 from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.storage.database.orm import WorkspaceRecord
 
 _ASSET_CAPABILITIES = ("read", "edit", "grant")
 
@@ -252,7 +253,7 @@ def replace_asset_schema_fields(
         raise ValidationFailure(str(exc)) from exc
 
 
-def _required_workspace(store: Session):
+def _required_workspace(store: Session) -> WorkspaceRecord:
     context = _db_workspace.get_workspace(store)
     if context is None:
         raise LookupError("No workspace has been configured")

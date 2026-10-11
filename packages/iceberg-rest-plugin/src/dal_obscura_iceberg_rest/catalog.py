@@ -17,6 +17,8 @@ from dal_obscura_plugin_api import (
     TableHandle,
     TableIdentifier,
 )
+from pyiceberg.catalog.rest import RestCatalog as PyIcebergRestCatalog
+from requests import Session
 
 MAX_TABLES = 10_000
 MAX_NAMESPACES = 10_000
@@ -222,7 +224,7 @@ class RestCatalog(CatalogPlugin):
             if first_error is not None:
                 raise first_error
 
-    def _load_catalog(self, context: ExecutionContext):
+    def _load_catalog(self, context: ExecutionContext) -> PyIcebergRestCatalog:
         context.check_active()
         if self._closed:
             raise ValueError("REST catalog is closed")
@@ -346,10 +348,8 @@ def _create_catalog(
     constructor.  The active execution context narrows the timeout further.
     """
 
-    from pyiceberg.catalog.rest import RestCatalog as PyIcebergRestCatalog
-
     class BoundedRestCatalog(PyIcebergRestCatalog):
-        def _create_session(self):
+        def _create_session(self) -> Session:
             session = super()._create_session()
             _install_request_timeout(session, connect_timeout, read_timeout)
             return session

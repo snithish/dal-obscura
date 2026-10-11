@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from threading import RLock
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
+
+from dal_obscura_plugin_api import TableFormatFactory
 
 if TYPE_CHECKING:
     from dal_obscura.sources.plugin_runtime import PublicPluginCatalogAdapter
@@ -26,7 +28,7 @@ class CatalogConfig:
     """One named built-in catalog configured by the control plane."""
 
     name: str
-    options: dict[str, Any] = field(default_factory=dict)
+    options: Mapping[str, object] = field(default_factory=dict)
     path_enforcer: PathRuleEnforcer | None = None
     plugin_id: str = "iceberg.catalog"
     revision: int = 0
@@ -130,15 +132,13 @@ def _build_catalog(
 
         plugin_registry = create_builtin_plugin_registry()
     factory = plugin_registry.load("catalog", config.plugin_id)
-    if not callable(factory):
-        raise ValueError(f"Plugin factory is invalid: {config.plugin_id}")
     from dal_obscura.sources.plugin_runtime import PublicPluginCatalogAdapter
 
     return PublicPluginCatalogAdapter(
         config.name,
         config.options,
         config.plugin_id,
-        cast(Any, factory),
+        factory,
         lambda plugin_id: _load_format_factory(plugin_registry, plugin_id, config.path_enforcer),
         config.path_enforcer,
         config.revision,
@@ -147,7 +147,7 @@ def _build_catalog(
 
 def _load_format_factory(
     registry: PluginRegistry, plugin_id: str, path_enforcer: PathRuleEnforcer | None
-) -> object:
+) -> TableFormatFactory:
     from dal_obscura.sources.iceberg_plugin import (
         IcebergFormatPlugin,
     )

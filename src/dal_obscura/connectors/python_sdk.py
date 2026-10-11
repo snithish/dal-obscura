@@ -17,6 +17,7 @@ Example:
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
+from types import ModuleType
 from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
@@ -353,7 +354,7 @@ class DuckDBDalObscuraReader:
         self.close()
 
 
-def _duckdb():
+def _duckdb() -> ModuleType:
     try:
         import duckdb
     except ImportError as error:

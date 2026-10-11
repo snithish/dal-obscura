@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 import pyarrow as pa
 
@@ -47,7 +47,7 @@ def _walk_fields(schema: pa.Schema) -> Iterator[tuple[pa.Field, int]]:
         stack.extend((child, depth + 1) for child in reversed(children))
 
 
-def _unique_names(fields) -> None:
+def _unique_names(fields: Iterable[pa.Field]) -> None:
     names: set[str] = set()
     for field in fields:
         if field.name in names:
