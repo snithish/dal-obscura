@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from typing import cast
 
@@ -99,15 +100,26 @@ def test_production_url_helpers_fail_closed_on_malformed_urls(value: str) -> Non
     assert control_plane_cli._origin(value) == ""
 
 
-def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("kind", ["environment", "mounted_file"])
+def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_path, kind) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     migrate_config_store(create_engine_from_url(database_url))
     captured: dict[str, object] = {}
     monkeypatch.setenv("LOCAL_catalog-password", "value")
+    provider_config: dict[str, object] = {"prefix": "LOCAL_"}
+    if kind == "mounted_file":
+        directory = tmp_path / "secrets"
+        directory.mkdir()
+        (directory / "catalog-password").write_text("value")
+        provider_config = {
+            "directory": str(directory),
+            "scope_grants": {"catalog:analytics": ["catalog-password"]},
+        }
     environment = {
         "DAL_OBSCURA_DATABASE_URL": database_url,
         "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
-        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": '{"prefix":"LOCAL_"}',
+        "DAL_OBSCURA_SECRET_PROVIDER_KIND": kind,
+        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": json.dumps(provider_config),
     }
 
     monkeypatch.setattr(

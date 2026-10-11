@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import stat
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from contextlib import ExitStack
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import cast
 
-ENV_SECRET_PROVIDER_MODULE = "dal_obscura.sources.secrets.EnvSecretProvider"
+_MOUNTED_SECRET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}\Z")
+MAX_MOUNTED_SECRET_BYTES = 64 * 1024
 
 
 class SecretProvider(ABC):
@@ -46,19 +51,89 @@ class EnvSecretProvider(SecretProvider):
         return key in self._scope_grants.get(scope, frozenset())
 
 
+class MountedFileSecretProvider(SecretProvider):
+    """Read scoped flat files from a fixed operator-owned POSIX mount."""
+
+    def __init__(self, *, config: Mapping[str, object]) -> None:
+        if set(config) - {"directory", "scope_grants"}:
+            raise ValueError(
+                "Mounted secret configuration supports directory and scope_grants only"
+            )
+        directory = config.get("directory")
+        if not isinstance(directory, str) or not Path(directory).is_absolute():
+            raise ValueError("Mounted secret directory must be an absolute directory")
+        if os.open not in os.supports_dir_fd or not all(
+            hasattr(os, flag) for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")
+        ):
+            raise ValueError("Mounted secrets require secure POSIX file operations")
+        try:
+            directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                root = os.fstat(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except OSError:
+            raise ValueError("Mounted secret directory is unavailable") from None
+        self._directory = Path(directory)
+        self._root_identity = (root.st_dev, root.st_ino)
+        self._scope_grants = _parse_scope_grants(config.get("scope_grants"))
+        if self._scope_grants and any(
+            not _MOUNTED_SECRET_NAME.fullmatch(key)
+            for keys in self._scope_grants.values()
+            for key in keys
+        ):
+            raise ValueError("Mounted secret grants must use flat filenames")
+
+    def get_secret(self, key: str) -> str | None:
+        if not _MOUNTED_SECRET_NAME.fullmatch(key):
+            return None
+        try:
+            with ExitStack() as opened:
+                directory_fd = os.open(
+                    self._directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                )
+                opened.callback(os.close, directory_fd)
+                root = os.fstat(directory_fd)
+                if (root.st_dev, root.st_ino) != self._root_identity:
+                    return None
+                secret_fd = os.open(
+                    key, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd
+                )
+                opened.callback(os.close, secret_fd)
+                info = os.fstat(secret_fd)
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink > 1:
+                    return None
+                payload = bytearray()
+                while len(payload) <= MAX_MOUNTED_SECRET_BYTES:
+                    chunk = os.read(secret_fd, MAX_MOUNTED_SECRET_BYTES + 1 - len(payload))
+                    if not chunk:
+                        break
+                    payload.extend(chunk)
+                if not payload or len(payload) > MAX_MOUNTED_SECRET_BYTES:
+                    return None
+                return payload.decode("utf-8")
+        except (OSError, UnicodeError):
+            return None
+
+    def is_allowed(self, key: str, scope: str) -> bool:
+        return self._scope_grants is not None and key in self._scope_grants.get(scope, frozenset())
+
+
 @dataclass(frozen=True)
 class SecretProviderConfig:
-    """Module and config used to instantiate a secret provider."""
+    """Fixed provider kind and startup configuration."""
 
-    module: str = ENV_SECRET_PROVIDER_MODULE
+    kind: str = "environment"
     config: dict[str, object] = field(default_factory=dict)
 
 
 def load_secret_provider(provider_config: SecretProviderConfig) -> SecretProvider:
-    """Builds the fixed environment provider from startup-only configuration."""
-    if provider_config.module != ENV_SECRET_PROVIDER_MODULE:
-        raise ValueError("Unsupported secret provider; only environment secrets are supported")
-    return EnvSecretProvider(config=provider_config.config)
+    """Construct one fixed provider without dynamic module loading."""
+    if provider_config.kind == "environment":
+        return EnvSecretProvider(config=provider_config.config)
+    if provider_config.kind == "mounted_file":
+        return MountedFileSecretProvider(config=provider_config.config)
+    raise ValueError("Unsupported secret provider kind")
 
 
 def load_secret_provider_from_environment(
@@ -66,12 +141,12 @@ def load_secret_provider_from_environment(
     *,
     require_scope_grants: bool = False,
 ) -> SecretProvider:
-    """Load the admitted environment-backed provider for control-plane callers.
+    """Load the admitted startup-selected provider for control-plane callers.
 
     The control plane must use the same startup-selected provider configuration
     as the data plane when it resolves catalog references. This helper keeps
     environment parsing in one place while retaining the explicit provider
-    module allowlist enforced by :func:`load_secret_provider`.
+    kind allowlist enforced by :func:`load_secret_provider`.
     """
 
     provider_config = secret_provider_config_from_environment(environment)
@@ -90,16 +165,15 @@ def secret_provider_config_from_environment(
     source = os.environ if environment is None else environment
     if "DAL_OBSCURA_SECRET_PROVIDER_SECRETS" in source:
         raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_SECRETS is unsupported")
-    module = source.get("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
-    if module != ENV_SECRET_PROVIDER_MODULE:
-        raise ValueError(
-            "DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported; "
-            "only environment secrets are supported"
-        )
+    if "DAL_OBSCURA_SECRET_PROVIDER_MODULE" in source:
+        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported; use provider KIND")
+    kind = source.get("DAL_OBSCURA_SECRET_PROVIDER_KIND", "environment").strip()
+    if kind not in {"environment", "mounted_file"}:
+        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_KIND must be environment or mounted_file")
     config = _json_object_value(
         source.get("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"), "DAL_OBSCURA_SECRET_PROVIDER_CONFIG"
     )
-    return SecretProviderConfig(module=module, config=config)
+    return SecretProviderConfig(kind=kind, config=config)
 
 
 def resolve_secret_refs(

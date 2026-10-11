@@ -566,3 +566,37 @@ HTTP writes. Three comparable single-worker runs measured p95 replacement typing
 All 72 unit tests, 58 browser stories, TypeScript, relevant policy-authoring E2E
 cases, and unchanged bundle gates pass. Mask-summary DOM, full-schema transfer,
 provider-native paging, and representative live operator qualification remain open.
+
+## 24. Fourteenth implementation delivery — scoped mounted secret references
+
+Startup configuration selects a fixed `environment` or `mounted_file` provider
+with `DAL_OBSCURA_SECRET_PROVIDER_KIND`, removing module-path mechanics. The
+mounted provider resolves existing scoped references from an operator-owned fixed
+POSIX directory. It reads nonempty UTF-8 regular files within a 64 KiB byte budget,
+preserves exact whitespace, and observes atomic file replacements without caching
+values. Absolute directory identity is pinned; path traversal, symbolic/hard links,
+nonregular files, oversized data, invalid text, and replaced roots fail closed.
+Both descriptors close on success, rejection, and IO failure; short reads retain
+complete values. No service-managed persistent state is added.
+
+This intentionally breaks startup configuration: remove
+`DAL_OBSCURA_SECRET_PROVIDER_MODULE`, including an empty value, and select the
+provider kind. The retired `DAL_OBSCURA_SECRET_PROVIDER_SECRETS` is still rejected.
+Bundled Compose and example environment files now use the same selector and no
+longer inject that retired inline setting. No arbitrary provider import is added.
+See [configuration, rotation and deployment limits](security.md#secret-handling).
+
+TDD exposed fourteen failures in the initial mounted-provider boundary cases.
+The final installed wheel passes 163 provider/runtime/CLI/HTTP/schema cases with
+zero failures or skips using disposable PostgreSQL; public catalog responses retain
+references while discovery receives the rotated value. Exact unchanged plugin
+artifacts were locked and admitted in the fresh environment. Ruff/types pass;
+repository fast checks apply at commit. A read-only Compose validation attempt was
+blocked by the unavailable Podman engine; no demo or engine state was changed.
+
+E12 is partially resolved. This is local POSIX file-provider evidence, not container
+mount/rotation, Vault/cloud-secret-manager, IAM/SSO or live TLS qualification.
+Projected symlink secret volumes are rejected. Existing identity configurations
+and cached/opened provider sessions can retain resolved values and need their own
+reload/refresh lifecycle. Egress enforcement, provenance, field/native depth,
+provider breadth, and the rest of the plan remain open.

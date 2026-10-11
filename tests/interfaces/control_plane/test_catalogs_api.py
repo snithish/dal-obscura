@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from dal_obscura_plugin_api import DiscoveryPage, TableIdentifier
 from fastapi.testclient import TestClient
 
 from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.sources.secrets import EnvSecretProvider
+from dal_obscura.sources.secrets import load_secret_provider_from_environment
 from dal_obscura.storage.database.db import (
     session_factory,
 )
@@ -516,12 +518,24 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
     assert "tenant" not in _keys_recursive(response.json())
 
 
-def test_workspace_catalog_discovery_resolves_secret_references(client_factory, monkeypatch):
-    client = client_factory(
-        secret_provider=EnvSecretProvider(
-            config={"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}}
-        )
+@pytest.mark.parametrize("kind", ["environment", "mounted_file"])
+def test_workspace_catalog_discovery_resolves_secret_references(
+    client_factory, monkeypatch, tmp_path, kind
+):
+    config: dict[str, object] = {"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}}
+    if kind == "mounted_file":
+        directory = tmp_path / "secrets"
+        directory.mkdir()
+        (directory / "CATALOG_TOKEN").write_text("sentinel-secret")
+        config["directory"] = str(directory)
+    provider = load_secret_provider_from_environment(
+        {
+            "DAL_OBSCURA_SECRET_PROVIDER_KIND": kind,
+            "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": json.dumps(config),
+        },
+        require_scope_grants=True,
     )
+    client = client_factory(secret_provider=provider)
     monkeypatch.setenv("CATALOG_TOKEN", "sentinel-secret")
     client.put(
         "/v1/catalogs/analytics",
@@ -549,6 +563,21 @@ def test_workspace_catalog_discovery_resolves_secret_references(client_factory, 
 
     assert response.status_code == 200
     assert received["token"] == "sentinel-secret"
+    reference = {"secret": "CATALOG_TOKEN", "scope": "catalog:analytics"}
+    catalog = client.get("/v1/catalogs", headers=ADMIN_HEADERS)
+    assert catalog.status_code == 200
+    analytics = next(item for item in catalog.json() if item["name"] == "analytics")
+    assert analytics["options"]["token"] == reference
+    assert "sentinel-secret" not in catalog.text
+    assert "sentinel-secret" not in response.text
+    if kind == "mounted_file":
+        replacement = directory / "replacement"
+        replacement.write_text("rotated-secret")
+        replacement.replace(directory / "CATALOG_TOKEN")
+        rotated = client.get("/v1/catalogs/analytics/tables", headers=ADMIN_HEADERS)
+        assert rotated.status_code == 200
+        assert received["token"] == "rotated-secret"
+        assert "rotated-secret" not in rotated.text
 
 
 def test_workspace_catalog_discovery_does_not_echo_provider_errors(client_factory, monkeypatch):

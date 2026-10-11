@@ -119,13 +119,52 @@ flowchart LR
 Store references in configuration. Keep secret values in environment variables,
 container secret stores, or another runtime secret provider.
 
-The supported environment provider accepts a `scope_grants` object in
+Select the fixed `environment` or `mounted_file` provider with
+`DAL_OBSCURA_SECRET_PROVIDER_KIND`. Both accept a `scope_grants` object in
 `DAL_OBSCURA_SECRET_PROVIDER_CONFIG`. Each exact caller scope (for example,
 `catalog:analytics` or `identity`) must name the secret keys it may resolve.
 Secret resolution is denied unless the provider implements scope authorization
 and this grant map includes the exact scope and key; a matching reference scope
-alone cannot authorize an environment lookup. Production startup requires a
+alone cannot authorize a provider lookup. Production startup requires a
 non-empty grant map in both planes.
+
+The environment provider accepts an optional `prefix`. The mounted-file provider
+accepts an absolute `directory` and reads flat regular UTF-8 files on each
+resolution, without caching values. File names must start with an ASCII letter or
+digit, contain only letters, digits, underscores, dots or hyphens, and fit 255
+characters. Values must be nonempty and at most 64 KiB of UTF-8 bytes. Whitespace,
+including final newlines, is preserved. Unknown configuration keys fail startup.
+
+For example, provision `CATALOG_TOKEN` through deployment secret tooling, then
+configure both planes with references only:
+
+```bash
+DAL_OBSCURA_SECRET_PROVIDER_KIND=mounted_file
+DAL_OBSCURA_SECRET_PROVIDER_CONFIG='{"directory":"/run/dal-secrets","scope_grants":{"catalog:analytics":["CATALOG_TOKEN"]}}'
+```
+
+Bind the directory read-only into each plane and restrict its host/runtime access
+to trusted provisioning tooling and worker identities. Bind the directory rather
+than an individual file so an atomic file replacement is visible to readers.
+Rotate by writing a complete new file and atomically replacing the named file in
+the same directory; each resolution observes one opened version. Replace files,
+not the root directory. The provider checks the original directory's device/inode
+identity, refuses symlinks, hard links and nonregular files, and closes descriptors
+on rejected reads. It cannot revoke already opened provider sessions or guarantee
+nonblocking disk IO. Startup identity configurations and cached clients can retain
+resolved values; their reload/restart or provider-specific credential refresh
+remains a separate lifecycle.
+
+Projected symlink secret volumes are rejected. Use provisioning tooling that
+delivers flat regular files; Vault/cloud-secret-manager adapters and container
+rotation qualification remain separate support gates. Local POSIX qualification
+does not establish those provider integrations.
+
+This is a breaking startup configuration change: remove
+`DAL_OBSCURA_SECRET_PROVIDER_MODULE` and use `DAL_OBSCURA_SECRET_PROVIDER_KIND`.
+The old module-path selector and `DAL_OBSCURA_SECRET_PROVIDER_SECRETS` are rejected,
+including when set to an empty string. Arbitrary provider imports and inline secret
+configuration remain prohibited.
 
 ## Live Configuration And Ticket Revocation
 

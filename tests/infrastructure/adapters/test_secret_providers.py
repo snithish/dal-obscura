@@ -36,11 +36,9 @@ def test_load_secret_provider_from_environment_uses_startup_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("LOCAL_catalog-password", "value")
-    module_name = "dal_obscura.sources.secrets.EnvSecretProvider"
-
     provider = load_secret_provider_from_environment(
         {
-            "DAL_OBSCURA_SECRET_PROVIDER_MODULE": module_name,
+            "DAL_OBSCURA_SECRET_PROVIDER_KIND": "environment",
             "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": '{"prefix":"LOCAL_"}',
         }
     )
@@ -49,7 +47,7 @@ def test_load_secret_provider_from_environment_uses_startup_prefix(
 
 
 def test_load_secret_provider_from_environment_rejects_dynamic_module():
-    with pytest.raises(ValueError, match="only environment secrets"):
+    with pytest.raises(ValueError, match="SECRET_PROVIDER_MODULE is unsupported"):
         load_secret_provider_from_environment(
             {"DAL_OBSCURA_SECRET_PROVIDER_MODULE": "untrusted.module.Provider"}
         )
@@ -61,11 +59,10 @@ def test_load_secret_provider_from_environment_rejects_retired_secret_payload():
 
 
 def test_load_secret_provider_from_environment_requires_production_grants():
-    module_name = "dal_obscura.sources.secrets.EnvSecretProvider"
     with pytest.raises(ValueError, match=r"non-empty.*scope_grants"):
         load_secret_provider_from_environment(
             {
-                "DAL_OBSCURA_SECRET_PROVIDER_MODULE": module_name,
+                "DAL_OBSCURA_SECRET_PROVIDER_KIND": "environment",
                 "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": "{}",
             },
             require_scope_grants=True,
@@ -83,10 +80,10 @@ def test_load_secret_provider_rejects_duplicate_json_settings() -> None:
         )
 
 
-def test_load_secret_provider_rejects_dynamic_module_path():
-    with pytest.raises(ValueError, match="only environment secrets"):
+def test_load_secret_provider_rejects_unknown_kind():
+    with pytest.raises(ValueError, match="Unsupported secret provider kind"):
         load_secret_provider(
-            SecretProviderConfig(module="untrusted.module.Provider"),
+            SecretProviderConfig(kind="untrusted.module.Provider"),
         )
 
 
