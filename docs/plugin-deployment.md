@@ -26,7 +26,35 @@ Docker with BuildKit, Compose supporting `up --wait`, registry authentication an
 an immutable worker base image are prerequisites. Build the base from this revision;
 its service package must include the operator image tooling.
 
-Create `.dal-obscura-deploy/target.json`. Replace both digest placeholders with verified
+Run guided one-time initialization:
+
+```sh
+dal-obscura target init --env-file deployment/production/.env --project-name dal-obscura-production
+dal-obscura doctor --offline --json
+dal-obscura doctor
+```
+
+The wizard asks for verified image digests, the existing Compose file, repository,
+control/Flight endpoints, and a small synthetic verification table with independent
+expected values. Columns and expected rows use JSON, preserving exact names rather
+than splitting paths on commas. Supply every required field with flags and
+`--non-interactive` for automation; `target init --help` describes them.
+It stores absolute file references, credential environment-variable names, and
+non-secret synthetic expectations in a mode-0600 target file. It rejects an existing
+target and creates the file atomically without replacement. Invalid/cancelled input
+leaves no target behind. Certificate/private-key options store file paths only.
+
+`doctor` reports actionable prerequisite checks and deterministic exit status:
+zero when all selected checks pass, one otherwise. `--json` emits a version-1 report
+with mode, readiness, and named checks. Offline readiness means valid referenced files
+and available credential environment variables; it does not authenticate those values.
+Online mode adds read-only container engine/Compose checks and authenticated control
+plugin inventory. Worker image, admission-lock, readiness, and exact Flight values
+remain the deployment verification stage. Captured container errors and service bodies
+are omitted from diagnostic output.
+
+The resulting `.dal-obscura-deploy/target.json` is available for operator review.
+The equivalent shape follows. Replace both digest placeholders with verified
 SHA-256 digests; mutable base/tool tags are rejected. Paths for `compose_file` and
 `env_file` are relative to this workspace. Smoke certificate paths are relative to the
 operator's current directory, or absolute. Match `project_name` to the existing project.

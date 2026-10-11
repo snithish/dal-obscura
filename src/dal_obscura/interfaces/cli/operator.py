@@ -29,7 +29,7 @@ from dal_obscura.control.catalog_service import (
 )
 from dal_obscura.sources.plugins import PluginAdmissionError
 
-_IMAGE_DIGEST = re.compile(r"[^\s]+@sha256:[0-9a-f]{64}\Z")
+_IMAGE_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}\Z")
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _INTERNAL = "dal_obscura.interfaces.cli.plugin_image"
 _LOCK_PATH = "/app/plugin-lock.json"
@@ -48,7 +48,7 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def write_json(path: Path, value: dict[str, Any]) -> None:
+def write_json(path: Path, value: dict[str, Any], *, replace: bool = True) -> None:
     """Replace local drafts atomically; leave existing state intact on failure."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
@@ -58,18 +58,31 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-            os.replace(temporary, path)
+            if replace:
+                os.replace(temporary, path)
+            else:
+                os.link(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
 
 
 def target_settings(workspace: Path) -> dict[str, Any]:
     target = read_json(workspace / "target.json")
-    if not _IMAGE_DIGEST.fullmatch(str(target.get("base_image", ""))):
-        raise ValueError("base_image must be an immutable image@sha256:digest reference")
-    if not _IMAGE_DIGEST.fullmatch(str(target.get("uv_image", ""))):
-        raise ValueError("uv_image must be an immutable image@sha256:digest reference")
+    for name in ("base_image", "uv_image"):
+        validate_image_reference(str(target.get(name, "")), name)
     return target
+
+
+def validate_image_reference(value: str, name: str) -> None:
+    if not _IMAGE_DIGEST.fullmatch(value):
+        raise ValueError(f"{name} must be an immutable image@sha256:digest reference")
+
+
+def validate_image_repository(repository: str) -> None:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9./:_-]*", repository) or not re.fullmatch(
+        r"[a-z0-9][a-z0-9._-]*", repository.rsplit("/", 1)[-1]
+    ):
+        raise ValueError("image_repository must be a container repository, without tag/digest")
 
 
 def image_id(reference: str) -> str:
@@ -316,10 +329,7 @@ def prepare_release(workspace: Path, target: dict[str, Any]) -> tuple[Path, dict
     previous = read_json(verified_path) if verified_path.exists() else {}
     show_admission(candidate, previous)
     repository = str(target["image_repository"])
-    if not re.fullmatch(r"[a-z0-9][a-z0-9./:_-]*", repository) or not re.fullmatch(
-        r"[a-z0-9][a-z0-9._-]*", repository.rsplit("/", 1)[-1]
-    ):
-        raise ValueError("image_repository must be a container repository, without tag/digest")
+    validate_image_repository(repository)
     release_id = uuid.uuid4().hex
     directory = workspace / "releases" / release_id
     directory.mkdir(parents=True)
@@ -363,14 +373,7 @@ class NoRedirect(HTTPRedirectHandler):
 def api_request(
     target: dict[str, Any], method: str, path: str, body: dict[str, Any] | None = None
 ) -> Any:
-    base = str(target["control_url"]).rstrip("/")
-    parsed = urlsplit(base)
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError("control_url must not contain credentials, query or fragment")
-    if parsed.scheme != "https" and not (
-        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-    ):
-        raise ValueError("control_url requires HTTPS except on loopback")
+    base = validate_control_url(str(target["control_url"]))
     token = os.environ[target.get("admin_token_env", "DAL_OBSCURA_DEPLOY_ADMIN_TOKEN")]
     request = Request(
         base + path,
@@ -380,6 +383,20 @@ def api_request(
     )
     with build_opener(NoRedirect()).open(request, timeout=30) as response:
         return json.load(response)
+
+
+def validate_control_url(value: str) -> str:
+    base = value.rstrip("/")
+    parsed = urlsplit(base)
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("control_url must not contain credentials, query or fragment")
+    if parsed.scheme != "https" and not (
+        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    ):
+        raise ValueError("control_url requires HTTPS except on loopback")
+    if not parsed.hostname:
+        raise ValueError("control_url requires a hostname")
+    return base
 
 
 def publish_catalogs(target: dict[str, Any], catalogs: dict[str, Any]) -> None:
@@ -444,11 +461,23 @@ def validate_smoke(settings: dict[str, Any]) -> None:
         raise ValueError("smoke.expected_rows must contain 1-1000 synthetic non-secret rows")
     if not all(isinstance(row, dict) for row in expected):
         raise ValueError("smoke.expected_rows must be JSON objects")
-    uri = str(settings["uri"])
-    if not uri.startswith("grpc+tls://") and not uri.startswith("grpc+tcp://127.0.0.1:"):
+    parsed = urlsplit(str(settings["uri"]))
+    if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path:
+        raise ValueError("Flight smoke URI must not contain credentials, path, query or fragment")
+    if not parsed.hostname:
+        raise ValueError("Flight smoke URI requires a hostname")
+    if parsed.scheme != "grpc+tls" and not (
+        parsed.scheme == "grpc+tcp" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    ):
         raise ValueError("Flight smoke requires TLS except on loopback")
-    if not settings.get("target") or not isinstance(settings.get("columns"), list):
-        raise ValueError("smoke requires a target and a columns list")
+    columns = settings.get("columns")
+    if (
+        not settings.get("target")
+        or not isinstance(columns, list)
+        or not columns
+        or not all(isinstance(column, str) and column for column in columns)
+    ):
+        raise ValueError("smoke requires a target and a non-empty list of column paths")
     for key in ("ca_file", "cert_file", "key_file"):
         if settings.get(key):
             Path(settings[key]).read_bytes()
@@ -640,6 +669,39 @@ def parser() -> argparse.ArgumentParser:
     )
     cli.add_argument("--workspace", type=Path, default=Path(".dal-obscura-deploy"))
     commands = cli.add_subparsers(dest="command", required=True)
+    targets = commands.add_parser("target", help="Initialize an operator deployment target")
+    target_actions = targets.add_subparsers(dest="action", required=True)
+    initialize = target_actions.add_parser(
+        "init", help="Collect target settings without secret values"
+    )
+    from dal_obscura.interfaces.cli.target import TARGET_FIELDS
+
+    initialize.add_argument(
+        "--non-interactive", action="store_true", help="Require every target field through flags"
+    )
+    for name, label in TARGET_FIELDS:
+        initialize.add_argument("--" + name.replace("_", "-"), help=label)
+    for name, label in (
+        ("env-file", "Existing Compose environment file; only its path is stored"),
+        ("project-name", "Existing Compose project name"),
+        ("ca-file", "Flight CA certificate path"),
+        ("cert-file", "Flight client certificate path"),
+        ("key-file", "Flight client private-key path; only its path is stored"),
+    ):
+        initialize.add_argument("--" + name, help=label)
+    initialize.add_argument("--admin-token-env", default="DAL_OBSCURA_DEPLOY_ADMIN_TOKEN")
+    initialize.add_argument("--flight-token-env", default="DAL_OBSCURA_DEPLOY_FLIGHT_TOKEN")
+    diagnostics = commands.add_parser(
+        "doctor", help="Check deployment prerequisites without changing services"
+    )
+    diagnostics.add_argument(
+        "--offline",
+        action="store_true",
+        help="Check files and references without network or containers",
+    )
+    diagnostics.add_argument(
+        "--json", action="store_true", help="Emit a versioned machine-readable report"
+    )
     plugins = commands.add_parser("plugin", help="Prepare plugin admission and catalog settings")
     actions = plugins.add_subparsers(dest="action", required=True)
     add = actions.add_parser("add", help="Install a package in an isolated worker image")
@@ -678,18 +740,33 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args = parser().parse_args(arguments)
     try:
-        if args.command == "deploy":
+        if args.command in {"target", "doctor"}:
+            from dal_obscura.interfaces.cli.target import diagnose_target, initialize_target
+
+            if args.command == "doctor":
+                return diagnose_target(args.workspace, args)
+            initialize_target(args.workspace, args)
+        elif args.command == "deploy":
             deploy(args.workspace, args)
         elif args.action == "add":
             add_plugin(args.workspace, args.package)
         else:
             configure_plugin(args.workspace, args)
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError, PluginAdmissionError) as exc:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        EOFError,
+        subprocess.SubprocessError,
+        PluginAdmissionError,
+    ) as exc:
         # Captured subprocess stderr and HTTP bodies may contain secrets; do not echo them.
         if isinstance(exc, subprocess.SubprocessError):
             message = "Container command failed; release was not marked verified"
         elif isinstance(exc, KeyError):
             message = "Missing deployment setting or credential environment variable"
+        elif isinstance(exc, EOFError):
+            message = "Configuration input ended; no target was saved"
         else:
             message = str(exc)
         print(message, file=sys.stderr)

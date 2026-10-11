@@ -467,3 +467,35 @@ schema installation, catalog publication, and smoke verification remain separate
 stages. This delivery does not implement automatic rollback, ticket draining,
 target initialization, provenance signing, another orchestrator, or a live image
 push/rollout. Live infrastructure and provider qualification remain open.
+
+## 19. Ninth implementation delivery — guided deployment target and diagnostics
+
+`dal-obscura target init` collects first-run target settings, validates immutable
+image references, repository/endpoint shape, referenced files, and independent
+synthetic smoke values, then writes a mode-0600 target without replacing existing
+state. Required fields can be supplied with `--non-interactive`; shared labels
+serve both prompts and flag help. Invalid or cancelled input leaves no target.
+Columns use a JSON array, retaining exact path strings. Credential values are
+never requested or copied: target settings retain environment names and TLS file
+references. Credential-bearing Flight URIs are now rejected before connecting.
+
+`dal-obscura doctor` provides human output or a versioned JSON report. Offline
+checks validate files/references and credential availability without external IO.
+Online checks use read-only container/Compose operations and authenticated control
+inventory. A failed check returns nonzero with an actionable, sanitized message;
+subprocess stderr, service bodies, and credential values stay out of the report.
+Offline readiness is not authentication evidence. Replica image/lock/readiness and
+exact Flight values remain owned by deploy verification.
+
+Qualification includes 35 installed-wheel target/operator tests, console help,
+and three real local authenticated Flight smoke cases (success, wrong values,
+invalid token). The service was rebuilt in a fresh environment, selected plugin
+locks regenerated from installed artifacts, and Ruff/type/fast checks applied.
+Existing target configurations remain readable; earlier malformed or
+credential-bearing image/endpoint references fail closed. Plugin APIs and schema
+identities are unchanged.
+
+The target-initialization/diagnostic portion of E11 is resolved. This release still
+uses an existing initialized Compose topology. Provisioning, deployment-stage
+recovery/rollback, ticket draining, additional orchestrators, live registry rollout,
+live IAM/SSO, and broader provider/catalog/format qualification remain outstanding.
