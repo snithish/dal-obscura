@@ -552,3 +552,17 @@ Content-Length, and rejection before a redirect credential destination is reache
 The service wheel was rebuilt in a fresh source-disabled environment, six unchanged
 plugin artifacts were locked and admitted, and Ruff/type/fast checks apply. Live
 TLS/proxy/identity renewal and cloud-provider qualification remain separate gates.
+
+## 23. Thirteenth implementation delivery — responsive wide mask forms
+
+Mask forms retain derived groups, allowed-field maps, and membership sets across
+local typing, avoiding repeated cross-field scans. Exemptions, map-key restrictions,
+mask changes, pending-edit guards, and exact target ownership stay at the same
+boundaries. A 5,000-field browser fixture checks local redaction and no premature
+HTTP writes. Three comparable single-worker runs measured p95 replacement typing
+137.900–147.415 → 28.699–29.085 ms, within the unchanged 200 ms gate. See
+[measurement scope](mask-edit-performance.md#replacement-typing).
+
+All 72 unit tests, 58 browser stories, TypeScript, relevant policy-authoring E2E
+cases, and unchanged bundle gates pass. Mask-summary DOM, full-schema transfer,
+provider-native paging, and representative live operator qualification remain open.

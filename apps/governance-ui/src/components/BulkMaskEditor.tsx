@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
 import type { Mask, PolicyRule } from "../api";
 import { groupMasks, type ColumnOption } from "../policy_editor";
@@ -28,11 +28,15 @@ export function BulkMaskEditor({ rule, options, supportedMasks, readOnly, onAppl
   const [pendingToken, setPendingToken] = useState("");
   const [showColumns, setShowColumns] = useState(false);
   const [showPeople, setShowPeople] = useState(false);
-  const groups = groupMasks(rule, [...new Set([...rule.columns, ...Object.keys(rule.masks)])]);
+  const groups = useMemo(() => groupMasks(rule, [...new Set([...rule.columns, ...Object.keys(rule.masks)])]), [rule.columns, rule.masks]);
   const masked = groups.filter((group) => group.mask);
   const unmasked = groups.find((group) => !group.mask)?.columns ?? [];
-  const available = options.filter((option) => rule.columns.includes(option.value) || Object.hasOwn(rule.masks, option.value));
-  const validTargets = targets.length > 0 && targets.every((column) => available.some((option) => option.value === column && option.valid));
+  const allowed = useMemo(() => new Set(rule.columns), [rule.columns]);
+  const available = useMemo(() => options.filter((option) => allowed.has(option.value) || Object.hasOwn(rule.masks, option.value)), [options, allowed, rule.masks]);
+  const availableByName = useMemo(() => new Map(available.map(option => [option.value, option])), [available]);
+  const targetSet = useMemo(() => new Set(targets), [targets]);
+  const excludedSet = useMemo(() => new Set(excluded), [excluded]);
+  const validTargets = targets.length > 0 && targets.every((column) => availableByName.get(column)?.valid);
 
   function begin(columns: string[], mask?: Mask) {
     setTargets(columns); setOriginalTargets(mask ? columns : []); setExcluded([]); setType(mask?.type ?? "");
@@ -58,8 +62,8 @@ export function BulkMaskEditor({ rule, options, supportedMasks, readOnly, onAppl
   }
   const exemptionTokens = [...new Set([...tokens, pendingToken.trim()].filter(Boolean))];
   if (exemptionTokens.some((token) => token === "*" || token.toLowerCase() === "everyone" || (token.startsWith("group:") && (!token.slice(6) || /\s/.test(token) || ["*", "everyone"].includes(token.slice(6).toLowerCase()))))) error = "Use a principal ID or group:name. Wildcard exemptions are not allowed.";
-  if (type && type !== "none" && type !== "null" && targets.some((target) => !excluded.includes(target) && options.find((option) => option.value === target)?.path?.segments.at(-1)?.kind === "map_key")) error = "Map keys support No mask or Hide value only. Exclude map keys to mask their values.";
-  const selectedExcluded = excluded.filter((column) => targets.includes(column));
+  if (type && type !== "none" && type !== "null" && targets.some((target) => !excludedSet.has(target) && availableByName.get(target)?.path?.segments.at(-1)?.kind === "map_key")) error = "Map keys support No mask or Hide value only. Exclude map keys to mask their values.";
+  const selectedExcluded = excluded.filter((column) => targetSet.has(column));
   const count = targets.length - selectedExcluded.length;
 
   return <section className="policy-step bulk-mask-editor" aria-label="Column masks">
@@ -82,11 +86,11 @@ export function BulkMaskEditor({ rule, options, supportedMasks, readOnly, onAppl
       {type === "default" && <TextInput label="Replacement value" value={rawValue} onChange={(event) => setRawValue(event.currentTarget.value)} disabled={readOnly} />}
       <ColumnMultiSelect label="Columns to mask" options={available} value={targets} onChange={(next) => { setTargets(next); setExcluded((current) => current.filter((column) => next.includes(column))); }} disabled={readOnly} />
       {type && type !== "none" && <div className="mask-exceptions"><div className="exception-actions">{!showColumns && <Button variant="subtle" size="compact-sm" onClick={() => setShowColumns(true)} disabled={readOnly}>Exclude columns</Button>}{!showPeople && <Button variant="subtle" size="compact-sm" onClick={() => setShowPeople(true)} disabled={readOnly}>Exempt people or groups</Button>}</div>
-        {showColumns && <div className="exception-section"><ColumnMultiSelect label="Columns without this mask" options={available.filter((option) => targets.includes(option.value))} value={selectedExcluded} onChange={setExcluded} disabled={readOnly} /><p className="help">Keep these columns visible with their original values in this rule. Applying removes their current mask.</p></div>}
+        {showColumns && <div className="exception-section"><ColumnMultiSelect label="Columns without this mask" options={available.filter((option) => targetSet.has(option.value))} value={selectedExcluded} onChange={setExcluded} disabled={readOnly} /><p className="help">Keep these columns visible with their original values in this rule. Applying removes their current mask.</p></div>}
         {showPeople && <div className="exception-section"><TokenInput label="People or groups that skip this mask" value={tokens} onChange={setTokens} onDraftChange={setPendingToken} placeholder="group:privacy-reviewers" disabled={readOnly} /><p className="help">These readers still need access. Row filters and masks from other rules still apply.</p></div>}
       </div>}
       {error && <p className="field-error" role="alert">{error}</p>}
-      <div className="composer-footer"><p>{type ? type === "none" ? `${count} columns show original values` : `${count} masked · ${selectedExcluded.length} excluded` : "Choose a mask to continue"}</p><Button variant="default" onClick={close}>Cancel mask changes</Button><Button disabled={readOnly || !type || !validTargets || Boolean(error)} onClick={() => { onApply([...new Set([...originalTargets, ...targets])], mask ? { ...mask, ...(exemptionTokens.length ? { exempt_principals: exemptionTokens } : {}) } : undefined, [...selectedExcluded, ...originalTargets.filter((column) => !targets.includes(column))]); close(); }}>Apply mask</Button></div>
+      <div className="composer-footer"><p>{type ? type === "none" ? `${count} columns show original values` : `${count} masked · ${selectedExcluded.length} excluded` : "Choose a mask to continue"}</p><Button variant="default" onClick={close}>Cancel mask changes</Button><Button disabled={readOnly || !type || !validTargets || Boolean(error)} onClick={() => { onApply([...new Set([...originalTargets, ...targets])], mask ? { ...mask, ...(exemptionTokens.length ? { exempt_principals: exemptionTokens } : {}) } : undefined, [...selectedExcluded, ...originalTargets.filter((column) => !targetSet.has(column))]); close(); }}>Apply mask</Button></div>
     </div>}
     {unmasked.length > 0 && <details className="unmasked-columns"><summary>{unmasked.length} {unmasked.length === 1 ? "column shows" : "columns show"} original values</summary><div className="policy-paths">{unmasked.map((column) => <code key={column}>{column}</code>)}</div></details>}
   </section>;

@@ -46,3 +46,25 @@ call-stack recursion; it does not establish native Arrow/IPC support at that dep
 All 72 UI unit tests, 58 browser stories, 101 E2E cases, TypeScript checks, and
 production bundle budgets pass. The current JS gzip total is 199.660 KiB under
 the unchanged 200 KiB budget.
+
+## Replacement typing
+
+A separate rendered 5,000-field fixture edits an existing hash mask, types
+`private-data`, then applies redaction to all exact targets without saving the
+policy. Form-local keystrokes now reuse mask groups, available-field maps, and
+membership sets. No backend write or visual layout change is involved.
+
+With one browser worker and three repetitions on the same host, before/current
+runs executed consecutively: p95 typing latency was 137.900–147.415 ms before
+and 28.699–29.085 ms after. Each run has twelve keystrokes, so its p95 is the
+largest sample; this small local regression fixture is not field INP evidence.
+The existing 200 ms gate is unchanged. JSON reporter attachments retain individual
+samples:
+
+```bash
+pnpm --dir apps/governance-ui exec playwright test e2e/mask-performance.spec.ts --workers=1 --repeat-each=3 --reporter=json > /tmp/mask-typing.json
+```
+
+The form still renders complete mask-summary path lists; this improvement removes
+repeated computation rather than claiming bounded summary DOM. Production JS gzip
+is 199.710 KiB under the unchanged 200 KiB budget.
