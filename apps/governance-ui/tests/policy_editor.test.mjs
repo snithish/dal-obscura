@@ -76,3 +76,29 @@ test("parent selection expands nested collection leaves for individual exemption
   const options = [parent, ...["city", "postcode"].map((name) => ({ ...parent, value: `contacts.$element.details.address.${name}`, path: { version: 1, segments: [...parent.path.segments, { kind: "list_element" }, { kind: "field", name: "details" }, { kind: "field", name: "address" }, { kind: "field", name }] } }))];
   assert.deepEqual(expandColumnSelections(options, ["contacts"]), options.slice(1).map((option) => option.value));
 });
+
+test("authoritative options traverse a synthetic deep schema without the JavaScript call stack", () => {
+  let child;
+  for (let index = 19999; index >= 0; index -= 1) {
+    child = node(`level-${index}`, [{ kind: "field", name: `level-${index}` }], child ? [child] : []);
+  }
+  const options = authoritativeColumnOptions([child], ["retired"]);
+  assert.equal(options.length, 20001);
+  assert.equal(options[0].value, "level-0");
+  assert.equal(options[19999].value, "level-19999");
+  assert.deepEqual(options.at(-1), { value: "retired", label: "retired", type: "Removed from schema", valid: false });
+});
+
+test("mask coverage distinguishes literal names, collection segments, and historical field IDs", () => {
+  const options = authoritativeColumnOptions([
+    node("items", [{ kind: "field", name: "items", field_id: 1 }], [
+      node("items.$element.key", [{ kind: "field", name: "items", field_id: 1 }, { kind: "list_element" }, { kind: "field", name: "key", field_id: 2 }]),
+    ]),
+    node('literal', [{ kind: "field", name: "items.$element.key", field_id: 3 }]),
+    node("reused", [{ kind: "field", name: "items", field_id: 4 }]),
+  ]);
+  const input = { ...rule(), columns: ["items"], masks: {} };
+  assert.deepEqual(applyMaskToTargets(input, ["items.$element.key", "literal", "reused"], { type: "hash" }, [], options).masks, { "items.$element.key": { type: "hash" } });
+  const withMasks = { ...input, columns: ["items.$element.key", "literal"], masks: { items: { type: "hash" }, literal: { type: "redact" }, orphan: { type: "null" } } };
+  assert.deepEqual(removeColumnSelections(withMasks, ["items.$element.key"], options).masks, { literal: { type: "redact" }, orphan: { type: "null" } });
+});

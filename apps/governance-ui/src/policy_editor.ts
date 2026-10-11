@@ -14,11 +14,12 @@ export type MaskGroup = { mask?: Mask; columns: string[] };
 export function authoritativeColumnOptions(fields: SchemaNode[] | undefined, selected: string[] = []): ColumnOption[] {
   if (!fields) return selected.map((value) => ({ value, label: value, type: "Unavailable", valid: false }));
   const options: ColumnOption[] = [];
-  const visit = (node: SchemaNode) => {
+  const pending = [...fields].reverse();
+  while (pending.length) {
+    const node = pending.pop()!;
     options.push({ value: node.human_path, label: node.human_path, type: node.type, path: node.path, valid: true });
-    node.children?.forEach(visit);
-  };
-  fields.forEach(visit);
+    for (let index = (node.children?.length ?? 0) - 1; index >= 0; index -= 1) pending.push(node.children![index]);
+  }
   const known = new Set(options.map((option) => option.value));
   for (const value of selected) if (!known.has(value)) options.push({ value, label: value, type: "Removed from schema", valid: false });
   return options;
@@ -55,6 +56,30 @@ function maskKey(mask: Mask): string {
   return stable({ ...mask, exempt_principals: [...new Set(mask.exempt_principals ?? [])].sort() });
 }
 
+/** Index grant coverage once per edit, retaining exact typed ancestry. */
+function selectionCoverage(values: string[], options: ColumnOption[]) {
+  const exact = new Set(values);
+  const paths = new Map(options.map((option) => [option.value, pathSegments(option.path)]));
+  const selectedPaths = new Set<string>();
+  const selectedAncestors = new Set<string>();
+  for (const value of exact) {
+    const segments = paths.get(value);
+    if (!segments) continue;
+    selectedPaths.add(JSON.stringify(segments));
+    for (let depth = 1; depth < segments.length; depth += 1) selectedAncestors.add(JSON.stringify(segments.slice(0, depth)));
+  }
+  return (value: string, includeDescendants = false): boolean => {
+    if (exact.has(value)) return true;
+    const segments = paths.get(value);
+    if (!segments) return false;
+    if (includeDescendants && selectedAncestors.has(JSON.stringify(segments))) return true;
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      if (selectedPaths.has(JSON.stringify(segments.slice(0, depth)))) return true;
+    }
+    return false;
+  };
+}
+
 export function groupMasks(rule: PolicyRule, columns: string[]): MaskGroup[] {
   const groups = new Map<string, MaskGroup>();
   for (const column of columns) {
@@ -75,8 +100,8 @@ export function applyMaskToTargets(
   excluded: string[] = [],
   options: ColumnOption[] = [],
 ): PolicyRule {
-  const allowed = new Set(rule.columns);
-  const targetSet = new Set(targets.filter((column) => allowed.has(column) || rule.columns.some((parent) => schemaPathCovers(parent, column, options))));
+  const covered = selectionCoverage(rule.columns, options);
+  const targetSet = new Set(targets.filter((column) => covered(column)));
   const excludedSet = new Set(excluded.filter((column) => targetSet.has(column)));
   const masks = { ...rule.masks };
   for (const column of targetSet) {
@@ -88,13 +113,13 @@ export function applyMaskToTargets(
 
 /** Removes explicit grants and masks no longer covered by any remaining grant. */
 export function removeColumnSelections(rule: PolicyRule, removed: string[], options: ColumnOption[]): PolicyRule {
-  const remaining = rule.columns.filter((column) => !removed.includes(column));
+  const removedSet = new Set(removed);
+  const remaining = rule.columns.filter((column) => !removedSet.has(column));
   const masks = { ...rule.masks };
-  const overlaps = (selection: string, maskPath: string) => schemaPathCovers(selection, maskPath, options) || schemaPathCovers(maskPath, selection, options);
+  const coveredBefore = selectionCoverage(rule.columns, options);
+  const coveredAfter = selectionCoverage(remaining, options);
   for (const maskPath of Object.keys(masks)) {
-    const coveredBefore = rule.columns.some((column) => overlaps(column, maskPath));
-    const coveredAfter = remaining.some((column) => overlaps(column, maskPath));
-    if (coveredBefore && !coveredAfter) delete masks[maskPath];
+    if (coveredBefore(maskPath, true) && !coveredAfter(maskPath, true)) delete masks[maskPath];
   }
   return { ...rule, columns: remaining, masks };
 }

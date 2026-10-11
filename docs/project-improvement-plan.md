@@ -517,3 +517,21 @@ existing authenticated E2E fixtures and selected-column search p95 gate remain
 separate evidence. No live workload, field INP, or aggregate capacity claim is
 made. E06 remains partially resolved pending representative workload and field
 qualification.
+
+## 21. Eleventh implementation delivery — indexed mask edits
+
+Mask application and grant removal now use one typed-path coverage index per edit
+instead of rebuilding the entire schema lookup for every comparison. Strict typed
+ancestors retain literal dotted names, collection tokens, and historical field
+identity. Another surviving grant still preserves a covered mask; unrelated masks
+and rule metadata remain unchanged. Schema option traversal now uses an explicit
+stack, and unrelated editor changes retain the option array.
+
+A failing synthetic deep traversal test first exposed JavaScript stack overflow.
+All 72 UI unit tests, 58 rendered stories, 101 E2E cases, TypeScript, and unchanged
+bundle gates pass after implementation. A reproducible same-host 300-grant probe
+measured mask apply 560.082 → 0.278 ms and removal 1,145.828 → 0.497 ms; exact
+values and selected columns are checked independently of the timed interval.
+See [measurement and limits](mask-edit-performance.md). Synthetic deep traversal
+does not remove the native Arrow depth limit. Full-schema transfer, prefix work,
+mask-summary rendering, provider coverage, and the remaining plan stay open.
