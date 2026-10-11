@@ -96,6 +96,22 @@ def create_iceberg_table(
     return identifier
 
 
+def append_parquet(table, data, *, row_group_size=65536):
+    """Preserve Arrow nulls in fixtures; PyIceberg's struct collection writer loses them.
+
+    Arrow writes the data and field IDs; PyIceberg's public add_files API owns
+    statistics, partition inference, manifests, sequence numbers and the commit.
+    """
+    import uuid
+
+    import pyarrow.parquet as pq
+
+    path = table.metadata.location + "/data/" + uuid.uuid4().hex + ".parquet"
+    with table.io.new_output(path).create() as output:
+        pq.write_table(data.cast(table.schema().as_arrow()), output, row_group_size=row_group_size)
+    table.add_files([path])
+
+
 def iceberg_sql_catalog_options(
     tmp_path: Path,
     catalog_name: str,
@@ -159,12 +175,15 @@ def install_delete_file(
         records = []
         for task in table.scan().plan_files():
             with table.io.new_input(task.file.file_path).open() as stream:
-                rows = pq.read_table(stream).to_pylist()
-            records += [
-                {"file_path": task.file.file_path, "pos": position}
-                for position, row in enumerate(rows)
-                if row["id"] in ids
-            ]
+                parquet = pq.ParquetFile(stream)
+                offset = 0
+                for batch in parquet.iter_batches(batch_size=8192, columns=["id"]):
+                    records.extend(
+                        {"file_path": task.file.file_path, "pos": offset + position}
+                        for position, identifier in enumerate(batch.column(0).to_pylist())
+                        if identifier in ids
+                    )
+                    offset += batch.num_rows
         content = DataFileContent.POSITION_DELETES
     with table.io.new_output(delete_path).create() as output:
         pq.write_table(pa.Table.from_pylist(records, schema=schema), output)

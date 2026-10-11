@@ -1,10 +1,10 @@
 # Rebuilt plugin contract
 
 All bundled plugins now implement one breaking API 2 contract in release 0.2.0.
-The server contains the native SQL catalog and Iceberg format; the independent
+The server contains the official PyIceberg catalog and native Iceberg format; the independent
 manifest/Parquet and Iceberg REST wheels use the same public SDK boundary.
 The new independent [Delta wheel](../packages/delta-plugin/README.md) adds
-`delta.directory` and `delta` entry points with pinned parallel scans and native
+`delta.directory`, `delta.catalog` and `delta` entry points with pinned parallel scans and native
 deletion-vector handling. Build and admit its exact artifact alongside the other
 external plugins; source-only registration is not release qualification.
 
@@ -57,11 +57,11 @@ Generate the external lock from those installed artifacts:
 python scripts/build_plugin_lock.py --output /tmp/plugin-lock.json \
   --plugin catalog:iceberg.rest --plugin catalog:manifest \
   --plugin table_format:parquet.dataset --plugin catalog:delta.directory \
-  --plugin table_format:delta
+  --plugin catalog:delta.catalog --plugin table_format:delta
 ```
 
-Admit all five entries through the registry and verify exact artifact identities.
-Native SQL/Iceberg ship in the service wheel. The independently packaged
+Admit all six entries through the registry and verify exact artifact identities.
+Native catalog/Iceberg ship in the service wheel. The independently packaged
 [native Iceberg reader](../packages/iceberg-reader/README.md) is a pinned server
 dependency. Build it with Rust 1.94 and ship its exact platform wheel to every worker;
 it implements no additional plugin ABI. Workers never compile/download during reads.

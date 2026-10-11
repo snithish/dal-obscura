@@ -197,14 +197,7 @@ def conditions_to_json(
 
 @dataclass(frozen=True)
 class AssetPolicy:
-    """Compiled policy snapshot for one governed asset.
-
-    Example:
-        ```python
-        compiled = AssetPolicy(version=1, catalog="analytics", target="orders", rules=[])
-        policy = compiled.to_policy()
-        ```
-    """
+    """Compiled policy snapshot for one governed asset."""
 
     version: int
     catalog: str

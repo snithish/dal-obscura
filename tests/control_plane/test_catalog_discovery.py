@@ -86,7 +86,7 @@ def test_iceberg_discovery_rejects_root_only_list_tables_signature() -> None:
 
 
 def test_iceberg_discovery_skips_pyiceberg_empty_root_namespace() -> None:
-    class SqlCatalog:
+    class IcebergCatalog:
         def list_namespaces(self, namespace=()):
             return [("retail",)] if not namespace else []
 
@@ -96,7 +96,7 @@ def test_iceberg_discovery_skips_pyiceberg_empty_root_namespace() -> None:
             return [("retail", "customer_revenue")]
 
     assert discover_iceberg_tables(
-        "analytics", {}, load_catalog_fn=lambda name, **options: SqlCatalog()
+        "analytics", {}, load_catalog_fn=lambda name, **options: IcebergCatalog()
     ) == [
         {
             "backend": "iceberg",

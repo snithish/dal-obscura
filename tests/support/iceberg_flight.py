@@ -9,7 +9,7 @@ from dal_obscura.sources.catalogs import (
 )
 from tests.support.iceberg import iceberg_sql_catalog_options
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 
 
 def iceberg_catalog_config(

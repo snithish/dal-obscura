@@ -42,24 +42,26 @@ def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
         session.commit()
 
     ticket_id = "00000000-0000-0000-0000-000000000001"
-    SqlAlchemyTicketStore(session_maker).store(
-        TicketPayload(
-            asset_id="00000000-0000-4000-8000-000000000001",
-            ticket_id=ticket_id,
-            catalog="analytics",
-            target="default.users",
-            columns=["id"],
-            scan={
-                "authorization_columns": ["id", "region"],
-                "read_payload": "payload",
-                "full_row_filter": None,
-                "masks": {},
-            },
-            policy_version=1,
-            principal_id="user:alice",
-            expires_at=2_000_000_000,
-            nonce="nonce",
-        ),
+    SqlAlchemyTicketStore(session_maker).store_many(
+        [
+            TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
+                ticket_id=ticket_id,
+                catalog="analytics",
+                target="default.users",
+                columns=["id"],
+                scan={
+                    "authorization_columns": ["id", "region"],
+                    "read_payload": "payload",
+                    "full_row_filter": None,
+                    "masks": {},
+                },
+                policy_version=1,
+                principal_id="user:alice",
+                expires_at=2_000_000_000,
+                nonce="nonce",
+            )
+        ],
         max_exchanges=1,
     )
 

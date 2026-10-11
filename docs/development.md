@@ -45,7 +45,7 @@ The [architecture atlas](architecture/architecture-atlas.html) shows these bound
 ## Setup
 
 ```bash
-uv sync --dev --extra server --extra sqlite
+uv sync --dev --extra server
 ```
 
 Run command help:

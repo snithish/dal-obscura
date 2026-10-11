@@ -1,10 +1,4 @@
-"""Catalog routes for the workspace API.
-
-Example:
-    ```python
-    app.include_router(router(deps))
-    ```
-"""
+"""Catalog routes for the workspace API."""
 
 from __future__ import annotations
 
@@ -23,13 +17,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
-    """Builds workspace catalog routes.
-
-    Example:
-        ```python
-        catalog_router = router(deps)
-        ```
-    """
+    """Builds workspace catalog routes."""
 
     api = APIRouter()
 

@@ -59,13 +59,13 @@ def test_workspace_catalog_upsert_accepts_plugin_defaults_without_backend_fields
 
     response = client.put(
         "/v1/catalogs/analytics",
-        json={"plugin_id": "iceberg.sql", "options": {"uri": "sqlite:///catalog.db"}},
+        json={"plugin_id": "iceberg.catalog", "options": {"uri": "sqlite:///catalog.db"}},
         headers=ADMIN_HEADERS,
     )
 
     assert response.status_code == 200
     catalog = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()[0]
-    assert catalog["plugin_id"] == "iceberg.sql"
+    assert catalog["plugin_id"] == "iceberg.catalog"
     assert catalog["options"] == {"uri": "sqlite:///catalog.db"}
 
 

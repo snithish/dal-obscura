@@ -1,39 +1,21 @@
-"""Environment-backed data-plane runtime configuration.
-
-Example:
-    ```python
-    config = load_data_plane_runtime_config()
-    assert config.location.startswith("grpc")
-    ```
-"""
+"""Environment-backed data-plane runtime configuration."""
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 from dal_obscura.read.memory_limits import validate_memory_limit
 from dal_obscura.sources.secrets import (
-    ENV_SECRET_PROVIDER_MODULE,
     SecretProviderConfig,
+    secret_provider_config_from_environment,
 )
 
 
 @dataclass(frozen=True)
 class DataPlaneRuntimeConfig:
-    """Configuration required to start one data-plane process.
-
-    Example:
-        ```python
-        config = DataPlaneRuntimeConfig(
-            database_url="sqlite+pysqlite:///control-plane.db",
-            location="grpc://0.0.0.0:8815",
-            ticket_secret="dev-ticket-secret",
-        )
-        ```
-    """
+    """Configuration required to start one data-plane process."""
 
     database_url: str
     location: str
@@ -109,7 +91,7 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         ticket_cleanup_interval_seconds=_positive_int_env(
             "DAL_OBSCURA_TICKET_CLEANUP_INTERVAL_SECONDS", default=60
         ),
-        secret_provider=_secret_provider_config(),
+        secret_provider=secret_provider_config_from_environment(),
         plugin_lock_file=_optional_env("DAL_OBSCURA_PLUGIN_LOCK_FILE"),
     )
     _validate_profile(config)
@@ -205,35 +187,3 @@ def _memory_limit_env() -> str:
         return validate_memory_limit(value)
     except ValueError as exc:
         raise ValueError(f"DAL_OBSCURA_DUCKDB_MEMORY_LIMIT: {exc}") from exc
-
-
-def _secret_provider_config() -> SecretProviderConfig:
-    if "DAL_OBSCURA_SECRET_PROVIDER_SECRETS" in os.environ:
-        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_SECRETS is unsupported")
-    module = os.getenv("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
-    if module != ENV_SECRET_PROVIDER_MODULE:
-        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported")
-    return SecretProviderConfig(
-        module=module, config=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_CONFIG")
-    )
-
-
-def _json_object_env(name: str) -> dict[str, object]:
-    raw = os.getenv(name)
-    if raw is None or not raw.strip():
-        return {}
-    value = json.loads(raw, object_pairs_hook=_unique_json_object)
-    if not isinstance(value, dict):
-        raise ValueError(f"{name} must be a JSON object")
-    return {str(key): item for key, item in value.items()}
-
-
-def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    """Reject duplicate environment configuration keys instead of overriding."""
-
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"{key} contains duplicate JSON key {key!r}")
-        result[key] = value
-    return result

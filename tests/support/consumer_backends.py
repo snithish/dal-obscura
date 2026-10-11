@@ -70,7 +70,7 @@ def catalog_registry(options, *, plugin_id=None, plugins=None) -> CatalogRegistr
             catalogs={
                 "analytics": CatalogConfig(
                     name="analytics",
-                    plugin_id=plugin_id or "iceberg.sql",
+                    plugin_id=plugin_id or "iceberg.catalog",
                     revision=1,
                     options=options,
                 )
@@ -254,7 +254,7 @@ def consumer_server(backend: str, directory: Path):
         )
         return
     factory = {
-        "iceberg.sql": sql_registry,
+        "iceberg.catalog": sql_registry,
         "manifest.parquet": manifest_registry,
         "iceberg.rest": rest_registry,
         "delta.directory": delta_registry,

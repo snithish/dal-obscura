@@ -7,7 +7,6 @@ from dal_obscura.policy.models import (
     MaskRule,
     Policy,
     Principal,
-    PrincipalConditionValue,
 )
 from dal_obscura.policy.paths import path_covers
 
@@ -46,7 +45,7 @@ def resolve_access(
             continue
         if "*" not in rule.principals and not principal_tokens.intersection(rule.principals):
             continue
-        if not _matches_conditions(principal, rule.when):
+        if not attributes_match(principal.attributes, rule.when):
             continue
         matching_columns = _matching_columns(requested, rule.columns)
         granted.update(matching_columns)
@@ -131,10 +130,3 @@ def _keep_last_value(mask: MaskRule) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise PermissionError("Invalid keep_last mask")
     return value
-
-
-def _matches_conditions(
-    principal: Principal,
-    when: Mapping[str, PrincipalConditionValue] | None,
-) -> bool:
-    return attributes_match(principal.attributes, when)

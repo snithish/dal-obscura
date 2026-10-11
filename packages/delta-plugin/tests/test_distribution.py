@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import dal_obscura_delta
-from dal_obscura_delta.catalog import CATALOG_DESCRIPTOR
+from dal_obscura_delta.catalog import CATALOG_DESCRIPTOR, LOCATION_DESCRIPTOR
 from dal_obscura_delta.format import FORMAT_DESCRIPTOR
 
 
@@ -14,7 +14,7 @@ def test_static_descriptors_match_runtime_contract_without_importing_service():
     static = json.loads((package / "dal_obscura-plugin.json").read_text())["descriptors"]
     expected = [
         {k: v for k, v in descriptor.to_json().items() if k not in {"distribution", "version"}}
-        for descriptor in (CATALOG_DESCRIPTOR, FORMAT_DESCRIPTOR)
+        for descriptor in (CATALOG_DESCRIPTOR, LOCATION_DESCRIPTOR, FORMAT_DESCRIPTOR)
     ]
     assert static == expected
     imports = set()

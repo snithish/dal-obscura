@@ -227,7 +227,7 @@ def control_plane_setup(
         _commands_seed.create_catalog(
             service,
             name="e2e_catalog",
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
         )
         asset = _commands_seed.create_asset(

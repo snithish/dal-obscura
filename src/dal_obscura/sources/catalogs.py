@@ -28,7 +28,7 @@ class CatalogConfig:
     name: str
     options: dict[str, Any] = field(default_factory=dict)
     path_enforcer: PathRuleEnforcer | None = None
-    plugin_id: str = "iceberg.sql"
+    plugin_id: str = "iceberg.catalog"
     revision: int = 0
 
     def __post_init__(self) -> None:
@@ -80,13 +80,6 @@ class CatalogRegistry:
             if implementation is None:
                 raise ValueError(f"Unknown catalog: {catalog}")
             return implementation.resolve_table(target)
-
-    def describe(
-        self,
-        catalog: str | None,
-        target: str,
-    ) -> Source:
-        return self.resolve(catalog, target)
 
     def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
         self._ensure_open()

@@ -1,6 +1,6 @@
 """Real native file fan-out; setup stays outside measured scans."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from dal_obscura_plugin_api import ExecutionContext, ScanRequest, TableHandle, TableIdentifier
@@ -29,7 +29,7 @@ def test_benchmark_iceberg_multifile_scan(benchmark, tmp_path):
         },
     ).load_table(identifier)
     handle = TableHandle(
-        "iceberg.sql",
+        "iceberg.catalog",
         "bench",
         1,
         TableIdentifier(("default",), "users"),
@@ -38,7 +38,7 @@ def test_benchmark_iceberg_multifile_scan(benchmark, tmp_path):
         str(table.metadata.current_snapshot_id),
         {"metadata_location": table.metadata_location},
     )
-    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=10), "benchmark")
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=10), "benchmark")
     plugin = IcebergFormatPlugin(handle, context)
     schema = plugin.schema(context).arrow_schema
     tasks = plugin.plan(ScanRequest(schema, 4), context)

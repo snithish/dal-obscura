@@ -47,13 +47,6 @@ class EnvSecretProvider(SecretProvider):
 
 
 @dataclass(frozen=True)
-class SecretProviderContext:
-    """Host-level context passed to a module-loaded secret provider."""
-
-    database_url: str
-
-
-@dataclass(frozen=True)
 class SecretProviderConfig:
     """Module and config used to instantiate a secret provider."""
 
@@ -61,13 +54,8 @@ class SecretProviderConfig:
     config: dict[str, object] = field(default_factory=dict)
 
 
-def load_secret_provider(
-    provider_config: SecretProviderConfig,
-    *,
-    context: SecretProviderContext,
-) -> SecretProvider:
+def load_secret_provider(provider_config: SecretProviderConfig) -> SecretProvider:
     """Builds the fixed environment provider from startup-only configuration."""
-    del context
     if provider_config.module != ENV_SECRET_PROVIDER_MODULE:
         raise ValueError("Unsupported secret provider; only environment secrets are supported")
     return EnvSecretProvider(config=provider_config.config)
@@ -86,22 +74,32 @@ def load_secret_provider_from_environment(
     module allowlist enforced by :func:`load_secret_provider`.
     """
 
-    source = os.environ if environment is None else environment
-    if "DAL_OBSCURA_SECRET_PROVIDER_SECRETS" in source:
-        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_SECRETS is unsupported")
-    module = source.get("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
-    config = _json_object_value(
-        source.get("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"), "DAL_OBSCURA_SECRET_PROVIDER_CONFIG"
-    )
-    scope_grants = config.get("scope_grants")
+    provider_config = secret_provider_config_from_environment(environment)
+    scope_grants = provider_config.config.get("scope_grants")
     if require_scope_grants and (not isinstance(scope_grants, Mapping) or not scope_grants):
         raise ValueError(
             "Production requires non-empty DAL_OBSCURA_SECRET_PROVIDER_CONFIG scope_grants"
         )
-    return load_secret_provider(
-        SecretProviderConfig(module=module, config=config),
-        context=SecretProviderContext(database_url="control-plane"),
+    return load_secret_provider(provider_config)
+
+
+def secret_provider_config_from_environment(
+    environment: Mapping[str, str] | None = None,
+) -> SecretProviderConfig:
+    """Parse the same admitted startup configuration for both service planes."""
+    source = os.environ if environment is None else environment
+    if "DAL_OBSCURA_SECRET_PROVIDER_SECRETS" in source:
+        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_SECRETS is unsupported")
+    module = source.get("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
+    if module != ENV_SECRET_PROVIDER_MODULE:
+        raise ValueError(
+            "DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported; "
+            "only environment secrets are supported"
+        )
+    config = _json_object_value(
+        source.get("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"), "DAL_OBSCURA_SECRET_PROVIDER_CONFIG"
     )
+    return SecretProviderConfig(module=module, config=config)
 
 
 def resolve_secret_refs(
@@ -155,10 +153,6 @@ def resolve_secret_refs(
             for item in value
         ]
     return value
-
-
-def _json_object_env(name: str) -> dict[str, object]:
-    return _json_object_value(os.getenv(name), name)
 
 
 def _json_object_value(raw: str | None, name: str) -> dict[str, object]:

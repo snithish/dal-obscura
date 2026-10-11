@@ -68,7 +68,7 @@ class StubTableFormat(FixtureSource):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("StubTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
@@ -99,7 +99,7 @@ class TrackingTableFormat(FixtureSource):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("TrackingTableFormat requires a StubInputPartition")
         return self.schema, iter(())
@@ -135,7 +135,7 @@ class PretendPushdownTableFormat(FixtureSource):
             else deserialize_row_filter(self.residual_sql),
         )
 
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("PretendPushdownTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
@@ -178,7 +178,7 @@ class FakeCatalogRegistry:
     def __init__(self, table_format: Source) -> None:
         self._table_format = table_format
 
-    def describe(
+    def resolve(
         self,
         catalog: str | None,
         target: str,
@@ -224,26 +224,20 @@ class FakeTicketStore:
         self.revoked: set[str] = set()
         self.fail_store = False
 
-    def store(self, payload: TicketPayload, *, max_exchanges: int) -> None:
-        if self.fail_store:
-            raise RuntimeError("store failed")
-        if payload.ticket_id is None:
-            raise AssertionError("ticket_id is required")
-        self.stored.append((payload, max_exchanges))
-        self.records[payload.ticket_id] = StoredTicket(
-            payload=payload,
-            payload_hash=ticket_payload_hash(payload),
-            exchange_count=0,
-            max_exchanges=max_exchanges,
-            expires_at=payload.expires_at,
-        )
-
     def store_many(self, payloads, *, max_exchanges: int) -> None:
-        payloads = list(payloads)
         if self.fail_store:
             raise RuntimeError("store failed")
         for payload in payloads:
-            self.store(payload, max_exchanges=max_exchanges)
+            if payload.ticket_id is None:
+                raise AssertionError("ticket_id is required")
+            self.stored.append((payload, max_exchanges))
+            self.records[payload.ticket_id] = StoredTicket(
+                payload=payload,
+                payload_hash=ticket_payload_hash(payload),
+                exchange_count=0,
+                max_exchanges=max_exchanges,
+                expires_at=payload.expires_at,
+            )
 
     def load(self, ticket_id: str) -> StoredTicket:
         try:

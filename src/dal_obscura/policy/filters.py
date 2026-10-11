@@ -1,12 +1,3 @@
-"""DuckDB row-filter parsing, validation, and serialization.
-
-Example:
-    ```python
-    row_filter = parse_row_filter("region = 'us'", schema)
-    sql = row_filter_to_sql(row_filter)
-    ```
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,14 +17,7 @@ from dal_obscura.policy.paths import (
 
 @dataclass(frozen=True)
 class RowFilter:
-    """Validated row-filter expression plus canonical DuckDB SQL.
-
-    Example:
-        ```python
-        row_filter = parse_row_filter("lower(region) = 'us'", schema)
-        assert row_filter.sql == "LOWER(region) = 'us'"
-        ```
-    """
+    """Validated row-filter expression plus canonical DuckDB SQL."""
 
     sql: str
     _expression: exp.Expr = field(repr=False, compare=False)
@@ -47,10 +31,9 @@ class RowFilter:
 
 def parse_row_filter(expression: str, schema: pa.Schema) -> RowFilter:
     """Parses a DuckDB filter expression and validates referenced schema paths."""
-    parsed = _parse_filter_expression(expression)
-    _validate_filter_root(parsed)
-    _validate_column_references(parsed, schema)
-    return _build_row_filter(parsed)
+    row_filter = _build_row_filter(_parse_filter_expression(expression))
+    _validate_column_references(row_filter.expression, schema)
+    return row_filter
 
 
 def validate_row_filter_against_schema(row_filter: RowFilter, schema: pa.Schema) -> RowFilter:
@@ -73,29 +56,12 @@ def combine_row_filters(*row_filters: RowFilter | None) -> RowFilter | None:
     return _build_row_filter(expression)
 
 
-def row_filter_to_sql(row_filter: RowFilter) -> str:
-    """Renders the canonical DuckDB SQL string for a validated filter."""
-    return row_filter.sql
-
-
-def extract_row_filter_dependencies(row_filter: RowFilter) -> list[str]:
-    """Returns referenced field paths in stable first-seen order."""
-    return list(row_filter.dependencies)
-
-
-def serialize_row_filter(row_filter: RowFilter) -> str:
-    """Converts a validated row filter into its canonical SQL string."""
-    return row_filter.sql
-
-
 def deserialize_row_filter(payload: object) -> RowFilter:
     """Restores a canonical row filter from a signed payload."""
     if not isinstance(payload, str) or not payload.strip():
         raise ValueError("Invalid row filter payload in ticket")
 
-    parsed = _parse_filter_expression(payload)
-    _validate_filter_root(parsed)
-    return _build_row_filter(parsed)
+    return _build_row_filter(_parse_filter_expression(payload))
 
 
 def _build_row_filter(expression: exp.Expr) -> RowFilter:

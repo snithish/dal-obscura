@@ -13,7 +13,7 @@ from scripts.build_plugin_lock import build_document, parse_selection, write_loc
 
 
 def test_parse_selection_requires_an_admitted_plugin_kind() -> None:
-    assert parse_selection("catalog:iceberg.sql") == ("catalog", "iceberg.sql")
+    assert parse_selection("catalog:iceberg.catalog") == ("catalog", "iceberg.catalog")
     assert parse_selection("table_format:parquet.dataset") == (
         "table_format",
         "parquet.dataset",

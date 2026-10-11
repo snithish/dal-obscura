@@ -16,21 +16,21 @@ def test_plugin_descriptors_expose_only_admitted_bounded_capabilities(client_fac
 
     assert response.status_code == 200
     payload = response.json()
-    assert {item["plugin_id"] for item in payload["plugins"]} == {"iceberg.sql", "iceberg"}
+    assert {item["plugin_id"] for item in payload["plugins"]} == {"iceberg.catalog", "iceberg"}
     assert payload["states"] == [
-        {"kind": "catalog", "plugin_id": "iceberg.sql", "status": "enabled"},
+        {"kind": "catalog", "plugin_id": "iceberg.catalog", "status": "enabled"},
         {"kind": "table_format", "plugin_id": "iceberg", "status": "enabled"},
     ]
     assert payload["pairs"] == [
         {
-            "catalog_plugin_id": "iceberg.sql",
+            "catalog_plugin_id": "iceberg.catalog",
             "format_plugin_id": "iceberg",
             "capabilities": ["nested_schema", "snapshot_reads", "splittable_scan"],
             "handle_versions": [1],
             "status": "admitted",
         }
     ]
-    catalog = next(item for item in payload["plugins"] if item["plugin_id"] == "iceberg.sql")
+    catalog = next(item for item in payload["plugins"] if item["plugin_id"] == "iceberg.catalog")
     assert catalog["status"] == "admitted"
     assert catalog["output_formats"] == ["iceberg"]
     assert all("$ref" not in str(value) for value in catalog["config_schema"].values())
@@ -41,22 +41,22 @@ def test_platform_admin_can_transition_plugin_lifecycle_and_audit_change(client_
     client = client_factory()
 
     disabled = client.patch(
-        "/v1/plugins/catalog/iceberg.sql/lifecycle",
+        "/v1/plugins/catalog/iceberg.catalog/lifecycle",
         headers=ADMIN_HEADERS,
         json={"target": "disabled"},
     )
     assert disabled.status_code == 200
     assert disabled.json() == {
         "kind": "catalog",
-        "plugin_id": "iceberg.sql",
+        "plugin_id": "iceberg.catalog",
         "lifecycle": "disabled",
     }
     states = client.get("/v1/plugins", headers=ADMIN_HEADERS).json()["states"]
     lifecycle_by_plugin = {item["plugin_id"]: item.get("lifecycle") for item in states}
-    assert lifecycle_by_plugin["iceberg.sql"] == "disabled"
+    assert lifecycle_by_plugin["iceberg.catalog"] == "disabled"
 
     enabled = client.patch(
-        "/v1/plugins/catalog/iceberg.sql/lifecycle",
+        "/v1/plugins/catalog/iceberg.catalog/lifecycle",
         headers=ADMIN_HEADERS,
         json={"target": "enabled"},
     )

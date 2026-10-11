@@ -8,7 +8,7 @@ from dal_obscura.policy.models import Principal
 from dal_obscura.read.request import PlanRequest
 from dal_obscura.read.ticket_repository import StoredTicket
 from dal_obscura.read.tickets import ScanPayload
-from tests.application.access_flow.helpers import (
+from tests.support.read_scenarios import (
     AUTHORIZATION_HEADER,
     _build_use_case_dependencies,
     _ticket_store_with,
@@ -144,7 +144,7 @@ def test_fetch_stream_reserves_exchange_before_scan_execution():
         nonce="nonce",
     )
     ticket_store = FakeTicketStore()
-    ticket_store.store(payload, max_exchanges=1)
+    ticket_store.store_many([payload], max_exchanges=1)
     use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         row_transform=FakeRowTransform(),

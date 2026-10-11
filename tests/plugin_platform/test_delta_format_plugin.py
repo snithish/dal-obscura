@@ -1,6 +1,7 @@
 """Core routing and passive scan envelopes preserve actual Delta DV semantics."""
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 
 import pyarrow as pa
 from deltalake import DeltaTable
@@ -22,7 +23,9 @@ def test_core_delta_tasks_restore_parallel_deletes_after_later_update(tmp_path):
 
         def read(payload):
             task = codec.decode(payload)
-            schema, batches = task.table_format.execute(task.partition)
+            schema, batches = task.table_format.execute(
+                task.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+            )
             return pa.Table.from_batches(list(batches), schema=schema)
 
         with ThreadPoolExecutor(max_workers=2) as pool:

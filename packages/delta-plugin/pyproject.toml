@@ -11,6 +11,7 @@ dependencies = [
 
 [project.entry-points."dal_obscura.catalogs.v2"]
 "delta.directory" = "dal_obscura_delta.catalog:delta_catalog_factory"
+"delta.catalog" = "dal_obscura_delta.catalog:delta_location_catalog_factory"
 
 [project.entry-points."dal_obscura.table_formats.v2"]
 delta = "dal_obscura_delta.format:delta_format_factory"

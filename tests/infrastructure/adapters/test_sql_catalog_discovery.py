@@ -1,24 +1,24 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
-from dal_obscura.sources.sql_catalog import SqlCatalog
+from dal_obscura.sources.iceberg_catalog import IcebergCatalog
 
 
 def context(seconds=30):
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(seconds=seconds),
+        deadline=datetime.now(UTC) + timedelta(seconds=seconds),
         correlation_id="sql-discovery",
     )
 
 
 def catalog(monkeypatch, provider, operation):
     monkeypatch.setattr(
-        "dal_obscura.sources.sql_catalog._load_iceberg_catalog", lambda *args: provider
+        "dal_obscura.sources.iceberg_catalog._load_iceberg_catalog", lambda *args: provider
     )
-    return SqlCatalog(
-        CatalogConfig(plugin_id="iceberg.sql", instance_id="analytics", revision=1), operation
+    return IcebergCatalog(
+        CatalogConfig(plugin_id="iceberg.catalog", instance_id="analytics", revision=1), operation
     )
 
 
@@ -47,7 +47,7 @@ def test_sql_discovery_preserves_literal_names_and_materializes_once_per_operati
 def test_sql_discovery_stops_namespace_traversal_at_deadline(monkeypatch):
     visits = []
     now = [0.0]
-    monkeypatch.setattr("dal_obscura.sources.sql_catalog.monotonic", lambda: now[0])
+    monkeypatch.setattr("dal_obscura.sources.iceberg_catalog.monotonic", lambda: now[0])
     monkeypatch.setattr("dal_obscura.sources.discovery.monotonic", lambda: now[0])
 
     class Provider:

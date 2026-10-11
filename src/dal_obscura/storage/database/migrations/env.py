@@ -15,13 +15,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_online() -> None:
-    """Runs Alembic migrations with the connection supplied by the migration CLI.
-
-    Example:
-        ```python
-        run_migrations_online()
-        ```
-    """
+    """Runs Alembic migrations with the connection supplied by the migration CLI."""
 
     connectable = config.attributes.get("connection")
     if connectable is None:

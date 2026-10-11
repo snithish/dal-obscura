@@ -8,7 +8,7 @@ from threading import BoundedSemaphore
 import duckdb
 import pyarrow as pa
 
-from dal_obscura.policy.filters import RowFilter, row_filter_to_sql
+from dal_obscura.policy.filters import RowFilter
 from dal_obscura.policy.models import MaskRule
 from dal_obscura.policy.projection import compile_projection
 from dal_obscura.read.duckdb_connection import TRANSFORM_CONFIG, connect
@@ -104,7 +104,7 @@ class DuckDBRowTransformAdapter:
                         raise ValueError("Arrow input schema changed during the governed stream")
                     _require_batch_size(batch, self._max_input_batch_bytes)
                     result_reader = (
-                        con.from_arrow(batch)
+                        con.from_arrow(_duckdb_input(batch))
                         .query("input", query)
                         .to_arrow_reader(batch_size=_DUCKDB_ARROW_OUTPUT_BATCH_SIZE)
                     )
@@ -120,6 +120,38 @@ class DuckDBRowTransformAdapter:
                 raise StreamMemoryLimitError(
                     "Governed stream memory budget exhausted; reduce batch size or concurrent reads"
                 ) from exc
+
+
+def _duckdb_input(batch: pa.RecordBatch) -> pa.RecordBatch:
+    """Compact only sliced nested columns before DuckDB's Arrow conversion.
+
+    DuckDB 1.5.1 misreads child validity/offsets in sliced nested arrays. Arrow
+    concatenation rebases those buffers without Python scalar materialization.
+    Scalar and unsliced columns retain their original buffers.
+    """
+    columns = [
+        pa.concat_arrays([column])
+        if pa.types.is_nested(column.type) and _has_offsets(column)
+        else column
+        for column in batch.columns
+    ]
+    return pa.RecordBatch.from_arrays(columns, schema=batch.schema)
+
+
+def _has_offsets(array: pa.Array) -> bool:
+    if array.offset:
+        return True
+    if pa.types.is_struct(array.type):
+        return any(_has_offsets(array.field(index)) for index in range(array.type.num_fields))
+    if (
+        pa.types.is_list(array.type)
+        or pa.types.is_large_list(array.type)
+        or pa.types.is_fixed_size_list(array.type)
+    ):
+        return _has_offsets(array.values)
+    if pa.types.is_map(array.type):
+        return _has_offsets(array.keys) or _has_offsets(array.items)
+    return False
 
 
 def _close_if_possible(value: object) -> None:
@@ -160,5 +192,5 @@ def _build_query(
     selection = compile_projection(base_schema, columns, masks)
     query = f"SELECT {', '.join(selection.select_list)} FROM input"
     if row_filter:
-        query += f" WHERE {row_filter_to_sql(row_filter)}"
+        query += f" WHERE {row_filter.sql}"
     return query

@@ -19,10 +19,10 @@ from dal_obscura_plugin_api import (
     SchemaDescriptor,
     TableHandle,
 )
-from dal_obscura_plugin_api.storage import StorageRoot
 from pyarrow.dataset import ParquetFileFormat
 
 from dal_obscura_delta.snapshot import MAX_DV_ROWS, MAX_FILES, open_snapshot
+from dal_obscura_delta.storage import DeltaStorage
 
 FORMAT_DESCRIPTOR = PluginDescriptor(
     kind="table_format",
@@ -56,15 +56,13 @@ class DeltaFormat:
             raise ValueError("Incompatible Delta handle")
         metadata = cast(dict[str, Any], dict(handle.metadata))
         if (
-            set(metadata) != {"root", "path", "version", "table_id"}
-            or any(not isinstance(metadata[k], str) for k in ("root", "path", "table_id"))
+            set(metadata) != {"location", "version", "table_id"}
+            or any(not isinstance(metadata[k], str) for k in ("location", "table_id"))
             or type(metadata["version"]) is not int
             or metadata["version"] < 0
         ):
             raise ValueError("Invalid Delta handle metadata")
-        root = StorageRoot(metadata["root"])
-        member = root.member(metadata["path"])
-        self._storage = StorageRoot(root.location(member))
+        self._storage = DeltaStorage(metadata["location"])
         self._table = open_snapshot(self._storage, context, metadata["version"])
         if (
             self._table.metadata().id != metadata["table_id"]
@@ -82,6 +80,19 @@ class DeltaFormat:
         self._actions = {row["path"]: row for row in actions.select(columns).to_pylist()}
         if len(self._actions) != actions.num_rows:
             raise ValueError("Delta snapshot contains duplicate active files")
+        # The public Arrow dataset owns COW partition/statistics/schema handling.
+        # It explicitly rejects deletion vectors; only that path needs the
+        # kernel selection-vector bridge below.
+        self._fragments = (
+            None
+            if "deletionVectors" in (self._table.protocol().reader_features or ())
+            else {
+                fragment.path: fragment
+                for fragment in self._table.to_pyarrow_dataset(
+                    filesystem=self._storage.filesystem
+                ).get_fragments()
+            }
+        )
 
     def schema(self, context: ExecutionContext) -> SchemaDescriptor:
         context.check_active()
@@ -216,11 +227,15 @@ class DeltaFormat:
                     if value is None
                     else field == pa.scalar(value, self._schema.field(name).type)
                 )
-            fragment = ParquetFileFormat().make_fragment(
-                str(path),
-                filesystem=self._storage.filesystem,
-                partition_expression=expression,
-                row_groups=[index],
+            fragment = (
+                self._fragments[group["path"]].subset(row_group_ids=[index])
+                if self._fragments is not None
+                else ParquetFileFormat().make_fragment(
+                    str(path),
+                    filesystem=self._storage.filesystem,
+                    partition_expression=expression,
+                    row_groups=[index],
+                )
             )
             offset = 0
             batches = fragment.to_batches(
@@ -252,6 +267,7 @@ class DeltaFormat:
     def close(self):
         self._table = None
         self._actions.clear()
+        self._fragments = None
 
     def __enter__(self):
         return self

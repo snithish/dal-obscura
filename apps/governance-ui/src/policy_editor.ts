@@ -67,11 +67,6 @@ export function groupMasks(rule: PolicyRule, columns: string[]): MaskGroup[] {
   return [...groups.values()];
 }
 
-export function mixedMaskState(rule: PolicyRule, columns: string[]): boolean {
-  if (columns.length < 2) return false;
-  return new Set(columns.map((column) => rule.masks[column] === undefined ? "<unmasked>" : maskKey(rule.masks[column]))).size > 1;
-}
-
 /** Applies only to explicit targets; access and unrelated rule metadata stay intact. */
 export function applyMaskToTargets(
   rule: PolicyRule,

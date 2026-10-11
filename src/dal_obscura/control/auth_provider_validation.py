@@ -94,12 +94,7 @@ def _validate_oidc_args(args: Mapping[str, object], *, index: int) -> None:  # n
         raise ValidationFailure(
             f"Authentication provider {index} cannot persist static JWKS material"
         )
-    unknown = sorted(
-        str(key)
-        for key, value in args.items()
-        if str(key) not in _SUPPORTED_ARGUMENTS
-        and not (value == "[redacted]" and str(key).lower() in _REDACTED_ARGUMENTS)
-    )
+    unknown = sorted(str(key) for key in args if key not in _SUPPORTED_ARGUMENTS)
     if unknown:
         raise ValidationFailure(
             f"Authentication provider {index} has unsupported arguments: {', '.join(unknown)}"

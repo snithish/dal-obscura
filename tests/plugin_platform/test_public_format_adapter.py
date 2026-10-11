@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pyarrow as pa
@@ -183,7 +183,9 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
         handle=handle,
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
-    _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
+    _schema, batches = plan.tasks[0].table_format.execute(
+        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+    )
     with pytest.raises(ValueError, match="batch schema"):
         list(batches)
 
@@ -231,8 +233,8 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
     monkeypatch.setattr(
         public_plugin_adapter,
         "_context",
-        lambda: ExecutionContext(
-            deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+        lambda deadline=None: ExecutionContext(
+            deadline=datetime.now(UTC) + timedelta(minutes=1),
             correlation_id="cancelled-plugin",
             cancel_check=lambda: cancelled[0],
         ),
@@ -245,7 +247,9 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
         handle=handle,
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
-    _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
+    _schema, batches = plan.tasks[0].table_format.execute(
+        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+    )
     with pytest.raises(InterruptedError, match="cancelled"):
         list(batches)
 
@@ -291,7 +295,9 @@ def test_public_format_closes_plugin_after_lazy_output_is_consumed() -> None:
         handle=handle,
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
-    _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
+    _schema, batches = plan.tasks[0].table_format.execute(
+        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+    )
 
     observed = [batch.to_pylist() for batch in batches]
     assert observed == [[{"id": 1}]]
@@ -505,11 +511,33 @@ def test_unstarted_execution_does_not_open_plugin_resources():
     table, calls = _contract_format(schema)
     plan = table.plan(PlanRequest(target="default.users", columns=["id"]), 2)
     calls.clear()
-    output_schema, batches = table.execute(plan.tasks[0].partition)
+    output_schema, batches = table.execute(
+        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+    )
     assert output_schema == schema
     assert calls == []
     assert list(batches) == []
     assert calls == ["open", "execute", "close"]
+
+
+def test_execution_uses_the_read_deadline_instead_of_the_planning_timeout():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table, _ = _contract_format(schema)
+    plan = table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
+    observed = []
+    factory = table.format_factory
+
+    def opened(handle, context):
+        observed.append(context.deadline)
+        return factory(handle, context)
+
+    from dataclasses import replace
+
+    table = replace(table, format_factory=opened)
+    deadline = datetime.now(UTC) + timedelta(minutes=30)
+    _, batches = table.execute(plan.tasks[0].partition, deadline=deadline)
+    list(batches)
+    assert observed == [deadline]
 
 
 def test_expired_batch_context_does_not_read_source():
@@ -524,7 +552,7 @@ def test_expired_batch_context_does_not_read_source():
         yield pa.record_batch([pa.array([1])], names=["id"])
 
     context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) - timedelta(seconds=1), correlation_id="expired"
+        deadline=datetime.now(UTC) - timedelta(seconds=1), correlation_id="expired"
     )
     with pytest.raises(TimeoutError, match="deadline"):
         list(_checked_plugin_batches(source(), pa.schema([pa.field("id", pa.int64())]), context))

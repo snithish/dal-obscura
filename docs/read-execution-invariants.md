@@ -78,11 +78,17 @@ qualify these contracts; see the package guide for supported features and budget
 
 DuckDB uses one thread per admitted stream and transient in-memory connections.
 Queries consume Arrow batches, with no whole-result accumulation in production.
+Sliced nested columns are compacted through Arrow only where needed: DuckDB
+1.5.1 misreads nested offsets/validity in those views. Scalar and unsliced
+buffers remain shared. Provider execution receives the captured ticket/stream
+deadline; the ten-second planning timeout does not bound a long fetch.
 Ticket fan-out provides file-level parallelism; clients must consume endpoints
 concurrently to realize it. Every Iceberg mode assigns largest data-file byte
 costs first to the least-loaded ticket, with deterministic ties. Apache Iceberg
 Rust reads only assigned files and retains hidden/historical equality keys;
-PyIceberg's field-ID projection evolves values after deletes. The format exposes
+PyIceberg's field-ID projection evolves values after deletes. A narrow Arrow
+validity bridge preserves null lists/maps of structs that PyIceberg 0.11.1
+otherwise rebuilds as empty collections; native Iceberg remains the delete reader. The format exposes
 no SQL pushdown; full governance SQL remains in the core. Planning materializes
 bounded file membership and native plans. Upstream APIs may materialize manifests
 and delete buffers; no custom delete loader or hard native RSS cap is provided.
@@ -111,3 +117,10 @@ Run masking, multi-file, and ticket-to-response benchmarks with `--benchmark-onl
 and save benchmark JSON for same-host comparisons. Flight tests require local
 socket binding. See [development](development.md) for benchmark commands and
 [security](security.md) for ticket revocation semantics.
+
+## Reproducible nested S3 scenarios
+
+The [code-flow HTML](scenarios/nested-mor.html) and [Compose examples](../examples/nested-mor/README.md)
+exercise ten million nested rows in ten partitions, native MoR deletes/updates,
+three stateless workers and independent masks/coverage checks. The report includes
+partition/projection IO probes and explicitly records missing predicate pushdown.

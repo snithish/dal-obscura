@@ -1,10 +1,4 @@
-"""Control-plane HTTP health and readiness routes.
-
-Example:
-    ```python
-    install_health_routes(app, session_factory(engine))
-    ```
-"""
+"""Control-plane HTTP health and readiness routes."""
 
 from __future__ import annotations
 
@@ -29,13 +23,7 @@ class ReadinessResponse(BaseModel):
 
 
 def install_health_routes(app: FastAPI, session_maker: sessionmaker[Session]) -> None:
-    """Installs `/healthz` and `/readyz` routes on the control-plane app.
-
-    Example:
-        ```python
-        install_health_routes(app, session_maker)
-        ```
-    """
+    """Installs `/healthz` and `/readyz` routes on the control-plane app."""
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

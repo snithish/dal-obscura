@@ -12,8 +12,9 @@ handles, tickets, catalog type discriminators and plugin artifacts are unsupport
 Do not run this release against an existing demo database. Existing user demos
 are deliberately left untouched during qualification.
 
-1. Build/install all six 0.2.0 wheels: service, SDK, conformance, manifest/Parquet,
-   REST Iceberg and Delta. Native SQL catalog/Iceberg ship in the service wheel.
+1. Build/install all seven 0.2.0 wheels: service, SDK, conformance, manifest/Parquet,
+   REST Iceberg, Delta and the native Iceberg reader. The generic `iceberg.catalog`
+   adapter ships in the service wheel; the native reader is a platform wheel.
 2. Generate the artifact lock from those exact installed wheels and deploy the
    same immutable artifacts/lock to both planes. The SDK is the sole factory/task
    contract; handles and tasks contain bounded passive JSON.
@@ -40,9 +41,11 @@ stream deadline and revocation. Streams close on exhaustion, failure and early s
 
 DuckDB receives Arrow batches and applies the full SQL filter before masking.
 The same projection compiler declares and emits nested output types. Provider
-pushdown is advisory. Iceberg preserves pinned metadata and projection order; DuckDB owns delete
-interpretation. Copy-on-write and position-delete tasks balance file bytes.
-Equality deletes use one native scan with bounded intra-query parallelism.
+pushdown is advisory. Apache Iceberg owns snapshot and position/equality-delete
+interpretation, including sequence ordering. Independently executable file/range
+tasks balance work across tickets for both copy-on-write and merge-on-read.
+Delta uses native active-file snapshots and kernel deletion vectors, with assigned
+Arrow row groups. DuckDB applies the complete governance filter before masks.
 
 Limits are per worker. Backend blocking IO cannot always be interrupted by deadline
 checks. Planning memory grows with file count; associated delete buffers are not

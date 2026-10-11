@@ -17,7 +17,7 @@ from dal_obscura.sources.task_codec import SourceTaskCodec
 
 def envelope():
     handle = TableHandle(
-        "iceberg.sql",
+        "iceberg.catalog",
         "warehouse",
         0,
         TableIdentifier(("default",), "users"),

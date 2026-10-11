@@ -13,7 +13,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture(
-    params=["memory", "iceberg.sql", "manifest.parquet", "iceberg.rest", "delta.directory"]
+    params=["memory", "iceberg.catalog", "manifest.parquet", "iceberg.rest", "delta.directory"]
 )
 def governed_server(request, tmp_path):
     if os.getenv("DAL_OBSCURA_RUN_CONSUMER_TESTS") != "1":

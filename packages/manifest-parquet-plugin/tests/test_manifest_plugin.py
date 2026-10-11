@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import pyarrow as pa
@@ -16,7 +16,7 @@ from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, ScanRequest,
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+        deadline=datetime.now(UTC) + timedelta(minutes=1),
         correlation_id="manifest-fixture",
     )
 
@@ -143,6 +143,29 @@ def test_parquet_format_rejects_noncanonical_base64_schema_payload(tmp_path):
         ParquetDatasetFormat(forged, initial)
 
 
+@pytest.mark.parametrize("phase", ["plan", "execute"])
+def test_parquet_rejects_file_metadata_drift(tmp_path, phase):
+    root, manifest, table = _write_fixture(tmp_path)
+    context = _context()
+    catalog = ManifestCatalog(_config_for_manifest(root, manifest), context)
+    handle = catalog.resolve_table(TableIdentifier(("default",), "users"), context)
+    plugin = ParquetDatasetFormat(handle, context)
+    request = ScanRequest(table.schema, 1)
+    tasks = plugin.plan(request, context) if phase == "execute" else []
+    pq.write_table(
+        table.slice(0, 2).replace_schema_metadata({b"classification": b"changed"}),
+        root / "part-0.parquet",
+        row_group_size=1,
+    )
+
+    with pytest.raises(ValueError, match="schema differs"):
+        if phase == "plan":
+            plugin.plan(request, context)
+        else:
+            _, batches = plugin.execute(tasks[0], context)
+            list(batches)
+
+
 def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, monkeypatch):
     root, manifest, _table = _write_fixture(tmp_path)
     initial = _context()
@@ -202,7 +225,7 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
 
     monkeypatch.setattr("dal_obscura_manifest_parquet.format.pq.ParquetFile", TrackingParquetFile)
     context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+        deadline=datetime.now(UTC) + timedelta(minutes=1),
         correlation_id="manifest-cancel",
         cancel_check=lambda: cancelled,
     )
@@ -330,7 +353,7 @@ def test_manifest_rejects_symlinked_member(tmp_path):
 def test_manifest_and_format_reject_expired_context(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     expired = ExecutionContext(
-        deadline=datetime.now(timezone.utc) - timedelta(seconds=1), correlation_id="expired"
+        deadline=datetime.now(UTC) - timedelta(seconds=1), correlation_id="expired"
     )
     with pytest.raises(TimeoutError, match="deadline"):
         ManifestCatalog(

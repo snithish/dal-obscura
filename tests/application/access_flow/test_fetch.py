@@ -10,13 +10,13 @@ from dal_obscura.read.signing import HmacTicketCodecAdapter
 from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
-from tests.application.access_flow.helpers import (
+from tests.support.flight import InMemoryPolicyAuthorizer
+from tests.support.read_scenarios import (
     AUTHORIZATION_HEADER,
-    _build_end_to_end_access_flow,
     _build_use_case_dependencies,
     _ticket_store_with,
+    governed_read_service,
 )
-from tests.support.flight import InMemoryPolicyAuthorizer
 from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
 from tests.support.use_cases import (
@@ -113,9 +113,9 @@ def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution(
     decision = AccessDecision(
         allowed_columns=["id", "region"], masks={}, row_filter=None, policy_version=100
     )
-    plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
+    reader = governed_read_service(table_format, decision)
 
-    plan_result = plan_access.plan(
+    plan_result = reader.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -124,7 +124,7 @@ def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution(
         ),
         AUTHORIZATION_HEADER,
     )
-    fetch_result = fetch_stream.fetch(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
+    fetch_result = reader.fetch(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
     table = pa.Table.from_batches(
         list(fetch_result.result_batches), schema=fetch_result.output_schema
     )
@@ -166,9 +166,9 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
         row_filter="LOWER(status) = 'active'",
         policy_version=100,
     )
-    plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
+    reader = governed_read_service(table_format, decision)
 
-    plan_result = plan_access.plan(
+    plan_result = reader.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -177,7 +177,7 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
         ),
         AUTHORIZATION_HEADER,
     )
-    fetch_result = fetch_stream.fetch(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
+    fetch_result = reader.fetch(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
     table = pa.Table.from_batches(
         list(fetch_result.result_batches), schema=fetch_result.output_schema
     )

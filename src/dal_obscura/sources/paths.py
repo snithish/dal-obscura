@@ -1,11 +1,4 @@
-"""Storage path allowlist enforcement.
-
-Example:
-    ```python
-    enforcer = PathRuleEnforcer([{"root": "s3://warehouse/"}])
-    enforcer.check("s3://warehouse/users/data.parquet")
-    ```
-"""
+"""Storage path allowlist enforcement."""
 
 from __future__ import annotations
 
@@ -17,25 +10,13 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 
 @dataclass(frozen=True)
 class PathRule:
-    """One allowed storage root.
-
-    Example:
-        ```python
-        rule = PathRule(root="s3://warehouse")
-        ```
-    """
+    """One allowed storage root."""
 
     root: str
 
 
 class PathRuleEnforcer:
-    """Checks storage paths against configured allowed storage roots.
-
-    Example:
-        ```python
-        PathRuleEnforcer([{"root": "/data"}]).check("/data/users.parquet")
-        ```
-    """
+    """Checks storage paths against configured allowed storage roots."""
 
     def __init__(self, rules: Sequence[Mapping[str, object]]) -> None:
         self._rules = [_path_rule(raw) for raw in rules]

@@ -1139,7 +1139,7 @@ export interface components {
          *
          *     Example:
          *         ```python
-         *         CatalogRequest(plugin_id="iceberg.sql", options={"uri": "sqlite:///catalog.db"})
+         *         CatalogRequest(plugin_id="iceberg.catalog", options={"uri": "sqlite:///catalog.db"})
          *         ```
          */
         CatalogRequest: {

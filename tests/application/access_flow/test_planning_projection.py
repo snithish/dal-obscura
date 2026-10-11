@@ -5,10 +5,10 @@ import pytest
 
 from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
 from dal_obscura.read.request import PlanRequest
-from tests.application.access_flow.helpers import (
+from tests.support.read_scenarios import (
     AUTHORIZATION_HEADER,
-    _build_end_to_end_access_flow,
     _build_use_case_dependencies,
+    governed_read_service,
 )
 from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
@@ -378,7 +378,7 @@ def test_backend_schema_drift_is_rejected_before_ticket_creation(monkeypatch, dr
             ),
         ),
     )
-    planner, _ = _build_end_to_end_access_flow(table, decision)
+    planner = governed_read_service(table, decision)
     with pytest.raises(ValueError, match="schema changed"):
         planner.plan(
             PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER

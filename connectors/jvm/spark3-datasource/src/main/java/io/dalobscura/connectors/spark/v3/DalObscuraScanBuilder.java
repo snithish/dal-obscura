@@ -1,5 +1,6 @@
 package io.dalobscura.connectors.spark.v3;
 
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import io.dalobscura.connectors.client.DalObscuraPlanRequest;
 import io.dalobscura.connectors.client.DalObscuraPlannedRead;
 import io.dalobscura.connectors.client.DalObscuraReadClient;
@@ -73,7 +74,7 @@ public final class DalObscuraScanBuilder
         List<String> projected = new ArrayList<>();
         for (StructField field : requiredSchema.fields()) {
             StructField fullField = fullSchema.apply(field.name());
-            collectProjectedColumns(field, fullField, field.name(), projected);
+            collectProjectedColumns(field, fullField, fieldPathName(field.name()), projected);
         }
         if (!projected.isEmpty()) {
             return projected;
@@ -81,7 +82,14 @@ public final class DalObscuraScanBuilder
         if (fullSchema.fields().length == 0) {
             throw new IllegalStateException("dal-obscura schema must expose at least one column");
         }
-        return List.of(fullSchema.fields()[0].name());
+        return List.of(fieldPathName(fullSchema.fields()[0].name()));
+    }
+
+    private static String fieldPathName(String name) {
+        if (name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return name;
+        }
+        return "[\"" + new String(JsonStringEncoder.getInstance().quoteAsString(name)) + "\"]";
     }
 
     private static void collectProjectedColumns(
@@ -96,7 +104,7 @@ public final class DalObscuraScanBuilder
             StructType fullStruct = (StructType) fullType;
             for (StructField child : requiredStruct.fields()) {
                 StructField fullChild = fullStruct.apply(child.name());
-                collectProjectedColumns(child, fullChild, path + "." + child.name(), projected);
+                collectProjectedColumns(child, fullChild, path + "." + fieldPathName(child.name()), projected);
             }
             return;
         }

@@ -15,7 +15,7 @@ from dal_obscura.storage.database.orm import (
 from dal_obscura.storage.snapshots import LiveConfigStore
 from tests.support.live_config import seed_live_config
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 
 
 def test_live_store_reads_current_policy_from_canonical_records(db_session: Session):
@@ -57,7 +57,7 @@ def test_live_runtime_settings_and_catalogs_need_no_snapshot_table(db_session: S
             "enabled": True,
         }
     ]
-    assert catalog.config["plugin_id"] == "iceberg.sql"
+    assert catalog.config["plugin_id"] == "iceberg.catalog"
     assert catalog.config["revision"] == 3
 
 

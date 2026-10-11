@@ -1,10 +1,4 @@
-"""Logging configuration helpers for service entrypoints.
-
-Example:
-    ```python
-    setup_logging(LoggingConfig(level="DEBUG", json=True))
-    ```
-"""
+"""Logging configuration helpers for service entrypoints."""
 
 from __future__ import annotations
 
@@ -12,20 +6,14 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _STANDARD_LOG_RECORD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
 
 
 @dataclass(frozen=True)
 class LoggingConfig:
-    """Runtime logging options.
-
-    Example:
-        ```python
-        config = LoggingConfig(level="INFO", json=True)
-        ```
-    """
+    """Runtime logging options."""
 
     level: str = "INFO"
     json: bool = True
@@ -36,7 +24,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -61,13 +49,7 @@ def resolve_logging_config() -> LoggingConfig:
 
 
 def setup_logging(config: LoggingConfig | None = None) -> None:
-    """Installs the root logger handler used by service CLIs.
-
-    Example:
-        ```python
-        setup_logging(resolve_logging_config())
-        ```
-    """
+    """Installs the root logger handler used by service CLIs."""
     config = config or resolve_logging_config()
     root = logging.getLogger()
     root.setLevel(config.level.upper())

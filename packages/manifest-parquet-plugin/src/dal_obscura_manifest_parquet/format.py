@@ -177,8 +177,20 @@ def parquet_factory(handle: TableHandle, context: ExecutionContext) -> ParquetDa
 
 
 def _validate_file_schema(actual: pa.Schema, expected: pa.Schema) -> None:
-    if actual != expected:
+    if actual != expected or actual.metadata != expected.metadata:
         raise ValueError("Parquet member schema differs from the pinned manifest schema")
+    # Parquet normalizes list child names ("item" -> "element"). Compare
+    # semantic types first, then metadata at every field without rejecting
+    # that maintained writer/reader normalization.
+    fields = list(zip(actual, expected, strict=True))
+    while fields:
+        actual_field, expected_field = fields.pop()
+        if actual_field.metadata != expected_field.metadata:
+            raise ValueError("Parquet member schema differs from the pinned manifest schema")
+        fields.extend(
+            (actual_field.type.field(index), expected_field.type.field(index))
+            for index in range(actual_field.type.num_fields)
+        )
 
 
 def _select_schema(schema: pa.Schema, columns: Sequence[str]) -> pa.Schema:

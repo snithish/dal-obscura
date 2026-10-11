@@ -1,10 +1,4 @@
-"""Runtime and authentication settings routes.
-
-Example:
-    ```python
-    app.include_router(router(deps))
-    ```
-"""
+"""Runtime and authentication settings routes."""
 
 from __future__ import annotations
 
@@ -27,13 +21,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
-    """Builds workspace settings routes.
-
-    Example:
-        ```python
-        settings_router = router(deps)
-        ```
-    """
+    """Builds workspace settings routes."""
 
     api = APIRouter()
 

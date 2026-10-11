@@ -5,9 +5,9 @@ reader, pinned to upstream commit `22c256e985a68b3a71dd3890d3ebd6bedc3e7b0d`.
 Released 0.10.x drops nonmatching NULL rows in equality deletes; this exact
 maintained commit includes [Apache PR #2781](https://github.com/apache/iceberg-rust/pull/2781).
 Remove the Cargo source patch once a release includes that fix. It has no catalog factory, plugin ABI, protocol parser, or delete matcher.
-The SDK Iceberg format remains owned by `dal_obscura.sources.iceberg_plugin`.
+Both Iceberg v1 COW and v2 COW/MoR use this reader. The SDK Iceberg format remains owned by `dal_obscura.sources.iceberg_plugin`.
 
-`Reader` opens captured metadata and snapshot, retains at most 10,000 native file
+`Reader(location, snapshot, file_io, seconds)` opens captured metadata and snapshot, retains at most 10,000 native file
 plans, and exposes file paths/costs. `start(fragments)` reads only assigned file byte ranges,
 with upstream position/equality deletes and sequence/partition applicability.
 Workers reconstruct plans independently from metadata: native task objects,
@@ -28,8 +28,13 @@ preserve renames, additions, dropped keys, nested types, and exact Arrow metadat
 SQL filter/mask enforcement remains in the governed core; no SQL pushdown is
 advertised by this reader.
 
-OpenDAL owns local and S3 IO and the native AWS credential chain. Credentials are
-worker-local; only passive file assignments cross processes. Reads release the
+Official PyIceberg FileIO owns transport for every configured supported filesystem.
+The native reader receives a read-only, worker-local bridge with exists/size/full
+metadata-read/range-read callbacks. It no longer has a separate OpenDAL backend.
+Each range owns and closes a seekable stream and copies returned bytes across the
+Python/Rust boundary. Blocking IO runs outside the async runtime thread. Callbacks
+check context and path admission; late IO is rejected. No callback/provider enters
+a ticket. Credentials are worker-local; only passive assignments cross processes. Reads release the
 GIL, use one IO runtime thread and one data-file stream, and emit 8,192-row batches.
 Operation deadlines bound async planning/pulls; closing drops the stream. Native
 metadata/delete buffers are upstream-owned, without a hard process RSS cap.

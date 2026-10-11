@@ -1,14 +1,8 @@
-"""Workspace asset-policy service functions.
-
-Example:
-    ```python
-    rules = list_policy_rules(store, asset_id)
-    ```
-"""
+"""Workspace asset-policy service functions."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any, Literal, cast
 from uuid import UUID
 
@@ -38,13 +32,7 @@ def list_policy_rules(
     *,
     actor: ControlPlaneActor | None = None,
 ) -> list[dict[str, object]]:
-    """Lists ordered policy rules for one asset.
-
-    Example:
-        ```python
-        rules = list_policy_rules(store, asset_id)
-        ```
-    """
+    """Lists ordered policy rules for one asset."""
 
     if actor is not None:
         ensure_asset_capability(store, asset_id, actor, "read")
@@ -60,13 +48,7 @@ def replace_policy_rules(
     expected_revision: int | None = None,
     revoke_existing_tokens: bool = False,
 ) -> dict[str, int]:
-    """Validates and replaces policy rules for one asset.
-
-    Example:
-        ```python
-        replace_policy_rules(store, asset_id, rules, actor=actor)
-        ```
-    """
+    """Validates and replaces policy rules for one asset."""
 
     _db_assets.lock_asset_for_update(store, asset_id)
     ensure_asset_capability(store, asset_id, actor, "edit")
@@ -130,19 +112,7 @@ def preview_asset_policy(
     requested_columns: list[str] | None = None,
     include_mask_values: bool = False,
 ) -> dict[str, object]:
-    """Evaluates current live policy rules for a preview principal.
-
-    Example:
-        ```python
-        preview = preview_asset_policy(
-            store,
-            asset_id,
-            principal="alice",
-            groups=["analytics"],
-            claims={},
-        )
-        ```
-    """
+    """Evaluates current live policy rules for a preview principal."""
 
     if actor is not None:
         ensure_asset_capability(store, asset_id, actor, "read")
@@ -162,7 +132,7 @@ def preview_asset_policy(
             "key": key,
             "expected": expected,
             "actual": preview_principal.attributes.get(key),
-            "matched": _preview_conditions_match({key: expected}, preview_principal.attributes),
+            "matched": attributes_match(preview_principal.attributes, {key: expected}),
             "missing": key not in preview_principal.attributes,
         }
         for raw in raw_rules
@@ -212,13 +182,7 @@ def ensure_policy_editor(
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> None:
-    """Requires the actor to be a platform admin or asset owner.
-
-    Example:
-        ```python
-        ensure_policy_editor(store, asset_id, actor)
-        ```
-    """
+    """Requires the actor to be a platform admin or asset owner."""
 
     ensure_asset_capability(store, asset_id, actor, "edit")
 
@@ -314,10 +278,6 @@ def _compiled_rule_from_response(raw: dict[str, object]) -> AccessRule:
     )
 
 
-def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
-    return _compiled_rule_from_response(raw)
-
-
 def _principal_attributes(claims: dict[str, object]) -> dict[str, str]:
     from dal_obscura.control.errors import ValidationFailure
 
@@ -365,19 +325,12 @@ def _first_matching_rule_ordinal(
 ) -> int | None:
     principal_tokens = set(principal.tokens())
     for raw_rule in raw_rules:
-        rule = _access_rule_from_response(raw_rule)
+        rule = _compiled_rule_from_response(raw_rule)
         if "*" not in rule.principals and not principal_tokens.intersection(rule.principals):
             continue
-        if _preview_conditions_match(rule.when, principal.attributes):
+        if attributes_match(principal.attributes, rule.when):
             return int(cast(int | str, raw_rule["ordinal"]))
     return None
-
-
-def _preview_conditions_match(
-    conditions: Mapping[str, PrincipalConditionValue] | None,
-    attributes: Mapping[str, str],
-) -> bool:
-    return attributes_match(attributes, conditions)
 
 
 def _allow_preview_reason(matched_ordinal: int | None) -> str:

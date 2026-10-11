@@ -11,7 +11,7 @@ import { recoveryMessage } from "./recovery";
 
 export function assetInventoryOptions(scope: string, search = "") {
   return infiniteQueryOptions({
-    queryKey: assetInventoryQueryKey(scope, search, null),
+    queryKey: assetInventoryQueryKey(scope, search),
     initialPageParam: null as string | null,
     queryFn: ({ signal, pageParam }) =>
       controlPlane.listAssetPage({

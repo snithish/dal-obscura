@@ -1,16 +1,4 @@
-"""Protocol v1 helpers for Arrow Flight descriptor commands.
-
-Example:
-    ```python
-    command = encode_plan_command(
-        catalog="analytics",
-        target="default.users",
-        columns=["id", "email"],
-        row_filter="region = 'us'",
-    )
-    descriptor = flight.FlightDescriptor.for_command(command)
-    ```
-"""
+"""Protocol v1 helpers for Arrow Flight descriptor commands."""
 
 from __future__ import annotations
 
@@ -45,17 +33,7 @@ def encode_plan_command(
     protocol_version: int = FLIGHT_PROTOCOL_VERSION,
     include_typed_paths: bool = False,
 ) -> bytes:
-    """Serializes a protocol v1 plan request into Flight command bytes.
-
-    Example:
-        ```python
-        payload = encode_plan_command(
-            catalog="analytics",
-            target="default.users",
-            columns=["id"],
-        )
-        ```
-    """
+    """Serializes a protocol v1 plan request into Flight command bytes."""
     request = PlanRequestProto(
         protocol_version=protocol_version,
         catalog=catalog or "",
@@ -70,14 +48,7 @@ def encode_plan_command(
 
 
 def decode_plan_command(payload: bytes) -> PlanRequestProto:
-    """Parses Flight command bytes into the generated protobuf message.
-
-    Example:
-        ```python
-        request = decode_plan_command(payload)
-        assert request.protocol_version == FLIGHT_PROTOCOL_VERSION
-        ```
-    """
+    """Parses Flight command bytes into the generated protobuf message."""
     request = PlanRequestProto()
     try:
         request.ParseFromString(payload)
@@ -87,15 +58,7 @@ def decode_plan_command(payload: bytes) -> PlanRequestProto:
 
 
 def encode_plan_command_from_mapping(payload: dict[str, Any]) -> bytes:
-    """Builds command bytes from JSON-like test or tooling input.
-
-    Example:
-        ```python
-        payload = encode_plan_command_from_mapping(
-            {"catalog": "analytics", "target": "default.users", "columns": ["id"]}
-        )
-        ```
-    """
+    """Builds command bytes from JSON-like test or tooling input."""
     protocol_version = payload.get("protocol_version", FLIGHT_PROTOCOL_VERSION)
     columns = payload.get("columns", [])
     if not isinstance(protocol_version, int):

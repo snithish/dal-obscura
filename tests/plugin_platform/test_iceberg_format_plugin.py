@@ -1,7 +1,7 @@
 """Pinned native reads through the public SDK, with independent delete fixtures."""
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pyarrow as pa
 import pytest
@@ -25,13 +25,13 @@ from tests.support.iceberg import (
 
 
 def context():
-    return ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "iceberg-test")
+    return ExecutionContext(datetime.now(UTC) + timedelta(minutes=2), "iceberg-test")
 
 
 def handle(table):
     snapshot = table.current_snapshot()
     return TableHandle(
-        "iceberg.sql",
+        "iceberg.catalog",
         "fixture",
         1,
         TableIdentifier(("default",), "users"),
@@ -180,30 +180,97 @@ def test_empty_snapshot_has_no_tasks(tmp_path):
     assert plugin.plan(ScanRequest(plugin.schema(context()).arrow_schema, 4), context()) == []
 
 
+def test_v1_copy_on_write_uses_native_parallel_reader(tmp_path):
+    catalog = load_catalog("v1", **iceberg_sql_catalog_options(tmp_path, "v1", "v1-warehouse"))
+    catalog.create_namespace("default")
+    table = catalog.create_table(
+        "default.users",
+        pa.schema([pa.field("id", pa.int64())]),
+        properties={"format-version": "1"},
+    )
+    for ids in ([0, 1], [2, 3]):
+        table.append(pa.table({"id": ids}, schema=table.schema().as_arrow()))
+    table.delete("id == 1")
+    captured = handle(table)
+    plugin = IcebergFormatPlugin(captured, context())
+    schema = plugin.schema(context()).arrow_schema
+    tasks = plugin.plan(ScanRequest(schema, 2), context())
+    plugin.close()
+    from tests.support.plugin_scans import distributed_rows
+
+    assert len(tasks) == 2
+    assert sorted(
+        distributed_rows(IcebergFormatPlugin, captured, tasks), key=lambda r: r["id"]
+    ) == [
+        {"id": 0},
+        {"id": 2},
+        {"id": 3},
+    ]
+
+
+@pytest.mark.parametrize("provider", ["pyarrow", "fsspec"])
+def test_native_reader_uses_supplied_fileio_for_all_locations(table, provider):
+    from dal_obscura_iceberg_reader import Reader
+    from pyiceberg.io import load_file_io
+
+    from dal_obscura.sources.iceberg_plugin import _FileIOBridge
+
+    implementation = {"pyarrow": "PyArrowFileIO", "fsspec": "FsspecFileIO"}[provider]
+    io = load_file_io(
+        {"py-io-impl": f"pyiceberg.io.{provider}.{implementation}"}, table.metadata_location
+    )
+    bridge = _FileIOBridge(io, context(), lambda path: None)
+    reader = Reader(table.metadata_location, table.current_snapshot().snapshot_id, bridge, 60)
+    batches = reader.start([(path, 0, size) for path, size in reader.files()])
+    try:
+        result = []
+        while (batch := batches.next(60)) is not None:
+            result.extend(batch.to_pylist())
+    finally:
+        batches.close()
+    assert sorted(result, key=lambda r: r["id"]) == [
+        {"id": i, "email": f"user{i}@example.com", "region": "us" if i % 2 == 0 else "eu"}
+        for i in range(6)
+    ]
+
+
 def test_nested_schema_and_evolution_preserve_values_and_metadata(tmp_path):
     schema = pa.schema(
         [
             pa.field("id", pa.int64()),
             pa.field("literal.name", pa.string()),
-            pa.field("profile", pa.struct([pa.field("tags", pa.list_(pa.string()))])),
-            pa.field("attributes", pa.map_(pa.string(), pa.int64())),
+            pa.field(
+                "profile",
+                pa.struct([pa.field("tags", pa.list_(pa.struct([("label", pa.string())])))]),
+            ),
+            pa.field("attributes", pa.map_(pa.string(), pa.struct([("value", pa.int64())]))),
         ]
     )
     rows = [
-        {"id": 1, "literal.name": "a", "profile": {"tags": ["x", None]}, "attributes": [("k", 2)]},
+        {
+            "id": 1,
+            "literal.name": "a",
+            "profile": {"tags": [{"label": "x"}, None]},
+            "attributes": [("k", {"value": 2})],
+        },
         {"id": 2, "literal.name": None, "profile": None, "attributes": []},
+        {"id": 3, "literal.name": "null", "profile": {"tags": None}, "attributes": None},
+        {"id": 4, "literal.name": "empty", "profile": {"tags": []}, "attributes": [("null", None)]},
     ]
+    from tests.support.iceberg import append_parquet
+
     create_iceberg_table(
         tmp_path,
         "nested",
         "nested-warehouse",
         arrow_schema=schema,
-        append_tables=[pa.Table.from_pylist(rows, schema=schema)],
+        append_tables=[],
     )
     catalog = load_catalog(
         "nested", **iceberg_sql_catalog_options(tmp_path, "nested", "nested-warehouse")
     )
     table = catalog.load_table("default.users")
+    append_parquet(table, pa.Table.from_pylist(rows, schema=schema))
     with table.update_schema() as update:
         update.add_column("new_field", StringType())
     plugin = IcebergFormatPlugin(handle(table), context())

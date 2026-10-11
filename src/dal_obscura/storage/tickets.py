@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hmac
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
@@ -16,24 +16,13 @@ from dal_obscura.storage.database.orm import DataPlaneTicketRecord
 
 
 class SqlAlchemyTicketStore:
-    """Durable SQLAlchemy-backed ticket exchange store.
-
-    Example:
-        ```python
-        store = SqlAlchemyTicketStore(session_factory)
-        store.store(payload, max_exchanges=1)
-        stored = store.reserve_exchange(payload.ticket_id, now=payload.expires_at - 1)
-        ```
-    """
+    """Durable SQLAlchemy-backed ticket exchange store."""
 
     def __init__(
         self,
         session_maker: sessionmaker[Session],
     ) -> None:
         self._session_maker = session_maker
-
-    def store(self, payload: TicketPayload, *, max_exchanges: int) -> None:
-        self.store_many([payload], max_exchanges=max_exchanges)
 
     def store_many(self, payloads: Iterable[TicketPayload], *, max_exchanges: int) -> None:
         records = [_ticket_record(payload, max_exchanges) for payload in payloads]
@@ -63,7 +52,7 @@ class SqlAlchemyTicketStore:
                     )
                     .values(
                         exchange_count=DataPlaneTicketRecord.exchange_count + 1,
-                        last_exchanged_at=datetime.now(timezone.utc),
+                        last_exchanged_at=datetime.now(UTC),
                     )
                 ),
             )

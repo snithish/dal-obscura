@@ -1,0 +1,145 @@
+name: obscura-nested-mor
+x-example: &example
+  image: obscura-nested-mor:local
+  build:
+    context: ../..
+    dockerfile: examples/nested-mor/Dockerfile
+  environment: &env
+    PYTHONPATH: /example:/support
+    SCENARIO: ${SCENARIO:-delta}
+    SCENARIO_ROWS_PER_PARTITION: ${SCENARIO_ROWS_PER_PARTITION:-1000002}
+    SCENARIO_PARTITIONS: ${SCENARIO_PARTITIONS:-10}
+    SCENARIO_SMOKE: ${SCENARIO_SMOKE:-0}
+    SCENARIO_ROUNDS: ${SCENARIO_ROUNDS:-1}
+    AWS_ACCESS_KEY_ID: scenario
+    AWS_SECRET_ACCESS_KEY: scenario-only-secret
+    AWS_REGION: us-east-1
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_ENDPOINT_URL: http://s3:5000
+    AWS_ENDPOINT_URL_S3: http://s3:5000
+    AWS_ALLOW_HTTP: "true"
+    AWS_EC2_METADATA_DISABLED: "true"
+    PYICEBERG_CATALOG__SCENARIO__S3__ENDPOINT: http://s3:5000
+    PYICEBERG_CATALOG__SCENARIO__S3__REGION: us-east-1
+    DAL_OBSCURA_DATABASE_URL: postgresql+psycopg://scenario:scenario@postgres:5432/scenario
+    ICEBERG_URI: postgresql+psycopg://scenario:scenario@postgres:5432/scenario
+    DAL_OBSCURA_SECRET_PROVIDER_CONFIG: '{"scope_grants":{"catalog:scenario":["ICEBERG_URI"]}}'
+    DAL_OBSCURA_TICKET_SECRET: disposable-scenario-ticket-secret-32chars
+    DAL_OBSCURA_PLUGIN_LOCK_FILE: /support/plugin-lock.json
+    DAL_OBSCURA_MAX_ACTIVE_STREAMS: "2"
+    DAL_OBSCURA_DUCKDB_MEMORY_LIMIT: 256MB
+    DAL_OBSCURA_MAX_INPUT_BATCH_BYTES: "67108864"
+    DAL_OBSCURA_MAX_OUTPUT_BATCH_BYTES: "67108864"
+    DAL_OBSCURA_MAX_STREAM_SECONDS: "3600"
+  volumes:
+    - ./scripts:/example:ro
+    - state:/state
+    - ./results:/results
+x-worker: &worker
+  <<: *example
+  command: [dal-obscura]
+  environment: &worker-env
+    <<: *env
+    DAL_OBSCURA_LOCATION: grpc://0.0.0.0:8815
+    DAL_OBSCURA_DATA_PLANE_HEALTH_HOST: 0.0.0.0
+    DAL_OBSCURA_DATA_PLANE_HEALTH_PORT: "8816"
+  depends_on:
+    provision: {condition: service_completed_successfully}
+  healthcheck:
+    test: [CMD, python, /example/health.py, http://127.0.0.1:8816/readyz]
+    interval: 2s
+    timeout: 5s
+    retries: 60
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_USER: scenario
+      POSTGRES_PASSWORD: scenario
+      POSTGRES_DB: scenario
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD, pg_isready, -U, scenario]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+  s3:
+    <<: *example
+    command: [python, /example/services.py, s3]
+    volumes: [./scripts:/example:ro]
+    healthcheck:
+      test: [CMD, python, /example/health.py, http://127.0.0.1:5000/]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+  issuer:
+    <<: *example
+    command: [python, /example/services.py, issuer]
+    volumes: [./scripts:/example:ro]
+    healthcheck:
+      test: [CMD, python, /example/health.py, http://127.0.0.1:8080/jwks]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+  seed:
+    <<: *example
+    command: [python, /example/seed.py]
+    depends_on:
+      postgres: {condition: service_healthy}
+      s3: {condition: service_healthy}
+  migrate:
+    <<: *example
+    command: [dal-obscura-migrate, upgrade]
+    depends_on:
+      postgres: {condition: service_healthy}
+  control:
+    <<: *example
+    command: [dal-obscura-control-plane]
+    environment:
+      <<: *env
+      DAL_OBSCURA_CONTROL_PLANE_HOST: 0.0.0.0
+      DAL_OBSCURA_CONTROL_PLANE_PORT: "8820"
+      DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN: disposable-scenario-admin
+      DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED: "true"
+      DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST: postgres,s3,nested-scenarios
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, /example/health.py, http://127.0.0.1:8820/readyz]
+      interval: 2s
+      timeout: 5s
+      retries: 45
+  provision:
+    <<: *example
+    command: [python, /example/provision.py]
+    depends_on:
+      seed: {condition: service_completed_successfully}
+      control: {condition: service_healthy}
+      issuer: {condition: service_healthy}
+  planner: *worker
+  worker-1:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      AWS_ACCESS_KEY_ID: worker-1
+  worker-2:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      AWS_ACCESS_KEY_ID: worker-2
+  worker-3:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      AWS_ACCESS_KEY_ID: worker-3
+  verify:
+    <<: *example
+    command: [python, /example/verify.py]
+    depends_on:
+      planner: {condition: service_healthy}
+      worker-1: {condition: service_healthy}
+      worker-2: {condition: service_healthy}
+      worker-3: {condition: service_healthy}
+volumes:
+  state:
+  postgres:

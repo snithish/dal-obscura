@@ -1,5 +1,7 @@
 """Deliberately invalid provider output for trust-boundary tests."""
 
+from datetime import UTC
+
 from dal_obscura_plugin_api import DiscoveryPage
 
 
@@ -14,33 +16,33 @@ def discover_iceberg_tables(
     cancel_check=None,
 ):
     """Drive the actual SQL SDK plugin with a replaceable provider I/O boundary."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     from time import monotonic
     from unittest.mock import patch
 
     from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
 
-    from dal_obscura.sources import sql_catalog
+    from dal_obscura.sources import iceberg_catalog
     from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error, _identifier_name
 
     remaining = 30 if deadline_at is None else deadline_at - monotonic()
     context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(seconds=remaining),
+        deadline=datetime.now(UTC) + timedelta(seconds=remaining),
         correlation_id="sql-provider-contract",
         cancel_check=cancel_check,
     )
     with (
         patch.object(
-            sql_catalog,
+            iceberg_catalog,
             "_load_iceberg_catalog",
             lambda name, values: load_catalog_fn(name, **values),
         ),
-        patch.object(sql_catalog, "DEFAULT_MAX_NAMESPACES", max_namespaces),
-        patch.object(sql_catalog, "DEFAULT_MAX_TABLES", max_tables),
+        patch.object(iceberg_catalog, "DEFAULT_MAX_NAMESPACES", max_namespaces),
+        patch.object(iceberg_catalog, "DEFAULT_MAX_TABLES", max_tables),
     ):
-        plugin = sql_catalog.SqlCatalog(
+        plugin = iceberg_catalog.IcebergCatalog(
             CatalogConfig(
-                plugin_id="iceberg.sql", instance_id=catalog_name, revision=0, options=options
+                plugin_id="iceberg.catalog", instance_id=catalog_name, revision=0, options=options
             ),
             context,
         )

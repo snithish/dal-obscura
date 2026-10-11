@@ -29,7 +29,7 @@ from dal_obscura.storage.database.orm import (
 )
 from dal_obscura.storage.snapshots import LiveAsset, LiveCatalog, LiveConfigStore
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 
 
 def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
@@ -79,7 +79,7 @@ def test_live_config_passes_runtime_path_enforcer_to_catalog():
         target="default.users",
         backend="iceberg",
         compiled_config={
-            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
+            "plugins": {"catalog": "iceberg.catalog", "table_format": "iceberg"},
             "target": {"backend": "iceberg", "table": "default.users"},
         },
         policy_version=1,
@@ -109,7 +109,7 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
         target="default.users",
         backend="iceberg",
         compiled_config={
-            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
+            "plugins": {"catalog": "iceberg.catalog", "table_format": "iceberg"},
             "target": {"backend": "iceberg", "table": "default.users"},
         },
         policy_version=1,
@@ -121,17 +121,17 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
 
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
         _catalog_config_for_asset(
-            catalog, asset, plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.sql"))
+            catalog, asset, plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.catalog"))
         )
 
     resolved = _catalog_config_for_asset(
         catalog,
         asset,
         plugin_registry=_AdmittedPluginSnapshot(
-            ("catalog", "iceberg.sql"), ("table_format", "iceberg")
+            ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
         ),
     )
-    assert resolved.plugin_id == "iceberg.sql"
+    assert resolved.plugin_id == "iceberg.catalog"
 
     retired = replace(
         asset,
@@ -148,7 +148,7 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
             catalog,
             retired,
             plugin_registry=_AdmittedPluginSnapshot(
-                ("catalog", "iceberg.sql"), ("table_format", "iceberg")
+                ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
             ),
         )
 

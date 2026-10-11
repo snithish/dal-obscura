@@ -232,7 +232,7 @@ public boundary, keep cases focused, and use independent expected results.
 Bootstrap, migrate, and run:
 
 ```bash
-uv sync --dev --extra server --extra sqlite --extra postgres
+uv sync --dev --extra server --extra postgres
 uv run --no-sync dal-obscura-migrate upgrade
 uv run --no-sync dal-obscura --help
 uv run --no-sync dal-obscura-control-plane --help

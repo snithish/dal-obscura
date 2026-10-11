@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -64,7 +65,9 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
     codec = SourceTaskCodec(registry)
     serialized = codec.encode(plan.tasks[0])
     restored = codec.decode(serialized)
-    output_schema, batches = restored.table_format.execute(restored.partition)
+    output_schema, batches = restored.table_format.execute(
+        restored.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+    )
     assert output_schema == table.schema
     assert pa.Table.from_batches(list(batches)).to_pylist() == [{"id": 1}]
 
@@ -72,7 +75,7 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
         PlanRequest(target="default.users", columns=["id"]), max_tickets=4
     )
     projected_schema, projected_batches = projected.tasks[0].table_format.execute(
-        projected.tasks[0].partition
+        projected.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
     )
     assert projected_schema.names == ["id"]
     assert pa.Table.from_batches(list(projected_batches)).to_pylist() == [{"id": 1}]
@@ -300,9 +303,9 @@ def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
     import hashlib
 
     from dal_obscura.policy.models import AccessDecision, MaskRule
-    from tests.application.access_flow.helpers import (
+    from tests.support.read_scenarios import (
         AUTHORIZATION_HEADER,
-        _build_end_to_end_access_flow,
+        governed_read_service,
     )
 
     root, _ = _fixture(tmp_path)
@@ -321,7 +324,7 @@ def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
     registry.reload()
     try:
         table = catalog.resolve_table("default.users")
-        planner, fetch = _build_end_to_end_access_flow(
+        reader = governed_read_service(
             table,
             AccessDecision(
                 allowed_columns=["id"],
@@ -331,12 +334,12 @@ def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
             ),
             task_codec=SourceTaskCodec(registry),
         )
-        plan = planner.plan(
+        plan = reader.plan(
             PlanRequest(catalog="fixture", target="default.users", columns=["id"]),
             AUTHORIZATION_HEADER,
         )
         assert len(plan.ticket_tokens) == 1
-        result = fetch.fetch(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
+        result = reader.fetch(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
         assert pa.Table.from_batches(result.result_batches).to_pylist() == [
             {"id": hashlib.sha256(b"2").hexdigest()}
         ]
@@ -357,15 +360,15 @@ def test_schema_must_match_catalog_pinned_snapshot():
 
 
 def test_native_catalog_validates_provider_config_during_construction():
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
 
-    from dal_obscura.sources.sql_catalog import SqlCatalog
+    from dal_obscura.sources.iceberg_catalog import IcebergCatalog
 
-    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=1), "config")
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "config")
     with pytest.raises(ValueError, match="Failed to load catalog"):
-        SqlCatalog(
-            CatalogConfig("iceberg.sql", "invalid", 1, {"type": "sql", "uri": "invalid-url"}),
+        IcebergCatalog(
+            CatalogConfig("iceberg.catalog", "invalid", 1, {"type": "sql", "uri": "invalid-url"}),
             context,
         )

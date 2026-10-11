@@ -100,7 +100,7 @@ class StubTableFormat(FixtureSource):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[Any]]:
+    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[Any]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("StubTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
@@ -110,7 +110,7 @@ class StubCatalogRegistry:
     def __init__(self, table_format: Source) -> None:
         self._table_format = table_format
 
-    def describe(
+    def resolve(
         self,
         catalog: str | None,
         target: str,

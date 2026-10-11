@@ -81,7 +81,7 @@ Stop the demo without deleting state:
 For package setup and command discovery from the repo root:
 
 ```bash
-uv sync --dev --extra server --extra sqlite
+uv sync --dev --extra server
 uv run dal-obscura --help
 uv run dal-obscura-control-plane --help
 uv run dal-obscura-migrate --help
@@ -219,7 +219,7 @@ See [the testing guide](docs/testing.md) for suite ownership and verification la
 [read execution invariants](docs/read-execution-invariants.md) for correctness boundaries.
 
 ```bash
-uv sync --dev --extra server --extra sqlite
+uv sync --dev --extra server
 uv run ruff check .
 uv run ruff format .
 uv run ty check

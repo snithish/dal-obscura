@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 DEFAULT_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"
 
 

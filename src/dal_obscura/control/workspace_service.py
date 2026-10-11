@@ -1,14 +1,8 @@
-"""Workspace-level control-plane service functions.
-
-Example:
-    ```python
-    summary = get_workspace_summary(store)
-    ```
-"""
+"""Workspace-level control-plane service functions."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy.orm import Session
@@ -26,13 +20,7 @@ from dal_obscura.storage import workspace as _db_workspace
 
 
 def required_workspace(store: Session):
-    """Returns the default workspace context or raises when none exists.
-
-    Example:
-        ```python
-        context = required_workspace_context(store)
-        ```
-    """
+    """Returns the default workspace context or raises when none exists."""
 
     context = _db_workspace.get_workspace(store)
     if context is None:
@@ -44,13 +32,7 @@ def get_workspace_summary(
     store: Session,
     actor: ControlPlaneActor | None = None,
 ) -> dict[str, object]:
-    """Returns a summary of the current workspace.
-
-    Example:
-        ```python
-        summary = get_workspace_summary(store)
-        ```
-    """
+    """Returns a summary of the current workspace."""
 
     return _db_workspace.get_workspace_summary(
         store, None if actor is None or actor.platform_admin else actor.owner_principals()
@@ -58,13 +40,7 @@ def get_workspace_summary(
 
 
 def get_workspace_runtime_settings(store: Session) -> dict[str, object] | None:
-    """Returns runtime ticket settings for the workspace when configured.
-
-    Example:
-        ```python
-        settings = get_workspace_runtime_settings(store)
-        ```
-    """
+    """Returns runtime ticket settings for the workspace when configured."""
 
     context = _db_workspace.get_workspace(store)
     if context is None:
@@ -94,7 +70,7 @@ def get_workspace_observations(
     is healthy or has reloaded changed startup settings.
     """
 
-    observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    observed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     context = _db_workspace.get_workspace(store)
     if context is None:
         return {
@@ -123,13 +99,7 @@ def get_workspace_observations(
 
 
 def list_workspace_auth_providers(store: Session) -> list[dict[str, object]]:
-    """Lists configured authentication providers for the workspace.
-
-    Example:
-        ```python
-        providers = list_workspace_auth_providers(store)
-        ```
-    """
+    """Lists configured authentication providers for the workspace."""
 
     context = _db_workspace.get_workspace(store)
     if context is None:
@@ -149,13 +119,7 @@ def replace_workspace_auth_providers(
     expected_revision: int | None = None,
     actor_principal: str = "system",
 ) -> list[dict[str, object]]:
-    """Replaces the workspace authentication provider chain.
-
-    Example:
-        ```python
-        replace_workspace_auth_providers(store, [{"module": "example.Provider"}])
-        ```
-    """
+    """Replaces the workspace authentication provider chain."""
 
     validate_auth_provider_payloads(providers)
     _db_workspace.ensure_workspace(store)
@@ -186,13 +150,7 @@ def upsert_workspace_runtime_settings(
     *,
     actor_principal: str = "system",
 ) -> dict[str, object]:
-    """Creates or updates workspace runtime ticket settings.
-
-    Example:
-        ```python
-        upsert_workspace_runtime_settings(store, 300, 32, 1)
-        ```
-    """
+    """Creates or updates workspace runtime ticket settings."""
 
     if path_rules is not None and not isinstance(path_rules, list):
         raise ValidationFailure("Runtime path rules must be a list")

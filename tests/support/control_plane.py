@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.storage.database.db import session_factory
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 
 
 @dataclass(frozen=True)

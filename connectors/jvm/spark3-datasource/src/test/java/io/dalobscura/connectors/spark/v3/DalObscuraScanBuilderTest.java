@@ -23,6 +23,8 @@ import org.apache.spark.sql.sources.EqualTo;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class DalObscuraScanBuilderTest {
     @Test
@@ -70,7 +72,7 @@ class DalObscuraScanBuilderTest {
                                 "analytics",
                                 "default.users",
                                 DalObscuraAuth.bearerToken("token-123"),
-                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
+                                DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client);
 
         DalObscuraScanBuilder builder =
@@ -96,7 +98,7 @@ class DalObscuraScanBuilderTest {
                                 "analytics",
                                 "default.users",
                                 DalObscuraAuth.bearerToken("token-123"),
-                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
+                                DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client,
                         providedSchema);
 
@@ -125,7 +127,7 @@ class DalObscuraScanBuilderTest {
                                 "analytics",
                                 "default.users",
                                 DalObscuraAuth.bearerToken("token-123"),
-                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
+                                DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client,
                         fullSchema);
 
@@ -141,9 +143,30 @@ class DalObscuraScanBuilderTest {
     }
 
     @Test
-    void fallsBackToTheFirstVisibleColumnWhenSparkPrunesAllColumns() {
+    void preservesLiteralDottedAndCollectionNamesInProjectedPaths() {
         RecordingClient client = new RecordingClient();
-        StructType fullSchema = new StructType().add("id", "long").add("region", "string");
+        StructType schema = new StructType()
+                .add("a.b", "string")
+                .add("$element", "string")
+                .add("parent", new StructType().add("quoted\"name", "string"));
+        DalObscuraScanBuilder builder = new DalObscuraScanBuilder(
+                new DalObscuraConnectorOptions(
+                        "grpc+tcp://localhost:8815", "analytics", "default.users",
+                        DalObscuraAuth.bearerToken("token-123"),
+                        DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
+                () -> client, schema);
+
+        builder.build();
+
+        assertEquals(List.of("[\"a.b\"]", "[\"$element\"]", "parent.[\"quoted\\\"name\"]"),
+                client.planRequests().get(0).columns());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"id,id", "a.b,[\"a.b\"]", "$element,[\"$element\"]"})
+    void usesFirstVisibleColumnForZeroColumnReads(String name, String path) {
+        RecordingClient client = new RecordingClient();
+        StructType fullSchema = new StructType().add(name, "long").add("region", "string");
         DalObscuraScanBuilder builder =
                 new DalObscuraScanBuilder(
                         new DalObscuraConnectorOptions(
@@ -151,7 +174,7 @@ class DalObscuraScanBuilderTest {
                                 "analytics",
                                 "default.users",
                                 DalObscuraAuth.bearerToken("token-123"),
-                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
+                                DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client,
                         fullSchema);
 
@@ -159,7 +182,7 @@ class DalObscuraScanBuilderTest {
 
         builder.build();
 
-        assertEquals(List.of("id"), client.planRequests().get(0).columns());
+        assertEquals(List.of(path), client.planRequests().get(0).columns());
     }
 
     private static final class RecordingClient implements DalObscuraReadClient {

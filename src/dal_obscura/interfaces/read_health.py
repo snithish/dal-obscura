@@ -1,10 +1,4 @@
-"""HTTP health and readiness helpers for the data plane.
-
-Example:
-    ```python
-    app = create_health_app(readiness=lambda: {"status": "ready", "checks": {}})
-    ```
-"""
+"""HTTP health and readiness helpers for the data plane."""
 
 from __future__ import annotations
 
@@ -17,13 +11,7 @@ from fastapi.responses import JSONResponse
 
 
 class RuntimeStore(Protocol):
-    """Store protocol used by the readiness probe.
-
-    Example:
-        ```python
-        payload = live_runtime_readiness(store)
-        ```
-    """
+    """Store protocol used by the readiness probe."""
 
     def get_runtime(self) -> object: ...
 
@@ -33,13 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
-    """Creates the optional FastAPI app serving `/healthz` and `/readyz`.
-
-    Example:
-        ```python
-        app = create_health_app(readiness=lambda: {"status": "ready", "checks": {}})
-        ```
-    """
+    """Creates the optional FastAPI app serving `/healthz` and `/readyz`."""
 
     app = FastAPI(title="dal-obscura data plane health")
 
@@ -62,14 +44,7 @@ def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
 
 
 def live_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
-    """Checks whether live runtime state is sufficient to admit traffic.
-
-    Example:
-        ```python
-        readiness = live_runtime_readiness(store)
-        assert readiness["status"] in {"ready", "not_ready"}
-        ```
-    """
+    """Checks whether live runtime state is sufficient to admit traffic."""
 
     checks: dict[str, str] = {}
     try:

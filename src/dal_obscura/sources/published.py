@@ -37,11 +37,9 @@ from dal_obscura.sources.catalogs import (
     CatalogRegistry,
     ServiceConfig,
 )
-from dal_obscura.sources.contracts import Source
 from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.sources.plugin_runtime import (
     PublicPluginTableFormat,
-    _BoundSource,
     _close_plugin_preserving_error,
 )
 from dal_obscura.sources.plugins import PluginRegistry
@@ -197,7 +195,7 @@ class LiveConfigCatalogRegistry:
         entry = self._acquire(key, catalog, config)
         try:
             assert entry.registry is not None
-            table_format = entry.registry.describe(catalog, _asset_table_identifier(asset))
+            table_format = entry.registry.resolve(catalog, _asset_table_identifier(asset))
             scope = (
                 table_format.open()
                 if isinstance(table_format, PublicPluginTableFormat)
@@ -209,12 +207,6 @@ class LiveConfigCatalogRegistry:
                 yield AccessContext(source, PublishedPolicy(asset), schema)
         finally:
             self._release(key, entry)
-
-    def describe(self, catalog: str | None, target: str) -> Source:
-        """Resolve a detached table format for direct catalog consumers."""
-        with self.open(catalog, target) as context:
-            source = context.table_format
-            return source.source if isinstance(source, _BoundSource) else source
 
     def _acquire(self, key: str, catalog: str, config: CatalogConfig) -> _ProviderEntry:
         deadline = monotonic() + self._provider_wait_seconds
@@ -347,7 +339,7 @@ def _catalog_config_for_asset(
     )
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
-    if config.plugin_id == "iceberg.sql":
+    if config.plugin_id == "iceberg.catalog":
         if backend != "iceberg":
             raise ValueError("Configured Iceberg catalogs require Iceberg assets")
         return config
@@ -370,9 +362,9 @@ def _validate_plugin_binding(
     format_plugin = raw_plugins.get("table_format")
     if not isinstance(catalog_plugin, str) or not isinstance(format_plugin, str):
         raise ValueError("Live plugin binding is unsupported")
-    if catalog_plugin == "iceberg.sql" and format_plugin != "iceberg":
+    if catalog_plugin == "iceberg.catalog" and format_plugin != "iceberg":
         raise ValueError("Live plugin binding is unsupported")
-    if catalog_plugin != "iceberg.sql" and plugin_registry is None:
+    if catalog_plugin != "iceberg.catalog" and plugin_registry is None:
         raise ValueError("Live plugin binding is unsupported without an admitted registry")
     if plugin_registry is not None:
         admitted = plugin_registry.admitted()

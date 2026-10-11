@@ -1,10 +1,4 @@
-"""Operational access invalidation for restore and emergency recovery.
-
-Example:
-    ```bash
-    dal-obscura-maintenance invalidate-access --database-url "$DAL_OBSCURA_DATABASE_URL"
-    ```
-"""
+"""Operational access invalidation for restore and emergency recovery."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pyarrow as pa
 import pytest
@@ -104,7 +104,7 @@ def test_record_batch_validation_rejects_expired_deadline():
         check_record_batches(
             schema,
             [batch],
-            context=ExecutionContext(datetime.now(timezone.utc) - timedelta(seconds=1), "expired"),
+            context=ExecutionContext(datetime.now(UTC) - timedelta(seconds=1), "expired"),
         )
 
 

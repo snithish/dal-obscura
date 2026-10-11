@@ -87,5 +87,5 @@ def test_control_plane_rejects_oversized_chunked_body_without_content_length(db_
     assert b"Request body too large" in sent[1]["body"]
 
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 DEFAULT_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"

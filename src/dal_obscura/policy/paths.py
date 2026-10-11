@@ -12,7 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Final, TypeAlias, cast
+from typing import Final, cast
 
 import pyarrow as pa
 
@@ -46,7 +46,7 @@ class MapValueSegment:
     """The value node of an Arrow map."""
 
 
-FieldPathSegment: TypeAlias = FieldSegment | ListElementSegment | MapKeySegment | MapValueSegment
+type FieldPathSegment = FieldSegment | ListElementSegment | MapKeySegment | MapValueSegment
 
 
 @dataclass(frozen=True)

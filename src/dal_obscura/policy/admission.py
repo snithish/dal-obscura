@@ -4,7 +4,6 @@ import pyarrow as pa
 
 from dal_obscura.policy.filters import (
     RowFilter,
-    extract_row_filter_dependencies,
     parse_row_filter,
     validate_row_filter_against_schema,
 )
@@ -25,7 +24,6 @@ def _build_execution_projection(
     ]
     return ExecutionProjection(
         visible_columns=visible_columns,
-        internal_dependency_columns=internal_dependency_columns,
         execution_columns=[*visible_columns, *internal_dependency_columns],
     )
 
@@ -33,7 +31,7 @@ def _build_execution_projection(
 def _extract_filter_dependencies(row_filter: RowFilter | None) -> list[str]:
     if not row_filter:
         return []
-    return extract_row_filter_dependencies(row_filter)
+    return list(row_filter.dependencies)
 
 
 def _build_authorization_columns(

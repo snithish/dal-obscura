@@ -1,10 +1,4 @@
-"""Workspace summary routes.
-
-Example:
-    ```python
-    app.include_router(router(deps))
-    ```
-"""
+"""Workspace summary routes."""
 
 from __future__ import annotations
 
@@ -20,13 +14,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
-    """Builds workspace summary routes.
-
-    Example:
-        ```python
-        workspace_router = router(deps)
-        ```
-    """
+    """Builds workspace summary routes."""
 
     api = APIRouter()
 

@@ -157,6 +157,47 @@ def test_empty_snapshot_returns_no_tasks(tmp_path, context):
     assert format.plan(ScanRequest(format.schema(context).arrow_schema, 3), context) == []
 
 
+def test_location_catalog_loads_official_uris_without_directory_registry(tmp_path, context):
+    from dal_obscura_delta.catalog import delta_location_catalog_factory
+
+    write_deltalake(
+        tmp_path / "sales",
+        pa.table({"id": [0, 1, 2, 3]}),
+        writer_properties=WriterProperties(max_row_group_size=1),
+    )
+    catalog = delta_location_catalog_factory(
+        CatalogConfig(
+            "delta.catalog",
+            "locations",
+            1,
+            {
+                "tables": [
+                    {
+                        "namespace": ["retail"],
+                        "name": "sales",
+                        "location": (tmp_path / "sales").as_uri(),
+                    }
+                ]
+            },
+        ),
+        context,
+    )
+    try:
+        identifier = TableIdentifier(("retail",), "sales")
+        assert catalog.list_tables(context).entries == (identifier,)
+        captured = catalog.resolve_table(identifier, context)
+    finally:
+        catalog.close()
+    with delta_format_factory(captured, context) as plugin:
+        tasks = plugin.plan(ScanRequest(plugin.schema(context).arrow_schema, 2), context)
+    from tests.support.plugin_scans import distributed_rows
+
+    assert len(tasks) == 2
+    assert sorted(
+        distributed_rows(delta_format_factory, captured, tasks), key=lambda r: r["id"]
+    ) == [{"id": i} for i in range(4)]
+
+
 def test_replaced_table_cannot_reinterpret_pinned_handle(tmp_path, context):
     write_deltalake(tmp_path / "sales", pa.table({"id": [1]}))
     handle, _ = open_format(tmp_path, context)

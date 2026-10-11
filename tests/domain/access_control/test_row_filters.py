@@ -5,10 +5,7 @@ from sqlglot import exp
 from dal_obscura.policy.filters import (
     RowFilter,
     deserialize_row_filter,
-    extract_row_filter_dependencies,
     parse_row_filter,
-    row_filter_to_sql,
-    serialize_row_filter,
 )
 from tests.support.row_filters import (
     PARSER_MULTIPLE_STATEMENT_ROW_FILTERS,
@@ -46,14 +43,14 @@ def test_filter_ast_cannot_change_the_validated_sql_or_dependencies():
 
     assert row_filter.sql == "region = 'us'"
     assert row_filter.expression.sql(dialect="duckdb") == row_filter.sql
-    assert extract_row_filter_dependencies(row_filter) == ["region"]
+    assert row_filter.dependencies == ("region",)
 
 
 def test_parse_row_filter_accepts_function_and_computed_predicates():
     row_filter = parse_row_filter("lower(region) = 'us' AND id + 1 > 5", _schema())
 
     assert isinstance(row_filter, RowFilter)
-    assert row_filter_to_sql(row_filter) == "LOWER(region) = 'us' AND id + 1 > 5"
+    assert row_filter.sql == "LOWER(region) = 'us' AND id + 1 > 5"
 
 
 def test_parse_row_filter_validates_columns_inside_functions():
@@ -67,7 +64,7 @@ def test_parse_row_filter_extracts_dependencies_from_nested_function_predicates(
         _schema(),
     )
 
-    assert extract_row_filter_dependencies(row_filter) == ["user.address.zip", "region"]
+    assert row_filter.dependencies == ("user.address.zip", "region")
 
 
 def test_parse_row_filter_distinguishes_quoted_literal_dots_from_nested_fields():
@@ -81,14 +78,14 @@ def test_parse_row_filter_distinguishes_quoted_literal_dots_from_nested_fields()
     literal = parse_row_filter('"a.b" = 1', schema)
     nested = parse_row_filter("a.b = 1", schema)
 
-    assert extract_row_filter_dependencies(literal) == ['["a.b"]']
-    assert extract_row_filter_dependencies(nested) == ["a.b"]
+    assert literal.dependencies == ('["a.b"]',)
+    assert nested.dependencies == ("a.b",)
 
 
 def test_row_filter_serialization_round_trips_as_sql_string():
     row_filter = parse_row_filter("lower(region) = 'us' AND active", _schema())
 
-    payload = serialize_row_filter(row_filter)
+    payload = row_filter.sql
 
     assert payload == "LOWER(region) = 'us' AND active"
     assert deserialize_row_filter(payload) == row_filter
@@ -115,7 +112,7 @@ def test_row_filter_deserialization_rejects_non_string_payload():
 def test_parse_row_filter_keeps_supported_filter_subset(payload, expected):
     row_filter = parse_row_filter(payload, _schema())
 
-    assert row_filter_to_sql(row_filter) == expected
+    assert row_filter.sql == expected
 
 
 @pytest.mark.parametrize(

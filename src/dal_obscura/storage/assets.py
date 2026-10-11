@@ -424,13 +424,7 @@ def _workspace_asset_rows(
 
 @dataclass(frozen=True)
 class AssetPage:
-    """Cursor-paginated asset listing.
-
-    Example:
-        ```python
-        page = store.list_assets()
-        ```
-    """
+    """Cursor-paginated asset listing."""
 
     items: list[dict[str, object]]
     next_cursor: str | None

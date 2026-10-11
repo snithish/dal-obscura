@@ -7864,7 +7864,7 @@
           "plugin_id"
         ],
         "title": "CatalogRequest",
-        "description": "Catalog configuration request.\n\nExample:\n    ```python\n    CatalogRequest(plugin_id=\"iceberg.sql\", options={\"uri\": \"sqlite:///catalog.db\"})\n    ```"
+        "description": "Catalog configuration request.\n\nExample:\n    ```python\n    CatalogRequest(plugin_id=\"iceberg.catalog\", options={\"uri\": \"sqlite:///catalog.db\"})\n    ```"
       },
       "CatalogTablesResponse": {
         "properties": {

@@ -97,7 +97,7 @@ sequenceDiagram
     R-->>C: Output schema + signed ticket references
 ```
 
-Native SQL Iceberg and external catalogs use the same SDK lifecycle. Catalog
+Official PyIceberg backends and external catalogs use the same SDK lifecycle. Catalog
 pagination reuses one bounded listing within its operation; later operations
 refresh. Iceberg COW/position scans balance data-file bytes across disjoint tasks;
 equality deletes use independent Apache Iceberg Rust file tasks across workers. Literal dotted field/table names remain distinct.

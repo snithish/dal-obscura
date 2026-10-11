@@ -518,6 +518,75 @@ def test_full_map_selection_enforces_descendant_masks(hide_key):
     assert result.schema == compile_projection(schema, ["contacts"], masks).output_schema
 
 
+@pytest.mark.parametrize("slice_offset", [1, 3, 9])
+def test_sliced_nested_arrow_batches_preserve_values_and_nulls(slice_offset):
+    phone = pa.struct([("number", pa.string())])
+    contact = pa.struct([("email", pa.string()), ("phones", pa.list_(phone))])
+    schema = pa.schema(
+        [
+            ("id", pa.int64()),
+            ("profile", pa.struct([("identity", pa.struct([("contact", contact)]))])),
+        ]
+    )
+    rows = [
+        {
+            "id": i,
+            "profile": None
+            if i % 8 == 7
+            else {
+                "identity": {
+                    "contact": {
+                        "email": "private",
+                        "phones": [{"number": "private"}, {"number": None}],
+                    }
+                }
+            },
+        }
+        for i in range(32)
+    ]
+    batch = pa.RecordBatch.from_pylist(rows, schema=schema).slice(slice_offset, 16)
+    masks = {
+        "profile.identity.contact.email": MaskRule(type="redact", value="hidden"),
+        "profile.identity.contact.phones.$element.number": MaskRule(type="redact", value="hidden"),
+    }
+    result = pa.Table.from_batches(
+        DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
+            [batch], schema.names, None, masks
+        )
+    )
+    assert result.to_pylist() == [
+        {
+            "id": i,
+            "profile": None
+            if i % 8 == 7
+            else {
+                "identity": {
+                    "contact": {
+                        "email": "hidden",
+                        "phones": [{"number": "hidden"}, {"number": None}],
+                    }
+                }
+            },
+        }
+        for i in range(slice_offset, slice_offset + 16)
+    ]
+    # Flight restores the declared schema; this boundary exposes DuckDB's Arrow
+    # list element name. Check its exact native shape independently.
+    output_contact = pa.struct(
+        [
+            ("email", pa.string()),
+            ("phones", pa.list_(pa.field("l", phone))),
+        ]
+    )
+    expected_schema = pa.schema(
+        [
+            ("id", pa.int64()),
+            ("profile", pa.struct([("identity", pa.struct([("contact", output_contact)]))])),
+        ]
+    )
+    assert result.schema.equals(expected_schema, check_metadata=True)
+
+
 def test_scalar_masks_execute_values_and_match_advertised_schema():
     from hashlib import sha256
 

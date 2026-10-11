@@ -518,7 +518,7 @@ def _provision_control_plane(
         _commands_seed.create_catalog(
             service,
             name=CATALOG_NAME,
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             options={
                 "type": "sql",
                 "uri": f"sqlite:///{output_dir / f'{CATALOG_NAME}.db'}",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from urllib.parse import urlsplit
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.socket
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+        deadline=datetime.now(UTC) + timedelta(minutes=1),
         correlation_id="io-boundary",
     )
 

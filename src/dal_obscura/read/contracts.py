@@ -54,14 +54,7 @@ class DecodedScan:
 
 @dataclass(frozen=True)
 class GetSchemaResult:
-    """Authorized schema response returned by GetSchemaUseCase.
-
-    Example:
-        ```python
-        result = get_schema.execute(plan_request, auth_request)
-        print(result.output_schema, result.policy_version)
-        ```
-    """
+    """Authorized schema returned by ReadService.schema."""
 
     output_schema: pa.Schema
     target: str

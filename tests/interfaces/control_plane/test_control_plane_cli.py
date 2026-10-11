@@ -65,7 +65,7 @@ def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> No
     assert captured["trusted_proxy_peers"] == ("10.0.0.8/32", "10.0.0.9")
     assert captured["cors_origins"] == ("http://127.0.0.1:5173", "http://localhost:5173")
     registry = cast(PluginRegistry, captured["plugin_registry"])
-    assert ("catalog", "iceberg.sql") in registry.admitted()
+    assert ("catalog", "iceberg.catalog") in registry.admitted()
     assert ("table_format", "iceberg") in registry.admitted()
 
 

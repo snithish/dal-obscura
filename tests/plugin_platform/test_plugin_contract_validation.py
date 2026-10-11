@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import pyarrow as pa
@@ -81,20 +81,20 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
 
 
 def test_plugin_contract_value_objects_validate_generation_and_schema_identity() -> None:
-    config = CatalogConfig(plugin_id="iceberg.sql", instance_id="analytics", revision=0)
+    config = CatalogConfig(plugin_id="iceberg.catalog", instance_id="analytics", revision=0)
     assert config.revision == 0
     with pytest.raises(ValueError, match="cannot be negative"):
-        CatalogConfig(plugin_id="iceberg.sql", instance_id="analytics", revision=-1)
+        CatalogConfig(plugin_id="iceberg.catalog", instance_id="analytics", revision=-1)
     with pytest.raises(ValueError, match="JSON-like"):
         CatalogConfig(
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             instance_id="analytics",
             revision=0,
             options={"provider": object()},
         )
     with pytest.raises(ValueError, match="too many keys"):
         CatalogConfig(
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             instance_id="analytics",
             revision=0,
             options={f"key-{index}": index for index in range(65)},
@@ -110,7 +110,7 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
         )
     with pytest.raises(ValueError, match="JSON-like"):
         TableHandle(
-            catalog_plugin_id="iceberg.sql",
+            catalog_plugin_id="iceberg.catalog",
             catalog_instance_id="analytics",
             catalog_revision=0,
             identifier=TableIdentifier(namespace=("default",), name="users"),
@@ -148,7 +148,7 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
 
 
 def test_execution_context_rejects_ambiguous_or_unbounded_values() -> None:
-    deadline = datetime.now(timezone.utc)
+    deadline = datetime.now(UTC)
     context = ExecutionContext(deadline=deadline, correlation_id="request-1")
     assert context.correlation_id == "request-1"
 

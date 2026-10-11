@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 DB_DRIVER_INSTALL_HINTS = {
-    "postgresql+psycopg": "pip install 'dal-obscura[postgres]'",
-    "postgresql": "pip install 'dal-obscura[postgres]'",
-    "sqlite+pysqlite": "pip install 'dal-obscura[sqlite]'",
-    "sqlite": "pip install 'dal-obscura[sqlite]'",
+    "postgresql+psycopg": "uv add 'dal-obscura[postgres]'",
+    "postgresql": "uv add 'dal-obscura[postgres]'",
+    "sqlite+pysqlite": "use Python with the standard-library sqlite3 module",
+    "sqlite": "use Python with the standard-library sqlite3 module",
 }
 
 
@@ -28,14 +28,7 @@ class ConfigStoreMigrationRequired(ConfigStoreSchemaError):
 
 @dataclass(frozen=True)
 class ConfigStoreMigrationStatus:
-    """Current and expected Alembic heads for the config store.
-
-    Example:
-        ```python
-        status = check_config_store_schema(engine)
-        assert status.is_current
-        ```
-    """
+    """Current and expected Alembic heads for the config store."""
 
     current_heads: tuple[str, ...]
     expected_heads: tuple[str, ...]
@@ -53,8 +46,8 @@ def create_engine_from_url(database_url: str) -> Engine:
             kwargs: dict[str, Any] = {"connect_args": {"check_same_thread": False}}
             if database_url.endswith(":memory:"):
                 kwargs["poolclass"] = StaticPool
-            return create_engine(database_url, future=True, **kwargs)
-        return create_engine(database_url, future=True)
+            return create_engine(database_url, **kwargs)
+        return create_engine(database_url)
     except (ModuleNotFoundError, NoSuchModuleError) as exc:
         hint = DB_DRIVER_INSTALL_HINTS.get(url.drivername)
         if hint is None:
@@ -64,7 +57,7 @@ def create_engine_from_url(database_url: str) -> Engine:
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:
     """Builds the session factory shared by control-plane routes and tests."""
-    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def session_scope(session_maker: sessionmaker[Session]) -> Iterator[Session]:

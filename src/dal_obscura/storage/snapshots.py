@@ -24,14 +24,7 @@ from dal_obscura.storage.database.orm import (
 
 @dataclass(frozen=True)
 class LiveRuntime:
-    """Active runtime settings compiled from the control plane.
-
-    Example:
-        ```python
-        runtime = store.get_runtime()
-        ttl = runtime.ticket["ttl_seconds"]
-        ```
-    """
+    """Active runtime settings compiled from the control plane."""
 
     auth_chain: dict[str, Any]
     ticket: dict[str, Any]
@@ -40,12 +33,7 @@ class LiveRuntime:
 
 @dataclass(frozen=True)
 class LiveAsset:
-    """Live asset policy and backend configuration for one target.
-
-    Example:
-        ```python
-        ```
-    """
+    """Live asset policy and backend configuration for one target."""
 
     catalog: str
     target: str
@@ -57,13 +45,7 @@ class LiveAsset:
 
 @dataclass(frozen=True)
 class LiveCatalog:
-    """Live catalog configuration for the deployment.
-
-    Example:
-        ```python
-        catalogs = store.get_catalogs()
-        ```
-    """
+    """Live catalog configuration for the deployment."""
 
     catalog: str
     config: dict[str, Any]
@@ -205,7 +187,7 @@ class LiveConfigStore:
             LiveCatalog(
                 catalog=record.name,
                 config={
-                    "type": ("iceberg" if record.plugin_id == "iceberg.sql" else "plugin"),
+                    "type": ("iceberg" if record.plugin_id == "iceberg.catalog" else "plugin"),
                     "plugin_id": record.plugin_id,
                     "options": dict(record.options_json),
                     "revision": record.revision,

@@ -50,7 +50,7 @@ class StaticAccessContext:
 
     @contextmanager
     def open(self, catalog: str | None, target: str) -> Iterator[AccessContext]:
-        table = self.catalog_registry.describe(catalog, target)
+        table = self.catalog_registry.resolve(catalog, target)
         yield AccessContext(table, self.authorizer, table.get_schema())
 
 

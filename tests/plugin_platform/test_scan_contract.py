@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import pyarrow as pa
@@ -67,12 +67,10 @@ def test_catalog_config_and_descriptor_are_detached_before_admission():
 
 def test_operation_guard_rejects_expired_or_cancelled_work_before_io():
     with pytest.raises(TimeoutError, match="deadline"):
-        ExecutionContext(
-            datetime.now(timezone.utc) - timedelta(seconds=1), "expired"
-        ).check_active()
+        ExecutionContext(datetime.now(UTC) - timedelta(seconds=1), "expired").check_active()
     with pytest.raises(InterruptedError, match="cancelled"):
         ExecutionContext(
-            datetime.now(timezone.utc) + timedelta(minutes=1),
+            datetime.now(UTC) + timedelta(minutes=1),
             "cancelled",
             cancel_check=lambda: True,
         ).check_active()

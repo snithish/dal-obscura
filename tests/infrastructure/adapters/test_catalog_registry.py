@@ -6,7 +6,7 @@ import pytest
 from dal_obscura_plugin_api import TableIdentifier
 
 from dal_obscura.sources import catalogs as registry_module
-from dal_obscura.sources import sql_catalog
+from dal_obscura.sources import iceberg_catalog
 from dal_obscura.sources.builtins import (
     create_builtin_plugin_registry,
 )
@@ -15,9 +15,9 @@ from dal_obscura.sources.catalogs import (
     CatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.sources.iceberg_catalog import IcebergCatalog
 from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
 from dal_obscura.sources.plugin_runtime import PublicPluginCatalogAdapter
-from dal_obscura.sources.sql_catalog import SqlCatalog
 
 
 def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch) -> None:
@@ -80,7 +80,7 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
         loaded["options"] = options
         return FakePyIcebergCatalog()
 
-    monkeypatch.setattr(sql_catalog, "_load_iceberg_catalog", fake_load_catalog)
+    monkeypatch.setattr(iceberg_catalog, "_load_iceberg_catalog", fake_load_catalog)
 
     catalog = _source_catalog(
         name="analytics",
@@ -113,7 +113,7 @@ def test_iceberg_registry_rejects_root_only_table_listing(monkeypatch):
             return [("users",)]
 
     monkeypatch.setattr(
-        sql_catalog,
+        iceberg_catalog,
         "_load_iceberg_catalog",
         lambda catalog_name, options: RootOnlyCatalog(),
     )
@@ -134,7 +134,7 @@ def test_iceberg_registry_does_not_hide_root_table_provider_errors(monkeypatch):
             raise RuntimeError("catalog unavailable")
 
     monkeypatch.setattr(
-        sql_catalog,
+        iceberg_catalog,
         "_load_iceberg_catalog",
         lambda catalog_name, options: FailingCatalog(),
     )
@@ -156,7 +156,7 @@ def test_iceberg_registry_rejects_malformed_provider_namespaces(monkeypatch, bad
             return []
 
     monkeypatch.setattr(
-        sql_catalog,
+        iceberg_catalog,
         "_load_iceberg_catalog",
         lambda catalog_name, options: MalformedCatalog(),
     )
@@ -178,7 +178,7 @@ def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypat
             return [bad_identifier]
 
     monkeypatch.setattr(
-        sql_catalog,
+        iceberg_catalog,
         "_load_iceberg_catalog",
         lambda catalog_name, options: MalformedCatalog(),
     )
@@ -199,7 +199,7 @@ def test_iceberg_registry_bounds_unbounded_namespace_providers(monkeypatch):
             return []
 
     monkeypatch.setattr(
-        sql_catalog,
+        iceberg_catalog,
         "_load_iceberg_catalog",
         lambda catalog_name, options: EndlessCatalog(),
     )
@@ -220,7 +220,7 @@ def test_iceberg_registry_bounds_unbounded_table_providers(monkeypatch):
             return (("users", str(index)) for index in range(100_000))
 
     monkeypatch.setattr(
-        sql_catalog,
+        iceberg_catalog,
         "_load_iceberg_catalog",
         lambda catalog_name, options: EndlessCatalog(),
     )
@@ -275,7 +275,7 @@ def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory(tmp
 
     registry = CatalogRegistry(config, plugin_registry=create_builtin_plugin_registry())
 
-    assert isinstance(cast(Any, registry._catalogs["analytics"])._catalog, SqlCatalog)
+    assert isinstance(cast(Any, registry._catalogs["analytics"])._catalog, IcebergCatalog)
 
 
 def test_catalog_registry_close_releases_adapters_and_rejects_reuse(monkeypatch):
@@ -381,7 +381,7 @@ def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roo
             del identifier
             return UnsafeTable()
 
-    monkeypatch.setattr(sql_catalog, "_load_iceberg_catalog", lambda *args: Catalog())
+    monkeypatch.setattr(iceberg_catalog, "_load_iceberg_catalog", lambda *args: Catalog())
     with pytest.raises(PermissionError, match="Path is not allowed"):
         _source_catalog(
             name="analytics",
@@ -406,7 +406,7 @@ def test_catalog_handle_never_copies_provider_credentials_or_redirect_properties
         def load_table(self, identifier):
             return Table()
 
-    monkeypatch.setattr(sql_catalog, "_load_iceberg_catalog", lambda *args: Catalog())
+    monkeypatch.setattr(iceberg_catalog, "_load_iceberg_catalog", lambda *args: Catalog())
     source = _source_catalog(name="analytics", options={}).resolve_table("default.users")
     assert dict(source.handle.metadata) == {"metadata_location": Table.metadata_location}
 
@@ -415,8 +415,8 @@ def _source_catalog(*, name, options, path_enforcer=None):
     return PublicPluginCatalogAdapter(
         name,
         options,
-        "iceberg.sql",
-        SqlCatalog,
+        "iceberg.catalog",
+        IcebergCatalog,
         lambda plugin_id: IcebergFormatPlugin,
         path_enforcer,
     )

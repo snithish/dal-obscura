@@ -1,10 +1,4 @@
-"""Workspace asset service functions.
-
-Example:
-    ```python
-    assets = list_workspace_assets(store)
-    ```
-"""
+"""Workspace asset service functions."""
 
 from __future__ import annotations
 
@@ -31,13 +25,7 @@ def list_workspace_assets(
     store: Session,
     actor: ControlPlaneActor | None = None,
 ) -> list[dict[str, object]]:
-    """Lists governed assets in the default workspace.
-
-    Example:
-        ```python
-        assets = list_workspace_assets(store)
-        ```
-    """
+    """Lists governed assets in the default workspace."""
 
     context = _db_workspace.get_workspace(store)
     if context is None:
@@ -75,13 +63,7 @@ def get_workspace_asset(
     asset_id: UUID,
     actor: ControlPlaneActor | None = None,
 ) -> dict[str, object]:
-    """Returns one governed asset by id.
-
-    Example:
-        ```python
-        asset = get_workspace_asset(store, asset_id)
-        ```
-    """
+    """Returns one governed asset by id."""
 
     asset = _db_assets.get_workspace_asset(store, asset_id)
     if actor is not None:
@@ -142,13 +124,7 @@ def upsert_workspace_asset(
     expected_revision: int | None = None,
     plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, str]:
-    """Creates or updates a governed asset binding.
-
-    Example:
-        ```python
-        result = upsert_workspace_asset(store, "analytics", "orders", "iceberg", None, {})
-        ```
-    """
+    """Creates or updates a governed asset binding."""
 
     _required_workspace(store)
     catalog_record = _db_catalogs.get_workspace_catalog(store, catalog)
@@ -189,13 +165,7 @@ def replace_asset_owners(
     expected_revision: int | None = None,
     actor: ControlPlaneActor | None = None,
 ) -> list[str]:
-    """Replaces owners for one governed asset.
-
-    Example:
-        ```python
-        owners = replace_asset_owners(store, asset_id, ["alice", "group:analytics"])
-        ```
-    """
+    """Replaces owners for one governed asset."""
 
     if actor is not None and not actor.platform_admin:
         raise AuthorizationFailure("Only platform admins may replace asset owners.")
@@ -266,13 +236,7 @@ def replace_asset_schema_fields(
     fields: list[dict[str, Any]],
     expected_revision: int | None = None,
 ) -> list[dict[str, object]]:
-    """Replaces the schema-field metadata for one governed asset.
-
-    Example:
-        ```python
-        fields = replace_asset_schema_fields(store, asset_id, [{"name": "id"}])
-        ```
-    """
+    """Replaces the schema-field metadata for one governed asset."""
 
     # Serialize schema replacement against concurrent asset updates.
     _db_assets.lock_asset_for_update(store, asset_id)

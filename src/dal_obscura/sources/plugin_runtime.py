@@ -10,7 +10,7 @@ import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
@@ -156,12 +156,14 @@ class PublicPluginTableFormat(Source):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(
+        self, partition: object, *, deadline: datetime
+    ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, PublicPluginPartition):
             raise TypeError("Public plugin format requires a PublicPluginPartition")
 
         def execute_batches() -> Iterable[pa.RecordBatch]:
-            context = _context()
+            context = _context(deadline)
             plugin = self._open(context)
             try:
                 output_schema, batches = plugin.execute(partition.task, context)
@@ -219,8 +221,10 @@ class _BoundSource(Source):
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         return self.source._plan(self.plugin, self.descriptor, self.context, request, max_tickets)
 
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        return self.source.execute(partition)
+    def execute(
+        self, partition: object, *, deadline: datetime
+    ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+        return self.source.execute(partition, deadline=deadline)
 
 
 class PublicPluginCatalogAdapter:
@@ -366,9 +370,11 @@ class PublicPluginCatalogAdapter:
             raise ValueError("Public catalog adapter is closed")
 
 
-def _context() -> ExecutionContext:
+def _context(deadline: datetime | None = None) -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(seconds=PLUGIN_OPERATION_TIMEOUT_SECONDS),
+        deadline=deadline
+        if deadline is not None
+        else datetime.now(UTC) + timedelta(seconds=PLUGIN_OPERATION_TIMEOUT_SECONDS),
         correlation_id=f"plugin-{uuid4().hex}",
     )
 

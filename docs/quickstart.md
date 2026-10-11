@@ -46,7 +46,7 @@ are unsupported. For a disposable environment, create a new empty database.
 Install the server, SQLite driver, and UI dependencies:
 
 ```bash
-uv sync --dev --extra server --extra sqlite
+uv sync --dev --extra server
 pnpm --dir apps/governance-ui install --frozen-lockfile
 ```
 

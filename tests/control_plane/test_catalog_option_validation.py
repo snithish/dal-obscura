@@ -41,6 +41,10 @@ def test_catalog_options_reject_remote_file_authority() -> None:
         validate_catalog_options({"warehouse": "file://remote-host/warehouse"})
 
 
+def test_azure_container_authority_is_not_uri_credentials() -> None:
+    validate_catalog_options({"warehouse": "abfss://warehouse@account.dfs.core.windows.net/tables"})
+
+
 def test_catalog_options_reject_malformed_uri_as_validation_failure() -> None:
     with pytest.raises(ValidationFailure, match="invalid URI"):
         validate_catalog_options({"uri": "https://[2001:db8::1/v1"})

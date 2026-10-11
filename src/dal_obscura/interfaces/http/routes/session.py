@@ -1,10 +1,4 @@
-"""Session and UI-auth routes for the control-plane API.
-
-Example:
-    ```python
-    app.include_router(router(deps))
-    ```
-"""
+"""Session and UI-auth routes for the control-plane API."""
 
 from __future__ import annotations
 
@@ -34,13 +28,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
-    """Builds session and UI authentication routes.
-
-    Example:
-        ```python
-        session_router = router(deps)
-        ```
-    """
+    """Builds session and UI authentication routes."""
 
     api = APIRouter()
 

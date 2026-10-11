@@ -2,7 +2,7 @@
 
 import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from multiprocessing import get_context
 
@@ -30,7 +30,7 @@ def _worker_rows(factory_module, factory_name, handle_json, task_json, worker_ke
     if "AWS_ACCESS_KEY_ID" in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = worker_key
     factory = getattr(import_module(factory_module), factory_name)
-    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "process-worker")
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=2), "process-worker")
     plugin = factory(TableHandle.from_json(handle_json), context)
     try:
         schema, batches = plugin.execute(ScanTask.from_json(task_json), context)

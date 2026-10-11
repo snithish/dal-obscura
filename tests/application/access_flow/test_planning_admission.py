@@ -5,7 +5,7 @@ import pytest
 from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.policy.models import Principal
 from dal_obscura.read.request import PlanRequest
-from tests.application.access_flow.helpers import (
+from tests.support.read_scenarios import (
     AUTHORIZATION_HEADER,
     _build_use_case_dependencies,
 )

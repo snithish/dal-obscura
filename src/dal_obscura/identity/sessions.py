@@ -1,11 +1,4 @@
-"""Durable opaque browser-session storage.
-
-Example:
-    ```python
-    token = BrowserSessionStore(session).issue(actor, ttl_seconds=3600)
-    actor = BrowserSessionStore(session).resolve(token)
-    ```
-"""
+"""Durable opaque browser-session storage."""
 
 from __future__ import annotations
 
@@ -13,7 +6,7 @@ import hashlib
 import math
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import delete, or_, select
@@ -105,7 +98,7 @@ class BrowserSessionStore:
                 raise ValueError("idle session TTL must be positive")
             last_seen_at = record.last_seen_at
             if last_seen_at.tzinfo is None:
-                last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+                last_seen_at = last_seen_at.replace(tzinfo=UTC)
             if last_seen_at + timedelta(seconds=idle_ttl_seconds) <= now:
                 record.revoked_at = now
                 self._session.flush()
@@ -280,7 +273,7 @@ def _validate_rate_limit_values(max_attempts: int, window_seconds: int, block_se
 
 
 def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 def _retry_after(blocked_until: datetime, now: datetime) -> int:

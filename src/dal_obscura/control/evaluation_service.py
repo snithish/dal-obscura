@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
@@ -199,7 +199,7 @@ def _sample_value(name: str, data_type: pa.DataType) -> object:  # noqa: C901
         return date(2024, 1, 2)
     if pa.types.is_timestamp(data_type):
         value = datetime(2024, 1, 2, 3, 4, 5)
-        return value.replace(tzinfo=timezone.utc) if data_type.tz else value
+        return value.replace(tzinfo=UTC) if data_type.tz else value
     if pa.types.is_time32(data_type) or pa.types.is_time64(data_type):
         return time(3, 4, 5)
     if pa.types.is_binary(data_type) or pa.types.is_large_binary(data_type):

@@ -110,7 +110,7 @@ their scenarios solely to reduce a test count would remove useful evidence.
 Install Python and UI dependencies using the repository's locked environments:
 
 ```bash
-uv sync --dev --extra server --extra sqlite
+uv sync --dev --extra server
 pnpm --dir apps/governance-ui install --frozen-lockfile
 ```
 

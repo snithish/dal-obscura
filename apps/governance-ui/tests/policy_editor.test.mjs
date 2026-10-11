@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyMaskToTargets, authoritativeColumnOptions, groupMasks, mixedMaskState, removeColumnSelections, schemaPathCovers } from "../src/policy_editor.ts";
+import { applyMaskToTargets, authoritativeColumnOptions, groupMasks, removeColumnSelections, schemaPathCovers } from "../src/policy_editor.ts";
 
 const node = (human_path, segments, children = []) => ({ field_id: 1, name: human_path, human_path, path: { version: 1, segments }, type: children.length ? "struct" : "string", nullable: true, kind: children.length ? "struct" : "scalar", ...(children.length ? { children } : {}) });
 const fields = [
@@ -37,13 +37,11 @@ test("column exemptions clear only targeted masks while keeping access; all-exem
   assert.deepEqual(applyMaskToTargets(original, ["email"], undefined).masks, { phone: { type: "redact" } });
 });
 
-test("mixed mask state and grouping include unmasked state", () => {
+test("mask grouping distinguishes equal masks and exemptions", () => {
   const value = rule();
-  assert.equal(mixedMaskState(value, ["email", "phone"]), true);
   assert.deepEqual(groupMasks(value, ["email", "phone"]).map((item) => item.columns), [["email"], ["phone"]]);
-  assert.equal(mixedMaskState({ ...value, masks: { email: { type: "hash" }, phone: { type: "hash" } } }, ["email", "phone"]), false);
+  assert.equal(groupMasks({ ...value, masks: { email: { type: "hash" }, phone: { type: "hash" } } }, ["email", "phone"]).length, 1);
   const exempted = { ...value, masks: { email: { type: "hash", exempt_principals: ["group:a"] }, phone: { type: "hash", exempt_principals: ["group:b"] } } };
-  assert.equal(mixedMaskState(exempted, ["email", "phone"]), true);
   assert.equal(groupMasks(exempted, ["email", "phone"]).length, 2);
 });
 

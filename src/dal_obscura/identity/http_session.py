@@ -1,10 +1,4 @@
-"""Session and UI-auth helpers for the control-plane API.
-
-Example:
-    ```python
-    actor = oidc_actor_from_header("Bearer token", resolver=resolver, admin_group="admins")
-    ```
-"""
+"""Session and UI-auth helpers for the control-plane API."""
 
 from __future__ import annotations
 
@@ -39,19 +33,7 @@ def create_oidc_actor_resolver(
     subject_claim: str,
     group_claims: tuple[str, ...],
 ) -> OidcActorResolver:
-    """Builds an OIDC bearer-token resolver for control-plane actors.
-
-    Example:
-        ```python
-        resolver = create_oidc_actor_resolver(
-            issuer="https://idp.example.com",
-            audience="dal-obscura-ui",
-            jwks_url=None,
-            subject_claim="preferred_username",
-            group_claims=("groups",),
-        )
-        ```
-    """
+    """Builds an OIDC bearer-token resolver for control-plane actors."""
 
     provider = OidcJwksIdentityProvider(
         issuer=issuer,
@@ -105,13 +87,7 @@ def create_oidc_nonce_actor_resolver(
 
 
 def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
-    """Serializes a control-plane actor for the session API.
-
-    Example:
-        ```python
-        payload = actor_response(actor)
-        ```
-    """
+    """Serializes a control-plane actor for the session API."""
 
     return {
         "principal": actor.principal,
@@ -123,13 +99,7 @@ def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
 
 
 def public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
-    """Returns only browser-safe UI authentication settings.
-
-    Example:
-        ```python
-        public = public_ui_auth_config(raw_config)
-        ```
-    """
+    """Returns only browser-safe UI authentication settings."""
 
     public_keys = (
         "authority",
@@ -251,17 +221,7 @@ def oidc_actor_from_header(
     resolver: OidcActorResolver,
     admin_group: str | None,
 ) -> ControlPlaneActor | None:
-    """Converts an authorization header into a control-plane actor.
-
-    Example:
-        ```python
-        actor = oidc_actor_from_header(
-            "Bearer token",
-            resolver=resolver,
-            admin_group="platform-admins",
-        )
-        ```
-    """
+    """Converts an authorization header into a control-plane actor."""
 
     token = _bearer_token(authorization)
     if token is None:

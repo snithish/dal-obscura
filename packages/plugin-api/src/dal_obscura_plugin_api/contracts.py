@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import isfinite
 from typing import Literal, Protocol, cast
 
@@ -319,7 +319,7 @@ class ExecutionContext:
 
     def check_active(self) -> None:
         """Check before and after provider work, including each iterator pull."""
-        if self.deadline <= datetime.now(timezone.utc):
+        if self.deadline <= datetime.now(UTC):
             raise TimeoutError("Plugin execution deadline expired")
         if self.cancel_check is not None and self.cancel_check():
             raise InterruptedError("Plugin execution was cancelled")

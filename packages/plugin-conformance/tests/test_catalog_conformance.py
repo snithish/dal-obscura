@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import cast
 
 import pytest
@@ -137,7 +137,7 @@ def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
             return None
 
     result = run_catalog_checks(
-        cast(CatalogPlugin, ExpiredCatalog()), _catalog_context(deadline=datetime.now(timezone.utc))
+        cast(CatalogPlugin, ExpiredCatalog()), _catalog_context(deadline=datetime.now(UTC))
     )
 
     assert result.to_dict()["status"] == "failed"

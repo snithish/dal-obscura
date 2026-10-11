@@ -106,6 +106,23 @@ def test_auth_provider_accepts_full_claim_and_cache_configuration():
     )
 
 
+@pytest.mark.parametrize("field", ["client_secret", "password", "token"])
+def test_auth_provider_rejects_redaction_markers_as_unsupported_configuration(field):
+    with pytest.raises(ValidationFailure, match="unsupported arguments"):
+        validate_auth_provider_payloads(
+            [
+                {
+                    "ordinal": 1,
+                    "module": OIDC_IDENTITY_MODULE,
+                    "args": {
+                        "issuer": "https://issuer.example",
+                        field: "[redacted]",
+                    },
+                }
+            ]
+        )
+
+
 @pytest.mark.parametrize(
     "definitions",
     [

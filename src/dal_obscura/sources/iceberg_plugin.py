@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import heapq
+import json
 import os
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from itertools import pairwise
 
 import pyarrow as pa
@@ -17,9 +18,12 @@ from dal_obscura_plugin_api import (
     SchemaDescriptor,
     TableHandle,
 )
+from pyiceberg.catalog.noop import NoopCatalog
+from pyiceberg.io import load_file_io
 from pyiceberg.io.pyarrow import ArrowAccessor, ArrowProjectionVisitor, pyarrow_to_schema
 from pyiceberg.manifest import DataFileContent
 from pyiceberg.schema import visit_with_partner
+from pyiceberg.serializers import FromInputFile
 from pyiceberg.table import StaticTable
 
 from dal_obscura import __version__
@@ -73,6 +77,7 @@ class IcebergFormatPlugin:
         self._table = None
         self._files = None
         self._reader = None
+        self._reader_context = None
 
     def _check_path(self, location):
         if self._enforcer is not None:
@@ -84,16 +89,18 @@ class IcebergFormatPlugin:
             self._check_path(self._location)
             # Worker identity owns storage credentials; provider properties must
             # never be copied into the passive handle or ticket.
-            options = {}
-            endpoint = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
-            region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
-            if endpoint:
-                options["s3.endpoint"] = endpoint
-            if region:
-                options["s3.region"] = region
-            table = StaticTable.from_metadata(self._location, properties=options)
+            options = _storage_options()
+            io = load_file_io(properties=options, location=self._location)
+            metadata = FromInputFile.table_metadata(io.new_input(self._location))
+            table = StaticTable(
+                identifier=("governed", self._location),
+                metadata_location=self._location,
+                metadata=metadata,
+                io=io,
+                catalog=NoopCatalog("governed"),
+            )
             context.check_active()
-            if table.metadata.format_version != 2:
+            if table.metadata.format_version not in (1, 2):
                 raise ValueError(
                     f"Unsupported Iceberg format version: {table.metadata.format_version}"
                 )
@@ -217,7 +224,7 @@ class IcebergFormatPlugin:
         return schema, self._batches(payload, schema, context)
 
     def _native(self, context):
-        if self._reader is None:
+        if self._reader is None or self._reader_context is not context:
             from dal_obscura_iceberg_reader import Reader
 
             members = self._members(context)
@@ -227,13 +234,17 @@ class IcebergFormatPlugin:
                 raise ValueError("Cannot execute an empty Iceberg snapshot")
             context.check_active()
             reader = Reader(
-                self._location, snapshot.snapshot_id, _storage_options(), _remaining(context)
+                self._location,
+                snapshot.snapshot_id,
+                _FileIOBridge(table.io, context, self._check_path),
+                _remaining(context),
             )
             context.check_active()
             planned = reader.files()
             if len(planned) != len(members) or {path for path, _ in planned} != set(members):
                 raise ValueError("Native Iceberg plan differs from admitted snapshot")
             self._reader = reader
+            self._reader_context = context
         return self._reader
 
     def _batches(self, payload, schema, context) -> Iterator[pa.RecordBatch]:
@@ -257,7 +268,7 @@ class IcebergFormatPlugin:
                     visit_with_partner(
                         table.schema(),
                         batch,
-                        ArrowProjectionVisitor(source_schema, include_field_ids=True),
+                        _NullableProjectionVisitor(source_schema, include_field_ids=True),
                         ArrowAccessor(source_schema),
                     )
                 )
@@ -276,6 +287,78 @@ class IcebergFormatPlugin:
         self._table = None
         self._files = None
         self._reader = None
+        self._reader_context = None
+
+
+class _FileIOBridge:
+    """Read-only callbacks for native Iceberg through official PyIceberg FileIO.
+
+    Providers and credentials stay on the worker. Each bounded range owns and
+    closes its stream, including failures. Native Iceberg owns protocol/deletes.
+    """
+
+    def __init__(self, io, context, check_path):
+        self._io = io
+        self._context = context
+        self._check_path = check_path
+
+    def _input(self, path):
+        self._context.check_active()
+        self._check_path(path)
+        return self._io.new_input(path)
+
+    def exists(self, path):
+        value = self._input(path).exists()
+        self._context.check_active()
+        return value
+
+    def size(self, path):
+        value = len(self._input(path))
+        self._context.check_active()
+        return value
+
+    def read(self, path):
+        with self._input(path).open() as stream:
+            value = stream.read()
+        self._context.check_active()
+        return value
+
+    def read_range(self, path, start, length):
+        with self._input(path).open() as stream:
+            stream.seek(start)
+            value = stream.read(length)
+        self._context.check_active()
+        return value
+
+
+class _NullableProjectionVisitor(ArrowProjectionVisitor):
+    """Keep validity when PyIceberg rebuilds struct-valued collections.
+
+    PyIceberg 0.11.1 reconstructs these arrays without their null mask. Delegate
+    field-ID evolution and type promotion, then restore the original validity.
+    This bridges Arrow representation only; native Iceberg owns deletes.
+    """
+
+    def list(self, list_type, list_array, value_array):
+        result = super().list(list_type, list_array, value_array)
+        if result is None or list_array.null_count == 0:
+            return result
+        constructor = pa.LargeListArray if isinstance(result, pa.LargeListArray) else pa.ListArray
+        return constructor.from_arrays(
+            result.offsets, result.values, type=result.type, mask=list_array.is_null()
+        )
+
+    def map(self, map_type, map_array, key_result, value_result):
+        result = super().map(map_type, map_array, key_result, value_result)
+        if result is None or map_array.null_count == 0:
+            return result
+        return pa.MapArray.from_arrays(
+            result.offsets,
+            result.keys,
+            result.items,
+            type=result.type,
+            mask=map_array.is_null(),
+        )
 
 
 def _projection(schema, columns):
@@ -288,7 +371,7 @@ def _projection(schema, columns):
 
 def _remaining(context):
     context.check_active()
-    return (context.deadline - datetime.now(timezone.utc)).total_seconds()
+    return (context.deadline - datetime.now(UTC)).total_seconds()
 
 
 def _split_work(files, budget):
@@ -312,8 +395,18 @@ def _split_work(files, budget):
 
 
 def _storage_options():
-    # OpenDAL obtains credentials from each worker's native AWS provider chain.
-    options = {}
+    # Operator-owned FileIO configuration, never passive table/ticket metadata.
+    options = json.loads(os.environ.get("DAL_OBSCURA_ICEBERG_IO_PROPERTIES", "{}"))
+    if not isinstance(options, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str) for key, value in options.items()
+    ):
+        raise ValueError("Worker Iceberg IO properties must be a string mapping")
+    if options.get("py-io-impl") not in (
+        None,
+        "pyiceberg.io.pyarrow.PyArrowFileIO",
+        "pyiceberg.io.fsspec.FsspecFileIO",
+    ):
+        raise ValueError("Worker Iceberg IO must use an official FileIO implementation")
     region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
     endpoint = os.environ.get("AWS_ENDPOINT_URL_S3") or os.environ.get("AWS_ENDPOINT_URL")
     if region:
@@ -333,5 +426,4 @@ def _storage_options():
         ):
             raise ValueError("Invalid operator S3 endpoint")
         options["s3.endpoint"] = endpoint
-        options["s3.path-style-access"] = "true"
     return options

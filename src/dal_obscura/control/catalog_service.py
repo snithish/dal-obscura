@@ -1,10 +1,4 @@
-"""Workspace catalog service functions.
-
-Example:
-    ```python
-    catalogs = list_workspace_catalogs(store)
-    ```
-"""
+"""Workspace catalog service functions."""
 
 from __future__ import annotations
 
@@ -12,7 +6,7 @@ import ipaddress
 import math
 from collections.abc import Mapping
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import isfinite
 from threading import BoundedSemaphore, Lock
 from typing import Any, cast
@@ -80,13 +74,7 @@ def _admit_session_discovery(session_key: str | None):
 def list_workspace_catalogs(
     store: Session,
 ) -> list[dict[str, object]]:
-    """Lists catalogs configured in the default workspace.
-
-    Example:
-        ```python
-        catalogs = list_workspace_catalogs(store)
-        ```
-    """
+    """Lists catalogs configured in the default workspace."""
 
     context = _db_workspace.get_workspace(store)
     if context is None:
@@ -103,13 +91,7 @@ def discover_workspace_catalog_tables(
     plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
-    """Discovers tables for a configured workspace catalog.
-
-    Example:
-        ```python
-        result = discover_workspace_catalog_tables(store, "analytics")
-        ```
-    """
+    """Discovers tables for a configured workspace catalog."""
 
     _required_workspace(store)
     catalog = _db_catalogs.get_workspace_catalog(store, name)
@@ -174,7 +156,7 @@ def diagnose_workspace_catalog(
     catalog_options = _resolve_catalog_secrets(
         catalog_options, scope=f"catalog:{name}", provider=secret_provider
     )
-    checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    checked_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     try:
         with _admit_session_discovery(session_key):
             tables = list(
@@ -221,13 +203,7 @@ def upsert_workspace_catalog(
     actor_principal: str = "system",
     plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, str]:
-    """Creates or updates a workspace catalog definition.
-
-    Example:
-        ```python
-        result = upsert_workspace_catalog(store, "analytics", "iceberg.sql", {})
-        ```
-    """
+    """Creates or updates a workspace catalog definition."""
 
     if plugin_id != ICEBERG_CATALOG_ID:
         if plugin_registry is None:
@@ -346,7 +322,7 @@ def validate_catalog_options(
             raise ValidationFailure(
                 f"Catalog option {key!r} must use a local file URI without an authority"
             )
-        if username or password:
+        if password or (username and parsed.scheme.lower() not in {"abfs", "abfss"}):
             raise ValidationFailure(
                 f"Catalog option {key!r} must use a secret reference, not URI credentials"
             )

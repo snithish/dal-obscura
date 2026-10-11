@@ -111,7 +111,7 @@ def test_resource_cas_rejects_stale_session_after_another_writer_commits(resourc
                 _db_catalogs.upsert_catalog(
                     store,
                     name="analytics",
-                    plugin_id="iceberg.sql",
+                    plugin_id="iceberg.catalog",
                     options={"uri": "sqlite:///changed.db"},
                     expected_revision=3,
                 )

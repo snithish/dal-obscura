@@ -119,7 +119,7 @@ def test_postgres_preserves_complete_nested_schema_types():
     with isolated_postgres_sessions() as factory:
         catalog_id, asset_id, field_id = uuid4(), uuid4(), uuid4()
         with factory() as session:
-            session.add(CatalogRecord(id=catalog_id, name="nested", plugin_id="iceberg.sql"))
+            session.add(CatalogRecord(id=catalog_id, name="nested", plugin_id="iceberg.catalog"))
             session.flush()
             session.add(
                 AssetRecord(id=asset_id, catalog_id=catalog_id, target="nested", backend="iceberg")

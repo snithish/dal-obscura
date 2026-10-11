@@ -39,7 +39,7 @@ def test_ticket_store_reserves_exchanges_until_limit(db_engine):
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000001"
 
-    store.store(_payload(ticket_id), max_exchanges=2)
+    store.store_many([_payload(ticket_id)], max_exchanges=2)
 
     assert store.reserve_exchange(ticket_id, now=1000).exchange_count == 1
     assert store.reserve_exchange(ticket_id, now=1001).exchange_count == 2
@@ -69,7 +69,7 @@ def test_ticket_store_rejects_load_and_exchange_after_owner_revocation(db_engine
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000003"
     payload = replace(_payload(ticket_id), asset_id=str(asset_id))
-    store.store(payload, max_exchanges=1)
+    store.store_many([payload], max_exchanges=1)
 
     with session_maker() as session:
         record = session.scalar(
@@ -93,15 +93,19 @@ def test_ticket_cleanup_deletes_only_expired_rows_globally(db_engine):
     store_a = SqlAlchemyTicketStore(session_maker)
     store_b = SqlAlchemyTicketStore(session_maker)
 
-    store_a.store(_payload("00000000-0000-0000-0000-000000000001", expires_at=900), max_exchanges=1)
-    store_a.store(
-        _payload("00000000-0000-0000-0000-000000000002", expires_at=2000), max_exchanges=1
+    store_a.store_many(
+        [_payload("00000000-0000-0000-0000-000000000001", expires_at=900)], max_exchanges=1
+    )
+    store_a.store_many(
+        [_payload("00000000-0000-0000-0000-000000000002", expires_at=2000)], max_exchanges=1
     )
     store_a.reserve_exchange("00000000-0000-0000-0000-000000000002", now=1000)
-    store_a.store(
-        _payload("00000000-0000-0000-0000-000000000003", expires_at=2000), max_exchanges=2
+    store_a.store_many(
+        [_payload("00000000-0000-0000-0000-000000000003", expires_at=2000)], max_exchanges=2
     )
-    store_b.store(_payload("00000000-0000-0000-0000-000000000004", expires_at=900), max_exchanges=1)
+    store_b.store_many(
+        [_payload("00000000-0000-0000-0000-000000000004", expires_at=900)], max_exchanges=1
+    )
 
     assert store_a.cleanup_expired(now=1000) == 2
 
@@ -119,7 +123,7 @@ def test_cleanup_preserves_last_reserved_stream_until_expiry(db_engine):
     session_maker = session_factory(db_engine)
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000005"
-    store.store(_payload(ticket_id, expires_at=2000), max_exchanges=1)
+    store.store_many([_payload(ticket_id, expires_at=2000)], max_exchanges=1)
     store.reserve_exchange(ticket_id, now=1000)
     store.cleanup_expired(now=1001)
     store.ensure_active(ticket_id)
@@ -132,6 +136,6 @@ def test_ticket_exchange_rejects_exact_expiry_boundary(db_engine):
     session_maker = session_factory(db_engine)
     store = SqlAlchemyTicketStore(session_maker)
     ticket_id = "00000000-0000-0000-0000-000000000006"
-    store.store(_payload(ticket_id, expires_at=2000), max_exchanges=1)
+    store.store_many([_payload(ticket_id, expires_at=2000)], max_exchanges=1)
     with pytest.raises(PermissionError):
         store.reserve_exchange(ticket_id, now=2000)

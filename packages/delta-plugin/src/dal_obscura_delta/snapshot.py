@@ -8,16 +8,17 @@ from pathlib import PurePosixPath
 import pyarrow.fs as fs
 import pyarrow.parquet as pq
 from dal_obscura_plugin_api import ExecutionContext
-from dal_obscura_plugin_api.storage import StorageRoot
 from deltalake import DeltaTable
 from deltalake.exceptions import DeltaError
+
+from dal_obscura_delta.storage import DeltaStorage, storage_options
 
 MAX_FILES = 10_000
 MAX_LOG_BYTES = 64 * 1024 * 1024
 MAX_DV_ROWS = 16_000_000
 
 
-def _check_action_paths(row: dict, root: StorageRoot) -> None:
+def _check_action_paths(row: dict, root: DeltaStorage) -> None:
     for kind in ("add", "remove", "sidecar"):
         action = row.get(kind)
         if not isinstance(action, dict):
@@ -34,7 +35,7 @@ def _check_action_paths(row: dict, root: StorageRoot) -> None:
             root.member(encoded[:-20], encoded=True, exists=False) if encoded[:-20] else None
 
 
-def _check_log_file(path: str, root: StorageRoot, context: ExecutionContext) -> None:
+def _check_log_file(path: str, root: DeltaStorage, context: ExecutionContext) -> None:
     if path.endswith(".json"):
         for line in root.read(path, limit=MAX_LOG_BYTES).splitlines():
             context.check_active()
@@ -59,7 +60,7 @@ def _check_log_file(path: str, root: StorageRoot, context: ExecutionContext) -> 
             root.member("_delta_log/" + v2["path"], encoded=True, exists=False)
 
 
-def _check_logs(root: StorageRoot, context: ExecutionContext) -> None:
+def _check_logs(root: DeltaStorage, context: ExecutionContext) -> None:
     """Guard kernel IO, including paths embedded in historical checkpoints.
 
     The public binding does not expose DV descriptors. Checking the bounded log
@@ -73,7 +74,7 @@ def _check_logs(root: StorageRoot, context: ExecutionContext) -> None:
     total = 0
     for entry in entries:
         context.check_active()
-        path = root.member(root.relative(entry.path))
+        path = root.member(entry.path)
         if entry.type != fs.FileType.File:
             continue
         total += entry.size
@@ -83,12 +84,12 @@ def _check_logs(root: StorageRoot, context: ExecutionContext) -> None:
 
 
 def open_snapshot(
-    path: StorageRoot, context: ExecutionContext, version: int | None = None
+    path: DeltaStorage, context: ExecutionContext, version: int | None = None
 ) -> DeltaTable:
     context.check_active()
     _check_logs(path, context)
     try:
-        table = DeltaTable(path.uri, version=version)
+        table = DeltaTable(path.uri, version=version, storage_options=storage_options())
     except DeltaError as exc:
         raise ValueError("Unable to load the pinned Delta snapshot") from exc
     context.check_active()

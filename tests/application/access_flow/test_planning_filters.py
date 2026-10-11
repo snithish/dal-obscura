@@ -3,13 +3,13 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.policy.filters import deserialize_row_filter, row_filter_to_sql
+from dal_obscura.policy.filters import deserialize_row_filter
 from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
 from dal_obscura.read.request import PlanRequest
-from tests.application.access_flow.helpers import (
+from tests.support.read_scenarios import (
     AUTHORIZATION_HEADER,
-    _build_end_to_end_access_flow,
     _build_use_case_dependencies,
+    governed_read_service,
 )
 from tests.support.reads import StaticAccessContext, make_read_service
 from tests.support.tickets import ticket_payload
@@ -296,10 +296,7 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
 
     payload_filter = ticket_codec.signed_payloads[0].scan["full_row_filter"]
     assert payload_filter is not None
-    assert (
-        row_filter_to_sql(deserialize_row_filter(payload_filter))
-        == "active = TRUE AND region = 'us'"
-    )
+    assert deserialize_row_filter(payload_filter).sql == "active = TRUE AND region = 'us'"
     assert planned_columns == [["id", "active", "region"]]
 
 
@@ -326,9 +323,9 @@ def test_plan_access_reports_non_sensitive_filter_and_projection_metrics():
         row_filter="LOWER(status) = 'active'",
         policy_version=100,
     )
-    plan_access, _fetch_stream = _build_end_to_end_access_flow(table_format, decision)
+    reader = governed_read_service(table_format, decision)
 
-    result = plan_access.plan(
+    result = reader.plan(
         PlanRequest(
             catalog="catalog1",
             target="users",
@@ -402,10 +399,10 @@ def test_backend_cannot_remove_core_row_filter(monkeypatch):
             original(self, request, max_tickets), full_row_filter=None
         ),
     )
-    planner, fetch = _build_end_to_end_access_flow(table, decision)
-    plan = planner.plan(
+    reader = governed_read_service(table, decision)
+    plan = reader.plan(
         PlanRequest(catalog="catalog1", target="users", columns=["id", "region"]),
         AUTHORIZATION_HEADER,
     )
-    result = fetch.fetch(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
+    result = reader.fetch(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
     assert pa.Table.from_batches(result.result_batches).column("id").to_pylist() == [1]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
 import pyarrow as pa
@@ -30,4 +31,6 @@ class Source(Protocol):
 
     def get_schema(self) -> pa.Schema: ...
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan: ...
-    def execute(self, partition: object) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]: ...
+    def execute(
+        self, partition: object, *, deadline: datetime
+    ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]: ...

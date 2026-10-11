@@ -15,8 +15,8 @@ test("delimiter-containing identities cannot read each other's cached inventory"
   const client = new QueryClient();
   const first = sessionQueryScope({ issuer: "https://issuer.example/|team", principal: "alice" }, 1);
   const second = sessionQueryScope({ issuer: "https://issuer.example/", principal: "team|alice" }, 1);
-  const firstKey = assetInventoryQueryKey(first, "", null);
-  const secondKey = assetInventoryQueryKey(second, "", null);
+  const firstKey = assetInventoryQueryKey(first, "");
+  const secondKey = assetInventoryQueryKey(second, "");
   client.setQueryData(firstKey, { items: ["private-asset"] });
   assert.equal(client.getQueryData(secondKey), undefined);
   assert.deepEqual(client.getQueryData(firstKey), { items: ["private-asset"] });
@@ -26,20 +26,19 @@ test("delimiter-containing identities cannot read each other's cached inventory"
 test("reauthentication does not reuse cached inventory for the same identity", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   const actor = { issuer: "https://issuer.example/", principal: "alice" };
-  const before = assetInventoryQueryKey(sessionQueryScope(actor, 1), "", null);
-  const after = assetInventoryQueryKey(sessionQueryScope(actor, 2), "", null);
+  const before = assetInventoryQueryKey(sessionQueryScope(actor, 1), "");
+  const after = assetInventoryQueryKey(sessionQueryScope(actor, 2), "");
   client.setQueryData(before, { items: ["revoked-asset"] });
   const result = await client.fetchQuery({ queryKey: after, queryFn: async () => ({ items: [] }) });
   assert.deepEqual(result, { items: [] });
   client.clear();
 });
 
-test("inventory query keys include session, search and cursor", () => {
-  assert.deepEqual(assetInventoryQueryKey("issuer|alice", "orders", "cursor-2"), [
+test("inventory query keys include session and search", () => {
+  assert.deepEqual(assetInventoryQueryKey("issuer|alice", "orders"), [
     "asset-inventory",
     "issuer|alice",
     "orders",
-    "cursor-2",
   ]);
 });
 
@@ -50,7 +49,7 @@ test("query cache deduplicates one session page without sharing another session"
     calls += 1;
     return Promise.resolve({ items: [calls] });
   };
-  const aliceKey = assetInventoryQueryKey("issuer|alice", "", null);
+  const aliceKey = assetInventoryQueryKey("issuer|alice", "");
   const [first, second] = await Promise.all([
     client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
     client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
@@ -58,7 +57,7 @@ test("query cache deduplicates one session page without sharing another session"
   assert.deepEqual(first, { items: [1] });
   assert.deepEqual(second, { items: [1] });
   await client.fetchQuery({
-    queryKey: assetInventoryQueryKey("issuer|bob", "", null),
+    queryKey: assetInventoryQueryKey("issuer|bob", ""),
     queryFn: load,
   });
   assert.equal(calls, 2);

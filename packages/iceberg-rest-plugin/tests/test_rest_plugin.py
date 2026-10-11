@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from time import sleep
 from types import SimpleNamespace
 from typing import Any
@@ -14,7 +14,7 @@ from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentif
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1), correlation_id="rest-fixture"
+        deadline=datetime.now(UTC) + timedelta(minutes=1), correlation_id="rest-fixture"
     )
 
 
@@ -29,7 +29,7 @@ def _config(**options: object) -> CatalogConfig:
 
 def test_rest_catalog_context_cancellation_is_fail_closed():
     context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+        deadline=datetime.now(UTC) + timedelta(minutes=1),
         correlation_id="rest-cancel",
         cancel_check=lambda: True,
     )
@@ -50,7 +50,7 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     session.request = original_request
     module._install_request_timeout(session, 5.0, 30.0)
     context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(seconds=2), correlation_id="rest-timeout"
+        deadline=datetime.now(UTC) + timedelta(seconds=2), correlation_id="rest-timeout"
     )
     token = module._ACTIVE_REQUEST_BUDGET.set((context, 5.0, 30.0))
     try:

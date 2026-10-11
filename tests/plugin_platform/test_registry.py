@@ -116,19 +116,19 @@ def test_discovery_ignores_malformed_unallowlisted_entry_point() -> None:
 
 
 def test_admitted_entry_point_loads_only_after_lock_match() -> None:
-    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    entry = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints([entry]),
     )
 
     discovered = registry.discover()
 
-    assert discovered[("catalog", "iceberg.sql")].api_version == "2"
+    assert discovered[("catalog", "iceberg.catalog")].api_version == "2"
     with pytest.raises(PluginAdmissionError, match="not admitted"):
-        registry.load("catalog", "iceberg.sql")
+        registry.load("catalog", "iceberg.catalog")
     registry.reload()
-    assert registry.load("catalog", "iceberg.sql") == {"name": "iceberg.sql"}
+    assert registry.load("catalog", "iceberg.catalog") == {"name": "iceberg.catalog"}
 
 
 def test_unapproved_entry_point_cannot_be_loaded_on_request() -> None:
@@ -144,18 +144,20 @@ def test_unapproved_entry_point_cannot_be_loaded_on_request() -> None:
 
 def test_lock_mismatch_and_duplicate_ids_fail_closed() -> None:
     mismatched = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql", version="9.9.9")},
-        entry_points_fn=lambda: _EntryPoints([_entry("iceberg.sql", "dal_obscura.catalogs.v2")]),
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog", version="9.9.9")},
+        entry_points_fn=lambda: _EntryPoints(
+            [_entry("iceberg.catalog", "dal_obscura.catalogs.v2")]
+        ),
     )
     with pytest.raises(PluginAdmissionError, match="lock mismatch"):
         mismatched.discover()
 
     duplicate = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints(
             [
-                _entry("iceberg.sql", "dal_obscura.catalogs.v2"),
-                _entry("iceberg.sql", "dal_obscura.catalogs.v2"),
+                _entry("iceberg.catalog", "dal_obscura.catalogs.v2"),
+                _entry("iceberg.catalog", "dal_obscura.catalogs.v2"),
             ]
         ),
     )
@@ -167,14 +169,14 @@ def test_allowlisted_entry_without_distribution_provenance_fails_closed() -> Non
     entry = cast(
         _Entry,
         SimpleNamespace(
-            name="iceberg.sql",
+            name="iceberg.catalog",
             group="dal_obscura.catalogs.v2",
             dist=None,
-            load=lambda: {"name": "iceberg.sql"},
+            load=lambda: {"name": "iceberg.catalog"},
         ),
     )
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints([entry]),
     )
 
@@ -190,16 +192,16 @@ def test_invalid_plugin_id_cannot_be_loaded() -> None:
 
 
 def test_failed_reload_keeps_last_valid_admission_snapshot() -> None:
-    entries = [_entry("iceberg.sql", "dal_obscura.catalogs.v2")]
+    entries = [_entry("iceberg.catalog", "dal_obscura.catalogs.v2")]
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints(entries),
     )
 
     initial = registry.reload()
-    assert set(registry.admitted()) == {("catalog", "iceberg.sql")}
+    assert set(registry.admitted()) == {("catalog", "iceberg.catalog")}
 
-    entries[:] = [_entry("iceberg.sql", "dal_obscura.catalogs.v2", version="9.9.9")]
+    entries[:] = [_entry("iceberg.catalog", "dal_obscura.catalogs.v2", version="9.9.9")]
     with pytest.raises(PluginAdmissionError, match="lock mismatch"):
         registry.reload()
 
@@ -207,26 +209,26 @@ def test_failed_reload_keeps_last_valid_admission_snapshot() -> None:
 
 
 def test_load_uses_entry_point_captured_by_admitted_generation() -> None:
-    first = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    first = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     entries = [first]
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints(entries),
         factory_loader=lambda entry: entry.load(),
     )
 
     registry.reload()
-    replacement = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    replacement = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     cast(Any, replacement).load = lambda: {"name": "replacement"}
     entries[:] = [replacement]
 
-    assert registry.load("catalog", "iceberg.sql") == {"name": "iceberg.sql"}
+    assert registry.load("catalog", "iceberg.catalog") == {"name": "iceberg.catalog"}
 
 
 def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",
-        plugin_id="iceberg.sql",
+        plugin_id="iceberg.catalog",
         api_version="2",
         config_version=1,
         distribution="dal-obscura",
@@ -234,13 +236,13 @@ def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
     )
     registry = PluginRegistry(
         entry_points_fn=lambda: _EntryPoints([]),
-        builtins={("catalog", "iceberg.sql"): (descriptor, {"builtin": True})},
+        builtins={("catalog", "iceberg.catalog"): (descriptor, {"builtin": True})},
     )
 
     admitted = registry.reload()
 
-    assert admitted[("catalog", "iceberg.sql")] == descriptor
-    assert registry.load("catalog", "iceberg.sql") == {"builtin": True}
+    assert admitted[("catalog", "iceberg.catalog")] == descriptor
+    assert registry.load("catalog", "iceberg.catalog") == {"builtin": True}
 
 
 def test_builtin_registration_wins_over_same_installed_entry_point() -> None:
@@ -334,13 +336,13 @@ def test_revoked_plugin_can_only_be_removed() -> None:
 
 
 def test_descriptor_loader_mismatch_fails_before_factory_import() -> None:
-    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    entry = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints([entry]),
         descriptor_loader=lambda _: PluginDescriptor(
             kind="catalog",
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             api_version="99",
             config_version=1,
             distribution="plugin-wheel",
@@ -354,13 +356,13 @@ def test_descriptor_loader_mismatch_fails_before_factory_import() -> None:
 
 
 def test_registry_rejects_self_consistent_unsupported_api_version() -> None:
-    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    entry = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql", api_version="99")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog", api_version="99")},
         entry_points_fn=lambda: _EntryPoints([entry]),
         descriptor_loader=lambda _: PluginDescriptor(
             kind="catalog",
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             api_version="99",
             config_version=1,
             distribution="plugin-wheel",
@@ -374,13 +376,13 @@ def test_registry_rejects_self_consistent_unsupported_api_version() -> None:
 
 
 def test_registry_rejects_self_consistent_unsupported_config_version() -> None:
-    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    entry = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): _lock("iceberg.sql")},
+        allowlist={("catalog", "iceberg.catalog"): _lock("iceberg.catalog")},
         entry_points_fn=lambda: _EntryPoints([entry]),
         descriptor_loader=lambda _: PluginDescriptor(
             kind="catalog",
-            plugin_id="iceberg.sql",
+            plugin_id="iceberg.catalog",
             api_version="2",
             config_version=2,
             distribution="plugin-wheel",
@@ -394,9 +396,9 @@ def test_registry_rejects_self_consistent_unsupported_config_version() -> None:
 
 
 def test_malformed_plugin_lock_is_rejected() -> None:
-    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v2")
+    entry = _entry("iceberg.catalog", "dal_obscura.catalogs.v2")
     registry = PluginRegistry(
-        allowlist=cast(Any, {("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")}),
+        allowlist=cast(Any, {("catalog", "iceberg.catalog"): ("plugin-wheel", "1.2.3", "1")}),
         entry_points_fn=lambda: _EntryPoints([entry]),
     )
 
@@ -409,7 +411,7 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
     artifact.write_text("trusted = True\n")
     descriptor = PluginDescriptor(
         kind="catalog",
-        plugin_id="iceberg.sql",
+        plugin_id="iceberg.catalog",
         api_version="2",
         config_version=1,
         distribution="plugin-wheel",
@@ -418,7 +420,7 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
     entry = cast(
         _Entry,
         SimpleNamespace(
-            name="iceberg.sql",
+            name="iceberg.catalog",
             group="dal_obscura.catalogs.v2",
             dist=SimpleNamespace(
                 name="plugin-wheel",
@@ -426,16 +428,16 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
                 files=["plugin.py"],
                 locate_file=lambda _: artifact,
                 read_text=lambda _: (
-                    '{"kind":"catalog","plugin_id":"iceberg.sql",'
+                    '{"kind":"catalog","plugin_id":"iceberg.catalog",'
                     '"api_version":"2","config_version":1}'
                 ),
             ),
-            load=lambda: {"name": "iceberg.sql"},
+            load=lambda: {"name": "iceberg.catalog"},
         ),
     )
     registry = PluginRegistry(
         allowlist={
-            ("catalog", "iceberg.sql"): (
+            ("catalog", "iceberg.catalog"): (
                 "plugin-wheel",
                 "1.2.3",
                 "2",
@@ -446,7 +448,7 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
         entry_points_fn=lambda: _EntryPoints([entry]),
     )
 
-    assert registry.reload()[("catalog", "iceberg.sql")] == descriptor
+    assert registry.reload()[("catalog", "iceberg.catalog")] == descriptor
 
 
 def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -> None:
@@ -454,7 +456,7 @@ def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -
     artifact.write_text("trusted = True\n")
     descriptor = PluginDescriptor(
         kind="catalog",
-        plugin_id="iceberg.sql",
+        plugin_id="iceberg.catalog",
         api_version="2",
         config_version=1,
         distribution="plugin-wheel",
@@ -463,7 +465,7 @@ def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -
     entry = cast(
         metadata.EntryPoint,
         SimpleNamespace(
-            name="iceberg.sql",
+            name="iceberg.catalog",
             group="dal_obscura.catalogs.v2",
             dist=SimpleNamespace(
                 name="plugin-wheel",

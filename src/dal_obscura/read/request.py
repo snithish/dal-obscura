@@ -42,14 +42,8 @@ class ExecutionProjection:
     """Visible columns plus hidden dependencies required for execution."""
 
     visible_columns: Sequence[str]
-    internal_dependency_columns: Sequence[str]
     execution_columns: Sequence[str]
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "visible_columns", tuple(self.visible_columns))
-        object.__setattr__(
-            self,
-            "internal_dependency_columns",
-            tuple(self.internal_dependency_columns),
-        )
         object.__setattr__(self, "execution_columns", tuple(self.execution_columns))

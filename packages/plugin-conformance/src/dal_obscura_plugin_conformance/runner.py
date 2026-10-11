@@ -6,7 +6,7 @@ import json
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
@@ -70,7 +70,7 @@ class ConformanceResult:
             "failures": list(self.failures),
             "skips": list(self.skips),
             "status": "failed" if self.failures else "passed",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
 
     def to_json(self) -> str:

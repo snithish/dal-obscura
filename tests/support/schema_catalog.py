@@ -7,7 +7,7 @@ from pyiceberg.types import LongType, NestedField, StringType
 
 def schema_registry(load_catalog):
     """Replace catalog/format I/O while retaining the production SDK lifecycle."""
-    from dal_obscura.sources.sql_catalog import DESCRIPTOR
+    from dal_obscura.sources.iceberg_catalog import DESCRIPTOR
 
     resolved = {}
 
@@ -17,7 +17,7 @@ def schema_registry(load_catalog):
 
         def load(self, kind, plugin_id):
             return {
-                ("catalog", "iceberg.sql"): lambda config, context: _SchemaCatalog(
+                ("catalog", "iceberg.catalog"): lambda config, context: _SchemaCatalog(
                     config, context, load_catalog, resolved
                 ),
                 ("table_format", "iceberg"): lambda handle, context: _SchemaFormat(
@@ -29,7 +29,7 @@ def schema_registry(load_catalog):
 
 
 class _SchemaCatalog:
-    from dal_obscura.sources.sql_catalog import DESCRIPTOR as descriptor
+    from dal_obscura.sources.iceberg_catalog import DESCRIPTOR as descriptor
 
     def __init__(self, config, context, load_catalog, resolved):
         self.config = config

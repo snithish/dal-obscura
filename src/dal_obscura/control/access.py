@@ -10,14 +10,7 @@ _MAX_GROUPS = 256
 
 @dataclass(frozen=True)
 class ControlPlaneActor:
-    """Authenticated control-plane caller.
-
-    Example:
-        ```python
-        actor = ControlPlaneActor.for_platform_admin("admin")
-        assert actor.platform_admin
-        ```
-    """
+    """Authenticated control-plane caller."""
 
     principal: str
     groups: tuple[str, ...]

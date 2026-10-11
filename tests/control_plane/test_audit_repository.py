@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from dal_obscura.storage import audit as _db_audit
@@ -55,7 +55,7 @@ def test_audit_visibility_enforces_asset_ownership(db_session) -> None:
             ),
         ]
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db_session.add_all(
         [
             AuditEventRecord(

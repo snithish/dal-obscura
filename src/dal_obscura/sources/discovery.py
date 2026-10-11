@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any, cast
 
 from dal_obscura_plugin_api import CatalogFactory, DiscoveryPage, TableIdentifier
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 
 CatalogTable = dict[str, object]
 Namespace = tuple[str, ...]
@@ -45,7 +45,7 @@ def discover_public_catalog_tables(
         from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
 
         context = ExecutionContext(
-            deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
+            deadline=datetime.now(UTC) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
             correlation_id=f"catalog-discovery-{catalog_name}",
         )
         plugin = cast(CatalogFactory, factory)(
@@ -152,7 +152,7 @@ def _walk_namespaces(
         seen.add(namespace)
         namespaces.append(namespace)
         for child in _bounded_provider_items(
-            _list_namespaces(catalog, namespace),
+            catalog.list_namespaces(namespace),
             limit=max_namespaces - len(seen),
             kind="namespace",
             deadline_at=deadline_at,
@@ -160,10 +160,6 @@ def _walk_namespaces(
         ):
             pending.append(_namespace_tuple(child))
     return namespaces
-
-
-def _list_namespaces(catalog: Any, namespace: Namespace) -> Iterable[object]:
-    return catalog.list_namespaces(namespace)
 
 
 def _list_tables(catalog: Any, namespace: Namespace) -> Iterable[object]:

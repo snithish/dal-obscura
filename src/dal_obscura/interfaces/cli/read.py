@@ -36,7 +36,6 @@ from dal_obscura.sources.plugins import load_plugin_lock_file
 from dal_obscura.sources.published import LiveConfigCatalogRegistry
 from dal_obscura.sources.secrets import (
     SecretProvider,
-    SecretProviderContext,
     load_secret_provider,
     resolve_secret_refs,
 )
@@ -73,7 +72,6 @@ def main() -> None:
     live_runtime = config_store.get_runtime()
     secret_provider = load_secret_provider(
         runtime_config.secret_provider,
-        context=SecretProviderContext(database_url=runtime_config.database_url),
     )
 
     identity = _identity_from_runtime(live_runtime, secret_provider=secret_provider)

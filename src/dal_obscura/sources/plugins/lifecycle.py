@@ -6,10 +6,10 @@ immutable plugin lock or the persisted live configuration.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class PluginLifecycleState(str, Enum):
+class PluginLifecycleState(StrEnum):
     ENABLED = "enabled"
     DRAINING = "draining"
     DISABLED = "disabled"

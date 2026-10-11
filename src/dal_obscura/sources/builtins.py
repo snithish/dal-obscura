@@ -6,11 +6,11 @@ from collections.abc import Mapping
 
 from dal_obscura_plugin_api import PluginKind
 
+from dal_obscura.sources.iceberg_catalog import DESCRIPTOR, IcebergCatalog
 from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
 from dal_obscura.sources.plugins import PluginLock, PluginRegistry
-from dal_obscura.sources.sql_catalog import DESCRIPTOR, SqlCatalog
 
-_ICEBERG_CATALOG_ID = "iceberg.sql"
+_ICEBERG_CATALOG_ID = "iceberg.catalog"
 _ICEBERG_FORMAT_ID = "iceberg"
 
 
@@ -25,7 +25,7 @@ def create_builtin_plugin_registry(
     registry = PluginRegistry(
         allowlist=allowlist,
         builtins={
-            ("catalog", _ICEBERG_CATALOG_ID): (DESCRIPTOR, SqlCatalog),
+            ("catalog", _ICEBERG_CATALOG_ID): (DESCRIPTOR, IcebergCatalog),
             ("table_format", _ICEBERG_FORMAT_ID): (
                 IcebergFormatPlugin.descriptor,
                 IcebergFormatPlugin,

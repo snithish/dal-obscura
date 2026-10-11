@@ -8,7 +8,6 @@ from dal_obscura.sources.secrets import (
     EnvSecretProvider,
     SecretProvider,
     SecretProviderConfig,
-    SecretProviderContext,
     load_secret_provider,
     load_secret_provider_from_environment,
     resolve_secret_refs,
@@ -28,7 +27,6 @@ def test_load_secret_provider_uses_fixed_environment_provider(monkeypatch: pytes
 
     provider = load_secret_provider(
         SecretProviderConfig(config={"prefix": "LOCAL_"}),
-        context=SecretProviderContext(database_url="sqlite+pysqlite:///:memory:"),
     )
 
     assert provider.get_secret("catalog-password") == "value"
@@ -89,7 +87,6 @@ def test_load_secret_provider_rejects_dynamic_module_path():
     with pytest.raises(ValueError, match="only environment secrets"):
         load_secret_provider(
             SecretProviderConfig(module="untrusted.module.Provider"),
-            context=SecretProviderContext(database_url="sqlite+pysqlite:///:memory:"),
         )
 
 

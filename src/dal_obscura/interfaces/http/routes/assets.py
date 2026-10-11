@@ -1,10 +1,4 @@
-"""Asset routes for the workspace API.
-
-Example:
-    ```python
-    app.include_router(router(deps))
-    ```
-"""
+"""Asset routes for the workspace API."""
 
 from __future__ import annotations
 
@@ -37,13 +31,7 @@ from dal_obscura.storage import assets as _db_assets
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
-    """Builds governed asset routes.
-
-    Example:
-        ```python
-        asset_router = router(deps)
-        ```
-    """
+    """Builds governed asset routes."""
 
     api = APIRouter()
 

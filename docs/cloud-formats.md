@@ -1,83 +1,122 @@
-# Cloud format execution
+# Catalog-independent COW and MoR execution
 
-All bundled formats can read local storage and AWS S3. Catalog discovery may use
-SQL, REST Iceberg, an operator manifest, or an operator Delta registry. Every
-format binds an immutable snapshot handle and emits only passive JSON tasks.
-Other clouds are outside this release; no generic object-store abstraction or
-second protocol implementation was added.
+Delta and Iceberg readers bind immutable snapshot handles and produce independent,
+passive JSON tasks. Catalog lookup, storage transport, and table semantics remain
+separate. Every worker executes only its assigned data work; shared metadata and
+delete reads are legitimate. COW versus MoR is inferred from the captured snapshot,
+not selected by a consumer flag.
 
-## Storage and credentials
+## Official catalogs and storage
 
-Arrow S3FileSystem, delta-rs and Apache OpenDAL own storage IO and their native AWS
-credential chains. Workers supply workload identity or standard AWS environment
-credentials. No storage credential, endpoint override, callback or live provider
-is captured in a handle/ticket. Operator startup AWS_REGION/AWS_DEFAULT_REGION
-and AWS_ENDPOINT_URL_S3 (AWS_ENDPOINT_URL fallback) configure regional/private
-test access. Workers must have equivalent read permissions, including metadata,
-checkpoint and delete objects. S3 IAM/STS renewal on an actual AWS account requires
-live deployment qualification; the S3 emulator lane does not establish it.
+`iceberg.catalog` delegates catalog selection to PyIceberg `load_catalog`: SQL,
+REST, Hive, Glue, DynamoDB, BigQuery, and in-memory catalogs. The old `iceberg.sql`
+plugin ID and module have been removed. Install backend dependencies with
+`uv sync --dev --extra server --extra postgres --extra cloud`. Provider configuration
+uses PyIceberg properties; admitted external catalog plugins can emit the same
+Iceberg metadata-location handle. No catalog-specific branch exists in reading.
+Catalog implementations loaded by arbitrary Python import strings are not admitted.
 
-The SDK StorageRoot helper contains only root/path admission and bounded metadata
-reads; maintained Arrow filesystems own transport. Local roots reject symlinks.
-S3 members reject root escape, traversal, credential-bearing URIs and query/fragment
-components. Delta additionally admits log/checkpoint/DV paths before kernel IO.
-Iceberg applies configured allowlists to metadata, manifests, data and deletes.
+Delta supports `delta.directory` for a bounded storage registry and `delta.catalog`
+for registered table locations, including native `uc://catalog.schema.table` Unity
+lookup. The official delta-rs client owns Unity lookup and credentials. Its public
+Python API does not expose catalog-wide listing: the registered identifiers define
+the governed scope. Other admitted catalog plugins can resolve Delta locations to
+the same location/version/table-ID handle. No custom Unity HTTP implementation is
+introduced.
 
-## Native semantics and parallelism
+Delta delegates log, checkpoint, DV, and Parquet transport to the official
+`DeltaStorageHandler` and `DeltaTable` object-store clients. Their supported local,
+S3, Azure, GCS and other backends are no longer restricted by an Arrow S3-only
+helper. Root containment, URI admission and local symlink rejection remain in the
+adapter. Worker startup `DAL_OBSCURA_DELTA_STORAGE_OPTIONS` is a JSON string mapping
+of native delta-rs options; standard native credential/environment chains still apply.
 
-- **Delta:** delta-rs 1.5.0/Delta Kernel owns snapshot replay, checkpoints, protocol
-  checks and DV decoding. Arrow reads grouped Parquet row groups; kernel masks are
-  sliced by physical row offset and applied before governance SQL. This bridge is
-  necessary because the public Arrow dataset reader rejects DV-enabled tables
-  and the public kernel scan has no independent row-group task API. Both COW and
-  MoR replacements retain exactly one copy of surviving rows. Tasks pin masks and
-  versions; later append/delete does not change issued work.
-- **Iceberg v2:** PyIceberg owns admission/schema discovery. Apache Iceberg Rust
-  0.10.0 with Apache's merged [NULL fix](https://github.com/apache/iceberg-rust/pull/2781)
-  plans native delete-aware file tasks and owns COW, position/equality
-  deletes, partition matching and sequence applicability. Its official Python
-  binding has no file-task reader API; a small [native binding](../packages/iceberg-reader/README.md)
-  exposes the maintained Rust planner/Arrow reader. Every mode uses deterministic,
-  disjoint file groups. When file count is below task budget, manifest row-group
-  offsets split the largest eligible range; absent offsets fall back to file granularity.
-  Workers reconstruct native plans from pinned metadata,
-  then execute only their assigned files/row groups; no whole-table data rescan or
-  thread-only fallback remains. Metadata and delete files may be shared.
-- **Manifest/Parquet:** Arrow owns immutable file reads; row groups are balanced
-  across disjoint tasks. Replacement files require a new manifest revision.
-  It is not a transactional table format and has no independent MoR semantics.
+Iceberg uses one official PyIceberg FileIO for metadata, manifests, data, and
+deletes. The native Apache Iceberg reader receives read-only worker-local FileIO
+callbacks instead of a separate OpenDAL filesystem. Thus every location supported
+by the configured official PyArrow/Fsspec FileIO can be consumed by the native
+reader, including S3, GCS, Azure, HDFS and additional installed Fsspec backends.
+Set `DAL_OBSCURA_ICEBERG_IO_PROPERTIES` to a JSON string mapping of official
+PyIceberg FileIO properties. Only the official PyArrow/Fsspec implementation names
+are accepted. Metadata properties cannot override worker transport or load Python
+implementations. AWS region/endpoint startup variables remain supported.
 
-Iceberg reads retain snapshot fields and required historical equality keys before
-field-ID projection to the captured metadata schema. This preserves dropped or
-renamed delete keys, including a different column reusing the old name. Native
-schema history/pruning and PyIceberg's projection visitor own type/default
-behavior. Reading hidden fields costs IO. The format no longer advertises SQL
-pushdown; core enforces complete SQL filters on original values before masking.
-No custom SQL translator, delete matcher or serialized DataFile codec exists.
+Credentials, endpoints and live providers stay on each worker. Handles/tickets
+contain locations and snapshot/task identity only. Catalog-vended credentials are
+not serialized: workers must have their own access to every referenced storage
+location. This includes cross-location manifests/delete files admitted by path
+rules. Catalog/file-system support requires the official client's dependencies,
+credentials and provider configuration; it does not mean arbitrary URIs or table
+protocol features are supported.
 
-## Bounds and evidence
+## Native semantics and distributed work
 
-Each native Iceberg reader uses one IO runtime thread, one data-file stream and
-8,192-row batches. Planning admits at most 10,000 manifest entries/native file
-plans; Delta and Parquet have additional documented limits. Async planning and
-batch pulls use operation deadlines. Metadata/delete buffers are upstream-owned;
-these limits do not establish a hard RSS or cluster capacity cap. Active checks
-reject late batches; close owns streams and opened providers.
+- **Delta COW:** the public delta-rs Arrow dataset owns partition expressions,
+  statistics and schema handling. Its Parquet fragments are narrowed to assigned
+  row groups. The active-file set comes from the captured native snapshot.
+- **Delta MoR:** the public Arrow dataset rejects deletion vectors. Delta Kernel's
+  public `deletion_vectors()` decodes exact keep masks; Arrow reads assigned row
+  groups, then applies masks by physical row offset before governance SQL. Inline,
+  UUID-relative and contained absolute DV files are covered. Newer replacement
+  rows are ordinary active files. No protocol/delete decoder is implemented here.
+- **Iceberg v1/v2:** Apache Iceberg Rust plans and reads assigned file/range work.
+  It owns COW, position/equality deletes, partition applicability and sequence
+  ordering. Manifest offsets allow disjoint row-group splitting when a few files
+  must serve multiple tickets. Snapshot history restores required historical
+  equality keys; upstream field-ID evolution runs after deletes. Renaming or
+  reusing a column name does not reuse its old identity.
 
-The socket lane `tests/plugin_platform/test_cloud_formats.py` uses real Arrow,
-Delta Kernel, PyIceberg and Apache Iceberg against disposable HTTP S3. Iceberg
-COW/position/equality cases run separate fresh worker processes: the server denies
-reads of any other task's data files, and workers must return exact rows after
-deletes/replacement updates. This proves independent worker execution and disjoint
-data IO on one host. An additional qualification ran three independent Linux VM
-worker containers per delete mode against the host's S3 emulator, using the Linux
-native wheel and passive JSON assignments. Exact rows, schemas and assigned-file
-IO passed across that OS/network boundary. Actual multi-host AWS IAM/STS remains
-deployment qualification.
-Local lanes cover nested schemas, evolution, hidden keys, cancellation, cleanup
-and path admission. No production AWS benchmark or speedup claim is made.
+Tasks are deterministically balanced under their budget. Excess work is grouped,
+empty scans produce no tickets, and every assigned unit is covered exactly once.
+A later append/update/delete cannot change an issued snapshot. Neither whole-table
+rescans on every worker nor DuckDB threads substitute for distributed tasks.
+Complete SQL filters and masks remain in DuckDB after native delete application.
 
-References: [delta-rs S3](https://delta-io.github.io/delta-rs/latest/integrations/object-storage/s3/),
+## Necessary bridges and costs
+
+The official Python Iceberg binding has no independently executable file-task
+reader. The small PyO3 binding exposes Apache's native planner/Arrow reader.
+Its read-only FileIO bridge adapts official Python streams to Rust byte ranges;
+it does not parse manifests, interpret snapshots, or match deletes. Each range
+opens/closes a seekable provider stream and copies its bytes across the Python/Rust
+boundary. Blocking provider work runs outside the async IO thread. This broad
+transport compatibility has additional stream-open/IO/copy cost; it is not a
+zero-copy claim. All callbacks check the operation context and path admission.
+Provider calls already in progress may finish after cancellation; late output is
+rejected and their streams still close.
+
+The native reader retains the upstream merged NULL/equality-delete fix, pinned
+in Cargo. PyIceberg's collection-validity bridge and DuckDB's sliced-nested-Arrow
+bridge remain documented in [execution invariants](read-execution-invariants.md).
+No live callback or native task object enters production tickets.
+
+Delta still rejects column mapping/unknown reader features explicitly. Its public
+DV API materializes masks snapshot-wide, so the existing 16-million physical-row
+bound remains. Iceberg v3 is outside the qualified v1/v2 reader contract. File/task,
+stream and retained-batch budgets apply; native metadata/delete buffers are
+upstream-owned and have no hard process/cluster RSS guarantee. Neither format
+currently advertises SQL filter pushdown. Unsupported protocol/provider behavior
+fails explicitly rather than returning partially interpreted data.
+
+## Evidence and reproduction
+
+Full Python qualification passed 1,076 tests with disposable PostgreSQL, every
+real consumer backend enabled and zero skips. The format/S3 lane checks COW and
+MoR in fresh worker processes with assigned-file access guards and exact expected
+rows. It covers row-group splitting, replacement sequences, hidden delete keys,
+nested null/empty values and pinned snapshots. SQL/in-memory catalog tests and the
+real Glue API/S3 emulator lane exercise official catalog selection independently
+of the format. Fresh installed-wheel qualification disables repository production
+import paths.
+
+The [Compose example](../examples/nested-mor/README.md) uses a catalog of 101 tables,
+10 partitions and 10,000,020 physical base rows. Three independent Flight worker
+containers share object storage and consume separate tickets. The
+[HTML report](scenarios/nested-mor.html) contains reproducible code flow, exhaustive
+nested correctness checks, batch telemetry and actual partition/projection IO
+comparisons. Emulator evidence does not establish live AWS/GCP/Azure IAM renewal,
+TLS/service quotas or multi-host throughput; those remain deployment qualification.
+
+References: [delta-rs API](https://delta-io.github.io/delta-rs/latest/api/delta_table/),
 [PyIceberg configuration](https://py.iceberg.apache.org/configuration/),
-[Apache Iceberg Rust](https://github.com/apache/iceberg-rust),
-[upstream file reader](https://docs.rs/iceberg/0.10.0/iceberg/arrow/struct.ArrowReader.html).
+[Apache Iceberg Rust](https://github.com/apache/iceberg-rust).

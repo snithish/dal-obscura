@@ -296,24 +296,26 @@ def test_postgres_restore_invalidation_removes_replayable_access(
         session.commit()
 
     ticket_id = str(uuid4())
-    SqlAlchemyTicketStore(postgres_sessions).store(
-        TicketPayload(
-            asset_id="00000000-0000-4000-8000-000000000001",
-            ticket_id=ticket_id,
-            catalog="recovery",
-            target="default.table",
-            columns=["id"],
-            scan={
-                "authorization_columns": ["id", "region"],
-                "read_payload": "payload",
-                "full_row_filter": None,
-                "masks": {},
-            },
-            policy_version=1,
-            principal_id="user:recovery",
-            expires_at=2_000_000_000,
-            nonce="recovery",
-        ),
+    SqlAlchemyTicketStore(postgres_sessions).store_many(
+        [
+            TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
+                ticket_id=ticket_id,
+                catalog="recovery",
+                target="default.table",
+                columns=["id"],
+                scan={
+                    "authorization_columns": ["id", "region"],
+                    "read_payload": "payload",
+                    "full_row_filter": None,
+                    "masks": {},
+                },
+                policy_version=1,
+                principal_id="user:recovery",
+                expires_at=2_000_000_000,
+                nonce="recovery",
+            )
+        ],
         max_exchanges=1,
     )
 

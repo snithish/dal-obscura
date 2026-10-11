@@ -1,8 +1,6 @@
 package io.dalobscura.connectors.spark.v3;
 
-import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.vectorized.ColumnVector;
@@ -106,17 +104,11 @@ final class ProjectedColumnVector extends ColumnVector {
 
     @Override
     public ColumnarArray getArray(int rowId) {
-        if (!(dataType() instanceof ArrayType)) {
-            return delegate.getArray(rowId);
-        }
         return delegate.getArray(rowId);
     }
 
     @Override
     public ColumnarMap getMap(int rowId) {
-        if (!(dataType() instanceof MapType)) {
-            return delegate.getMap(rowId);
-        }
         return delegate.getMap(rowId);
     }
 

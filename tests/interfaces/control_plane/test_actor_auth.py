@@ -21,7 +21,7 @@ from dal_obscura.storage.database.orm import AssetRecord, DataPlaneTicketRecord
 from tests.support.actors import _actor_for_token, _bearer, _client
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 OIDC_AUTH_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"
 
 

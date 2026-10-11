@@ -18,14 +18,14 @@ from tests.support.use_cases import (
 AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
 
 
-def _build_end_to_end_access_flow(table_format: Source, decision: AccessDecision, **options):
+def governed_read_service(table_format: Source, decision: AccessDecision, **options):
     ticket_codec = HmacTicketCodecAdapter("secret")
     ticket_store = FakeTicketStore()
 
     authorizer = FakeAuthorizer(decision=decision, current_version=decision.policy_version)
     catalog_registry = FakeCatalogRegistry(table_format)
     principal = Principal(id="user1", groups=[], attributes={})
-    plan_access = make_read_service(
+    return make_read_service(
         identity=FakeIdentity(principal=principal),
         access_context=StaticAccessContext(
             authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
@@ -37,7 +37,6 @@ def _build_end_to_end_access_flow(table_format: Source, decision: AccessDecision
         max_ticket_exchanges=1,
         **options,
     )
-    return plan_access, plan_access
 
 
 def _build_use_case_dependencies():
@@ -61,5 +60,5 @@ def _build_use_case_dependencies():
 
 def _ticket_store_with(payload: TicketPayload, *, max_exchanges: int = 1) -> FakeTicketStore:
     ticket_store = FakeTicketStore()
-    ticket_store.store(payload, max_exchanges=max_exchanges)
+    ticket_store.store_many([payload], max_exchanges=max_exchanges)
     return ticket_store

@@ -5,6 +5,7 @@ import os
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields
+from datetime import UTC, datetime
 from typing import cast
 from uuid import uuid4
 
@@ -22,7 +23,6 @@ from dal_obscura.policy.filters import (
     RowFilter,
     combine_row_filters,
     deserialize_row_filter,
-    serialize_row_filter,
 )
 from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
 from dal_obscura.policy.projection import compile_projection
@@ -189,7 +189,7 @@ class ReadService:
                         "read_payload": serialized_task,
                         "full_row_filter": None
                         if effective_row_filter is None
-                        else serialize_row_filter(effective_row_filter),
+                        else effective_row_filter.sql,
                         "masks": {
                             key: {"type": value.type, "value": value.value}
                             for key, value in decision.masks.items()
@@ -264,7 +264,10 @@ class ReadService:
             self.ticket_store.cleanup_expired(now=now)
             raise
 
-        _, batches = task.table_format.execute(task.partition)
+        stream_deadline = min(payload.expires_at, now + self.settings.max_stream_seconds)
+        _, batches = task.table_format.execute(
+            task.partition, deadline=datetime.fromtimestamp(stream_deadline, UTC)
+        )
         scanner = ManagedStream(batches)
         try:
             transformed = self.row_transform.apply_filters_and_masks_stream(
@@ -276,7 +279,7 @@ class ReadService:
                 guard=StreamGuard(
                     ticket_expires_at=payload.expires_at,
                     identity_expires_at=principal.expires_at,
-                    stream_deadline_at=self.now() + self.settings.max_stream_seconds,
+                    stream_deadline_at=stream_deadline,
                     now=self.now,
                     check_revocation=lambda: self.ticket_store.ensure_active(
                         client_payload.ticket_id

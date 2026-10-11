@@ -1,16 +1,11 @@
-"""Small observability helpers shared by service adapters.
-
-Example:
-    ```python
-    rss = get_resident_memory_bytes()
-    ```
-"""
+"""Small observability helpers shared by service adapters."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from math import isfinite
 from threading import Lock
 from time import perf_counter
 
@@ -46,7 +41,7 @@ class ServiceMetrics:
 
     def __init__(self) -> None:
         self._lock = Lock()
-        self._values: dict[tuple[str, str], MetricSnapshot] = {}
+        self._values: dict[str, dict[str, MetricSnapshot]] = {}
 
     @contextmanager
     def measure(self, operation: str) -> Iterator[None]:
@@ -72,15 +67,14 @@ class ServiceMetrics:
             raise ValueError("metric operation name is invalid or too long")
         if outcome not in {"success", "error"}:
             raise ValueError("metric outcome must be success or error")
-        if duration_seconds < 0:
-            raise ValueError("metric duration cannot be negative")
-        key = (operation, outcome)
+        if not isfinite(duration_seconds) or duration_seconds < 0:
+            raise ValueError("metric duration must be finite and non-negative")
         with self._lock:
-            operation_count = len({item[0] for item in self._values})
-            if key not in self._values and operation_count >= self._MAX_OPERATIONS:
+            if operation not in self._values and len(self._values) >= self._MAX_OPERATIONS:
                 raise ValueError("metric operation limit exceeded")
-            current = self._values.get(key, MetricSnapshot(0, 0.0))
-            self._values[key] = MetricSnapshot(
+            outcomes = self._values.setdefault(operation, {})
+            current = outcomes.get(outcome, MetricSnapshot(0, 0.0))
+            outcomes[outcome] = MetricSnapshot(
                 count=current.count + 1,
                 duration_seconds=current.duration_seconds + duration_seconds,
             )
@@ -95,8 +89,7 @@ class ServiceMetrics:
                         "count": snapshot.count,
                         "duration_seconds": snapshot.duration_seconds,
                     }
-                    for (item_operation, outcome), snapshot in self._values.items()
-                    if item_operation == operation
+                    for outcome, snapshot in outcomes.items()
                 }
-                for operation in sorted({item[0] for item in self._values})
+                for operation, outcomes in sorted(self._values.items())
             }

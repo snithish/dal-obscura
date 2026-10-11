@@ -1,11 +1,4 @@
-"""Ticket-store contract used by data-plane fetch verification.
-
-Example:
-    ```python
-    store.store(payload, max_exchanges=2)
-    stored = store.reserve_exchange(payload.ticket_id, now=now)
-    ```
-"""
+"""Ticket-store contract used by data-plane fetch verification."""
 
 from __future__ import annotations
 
@@ -18,13 +11,7 @@ from dal_obscura.read.tickets import TicketPayload
 
 @dataclass(frozen=True)
 class StoredTicket:
-    """Ticket payload plus server-side integrity and exchange metadata.
-
-    Example:
-        ```python
-        assert stored.exchange_count < stored.max_exchanges
-        ```
-    """
+    """Ticket payload plus server-side integrity and exchange metadata."""
 
     payload: TicketPayload
     payload_hash: str
@@ -34,17 +21,7 @@ class StoredTicket:
 
 
 class TicketStorePort(Protocol):
-    """Persists ticket payloads and atomically reserves `do_get` exchanges.
-
-    Example:
-        ```python
-        store.store(payload, max_exchanges=1)
-        stored = store.load(payload.ticket_id)
-        store.reserve_exchange(payload.ticket_id, now=now)
-        ```
-    """
-
-    def store(self, payload: TicketPayload, *, max_exchanges: int) -> None: ...
+    """Persists ticket payloads and atomically reserves `do_get` exchanges."""
 
     def store_many(self, payloads: Iterable[TicketPayload], *, max_exchanges: int) -> None: ...
 

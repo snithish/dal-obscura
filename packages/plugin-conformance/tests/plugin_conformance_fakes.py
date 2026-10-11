@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
@@ -26,7 +26,7 @@ def _descriptor() -> PluginDescriptor:
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1), correlation_id="fixture"
+        deadline=datetime.now(UTC) + timedelta(minutes=1), correlation_id="fixture"
     )
 
 

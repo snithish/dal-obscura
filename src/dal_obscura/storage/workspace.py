@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import case, exists, func, or_, select
@@ -131,7 +130,6 @@ def replace_auth_providers(
             "reread before writing.",
             current_revision=current_revision,
         )
-    existing_args = {record.ordinal: dict(record.args_json) for record in existing}
     new_revision = 0 if not existing and current_revision == 0 else current_revision + 1
     for record in existing:
         session.delete(record)
@@ -142,9 +140,7 @@ def replace_auth_providers(
                 id=uuid4(),
                 ordinal=int(raw["ordinal"]),
                 module=str(raw["module"]),
-                args_json=_preserve_redacted_args(
-                    dict(raw.get("args", {})), existing_args.get(int(raw["ordinal"]))
-                ),
+                args_json=dict(raw.get("args", {})),
                 enabled=bool(raw.get("enabled", True)),
                 revision=new_revision,
             )
@@ -279,35 +275,3 @@ def _empty_workspace_summary() -> dict[str, object]:
         "runtime_configured": False,
         "enabled_auth_provider_count": 0,
     }
-
-
-def _preserve_redacted_args(
-    incoming: Mapping[str, object], existing: Mapping[str, object] | None
-) -> dict[str, object]:
-    """Keep server-held secret values when a redacted GET is round-tripped."""
-
-    if not existing:
-        return dict(incoming)
-    result: dict[str, object] = {}
-    for key, value in incoming.items():
-        old = existing.get(key)
-        if value == "[redacted]" and old is not None:
-            result[key] = old
-        elif isinstance(value, Mapping) and isinstance(old, Mapping):
-            result[key] = _preserve_redacted_args(
-                cast(Mapping[str, object], value), cast(Mapping[str, object], old)
-            )
-        elif isinstance(value, list) and isinstance(old, list):
-            result[key] = [
-                _preserve_redacted_args(
-                    cast(Mapping[str, object], item), cast(Mapping[str, object], old[index])
-                )
-                if isinstance(item, Mapping)
-                and index < len(old)
-                and isinstance(old[index], Mapping)
-                else item
-                for index, item in enumerate(value)
-            ]
-        else:
-            result[key] = value
-    return result

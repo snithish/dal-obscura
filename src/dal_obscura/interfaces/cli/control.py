@@ -1,12 +1,4 @@
-"""Control-plane HTTP server command.
-
-Example:
-    ```bash
-    DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///control-plane.db \
-    DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=local-admin \
-    dal-obscura-control-plane
-    ```
-"""
+"""Control-plane HTTP server command."""
 
 from __future__ import annotations
 

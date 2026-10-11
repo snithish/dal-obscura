@@ -2,7 +2,8 @@
 
 import base64
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -60,8 +61,8 @@ def test_delta_s3_parallel_reads_match_native_pinned_snapshot(tmp_path, monkeypa
     expected = [
         {"id": i, "amount": 102 if i == 2 else i} for i in range(30) if i not in (1, 3, 4, 11, 21)
     ]
-    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "s3-test")
-    with s3_bucket(monkeypatch) as (client, bucket):
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=2), "s3-test")
+    with data_read_guard() as guard, s3_bucket(monkeypatch, guard=guard) as (client, bucket):
         upload_directory(client, bucket, path, "root/sales")
         client.put_object(
             Bucket=bucket,
@@ -97,12 +98,21 @@ def test_delta_s3_parallel_reads_match_native_pinned_snapshot(tmp_path, monkeypa
         write_deltalake(
             f"s3://{bucket}/root/sales", pa.table({"id": [999], "amount": [999]}), mode="append"
         )
+        units = []
+        for task in tasks:
+            groups = task.to_json()["row_groups"]
+            assert isinstance(groups, list)
+            for group in groups:
+                assert isinstance(group, dict)
+                group = cast(dict[str, object], group)
+                units.append((group["path"], group["row_group"]))
+        assert len(units) == len(set(units))
+        guard.assign(tasks, location=handle.metadata["location"])
         assert (
-            sorted(
-                parallel_rows(delta_format_factory, handle, tasks, context), key=lambda r: r["id"]
-            )
+            sorted(distributed_rows(delta_format_factory, handle, tasks), key=lambda r: r["id"])
             == expected
         )
+        guard.assert_disjoint_reads()
         assert "dal-test-secret" not in json.dumps(handle.to_json())
 
 
@@ -127,7 +137,7 @@ def test_manifest_s3_parallel_nested_projection(tmp_path, monkeypatch):
             }
         },
     }
-    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "manifest-s3")
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=2), "manifest-s3")
     with s3_bucket(monkeypatch) as (client, bucket):
         upload_directory(client, bucket, tmp_path, "root")
         client.put_object(
@@ -164,7 +174,7 @@ def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode, lay
     from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
     from tests.support.iceberg import install_delete_file
 
-    context = ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=2), "iceberg-s3")
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=2), "iceberg-s3")
     with data_read_guard() as guard, s3_bucket(monkeypatch, guard=guard) as (client, bucket):
         endpoint = client.meta.endpoint_url
         catalog = load_catalog(
@@ -200,7 +210,7 @@ def test_iceberg_s3_reads_cow_and_mor_snapshots(tmp_path, monkeypatch, mode, lay
             )
         )
         handle = TableHandle(
-            "iceberg.sql",
+            "iceberg.catalog",
             "s3",
             1,
             TableIdentifier(("retail",), "sales"),
@@ -244,3 +254,44 @@ def test_s3_storage_admission_contains_decoded_members(monkeypatch):
         ):
             with pytest.raises(ValueError):
                 storage.member(path, encoded=True, exists=False)
+
+
+def test_official_glue_catalog_returns_portable_native_scan(tmp_path, monkeypatch):
+    from dal_obscura.sources.iceberg_catalog import IcebergCatalog
+    from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
+
+    context = ExecutionContext(datetime.now(UTC) + timedelta(minutes=2), "glue")
+    with data_read_guard() as guard, s3_bucket(monkeypatch, guard=guard) as (client, bucket):
+        catalog = IcebergCatalog(
+            CatalogConfig(
+                "iceberg.catalog",
+                "glue",
+                1,
+                {
+                    "type": "glue",
+                    "warehouse": f"s3://{bucket}/warehouse",
+                    "s3.endpoint": client.meta.endpoint_url,
+                    "s3.region": "us-east-1",
+                },
+            ),
+            context,
+        )
+        try:
+            provider = catalog._provider(context)
+            provider.create_namespace("retail")
+            table = provider.create_table("retail.sales", pa.schema([("id", pa.int64())]))
+            for ids in ([0, 1], [2, 3]):
+                table.append(pa.table({"id": ids}, schema=table.schema().as_arrow()))
+            captured = catalog.resolve_table(TableIdentifier(("retail",), "sales"), context)
+        finally:
+            catalog.close()
+        plugin = IcebergFormatPlugin(captured, context)
+        schema = plugin.schema(context).arrow_schema
+        tasks = plugin.plan(ScanRequest(schema, 2), context)
+        plugin.close()
+        guard.assign(tasks)
+        actual = sorted(
+            distributed_rows(IcebergFormatPlugin, captured, tasks), key=lambda r: r["id"]
+        )
+        assert actual == [{"id": i} for i in range(4)]
+        guard.assert_disjoint_reads()

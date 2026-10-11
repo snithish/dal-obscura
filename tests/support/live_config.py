@@ -13,7 +13,7 @@ from dal_obscura.storage.database.orm import (
     WorkspaceRecord,
 )
 
-ICEBERG_CATALOG_ID = "iceberg.sql"
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 
 
 def seed_live_config(session: Session):

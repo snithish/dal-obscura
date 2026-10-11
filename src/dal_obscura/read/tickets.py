@@ -1,12 +1,4 @@
-"""Ticket payload value objects and canonical hashing helpers.
-
-Example:
-    ```python
-    payload_hash = ticket_payload_hash(payload)
-    encoded = payload.to_dict()
-    restored = TicketPayload.from_dict(encoded)
-    ```
-"""
+"""Ticket payload value objects and canonical hashing helpers."""
 
 from __future__ import annotations
 
@@ -45,24 +37,7 @@ class TicketReference:
 
 @dataclass(frozen=True)
 class TicketPayload:
-    """Serialized contents of a signed Flight ticket.
-
-    Example:
-        ```python
-        payload = TicketPayload(
-            ticket_id="ticket-1",
-            catalog="analytics",
-            target="default.users",
-            columns=["id"],
-            scan={"read_payload": "...", "full_row_filter": None, "masks": {}},
-            policy_version=1,
-            principal_id="user:alice",
-            expires_at=1_900_000_000,
-            nonce="nonce",
-            asset_id="00000000-0000-4000-8000-000000000001",
-        )
-        ```
-    """
+    """Serialized contents of a signed Flight ticket."""
 
     target: str
     columns: list[str]
@@ -224,24 +199,12 @@ def _strict_masks(raw: object) -> dict[str, MaskPayload]:
 
 
 def canonical_ticket_payload_bytes(payload: TicketPayload) -> bytes:
-    """Returns stable JSON bytes used for signing and integrity checks.
-
-    Example:
-        ```python
-        signed_bytes = canonical_ticket_payload_bytes(payload)
-        ```
-    """
+    """Returns stable JSON bytes used for signing and integrity checks."""
     return json.dumps(payload.to_dict(), sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def ticket_payload_hash(payload: TicketPayload) -> str:
-    """Returns SHA-256 hex digest of the canonical ticket payload.
-
-    Example:
-        ```python
-        digest = ticket_payload_hash(payload)
-        ```
-    """
+    """Returns SHA-256 hex digest of the canonical ticket payload."""
     return hashlib.sha256(canonical_ticket_payload_bytes(payload)).hexdigest()
 
 

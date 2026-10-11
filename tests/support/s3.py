@@ -16,11 +16,15 @@ class DataReadGuard:
     allowed: DictProxy
     reads: ListProxy
 
-    def assign(self, tasks):
+    def assign(self, tasks, *, location=None):
         for index, task in enumerate(tasks):
+            payload = task.to_json()
+            files = payload.get("files")
+            if files is None:
+                assert location is not None
+                files = [location + "/" + group["path"] for group in payload["row_groups"]]
             self.allowed["dal-worker-" + str(index)] = [
-                "/" + urlsplit(path).netloc + unquote(urlsplit(path).path)
-                for path in task.to_json()["files"]
+                "/" + urlsplit(path).netloc + unquote(urlsplit(path).path) for path in files
             ]
 
     def assert_disjoint_reads(self):

@@ -1,10 +1,4 @@
-"""FastAPI control-plane application factory.
-
-Example:
-    ```python
-    app = create_app(session_factory(engine), admin_token="dev-admin")
-    ```
-"""
+"""FastAPI control-plane application factory."""
 
 from __future__ import annotations
 
@@ -160,13 +154,7 @@ def create_app(  # noqa: C901
     plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> FastAPI:
-    """Creates the control-plane FastAPI app with all workspace routes installed.
-
-    Example:
-        ```python
-        app = create_app(session_factory(engine), admin_token="dev-admin")
-        ```
-    """
+    """Creates the control-plane FastAPI app with all workspace routes installed."""
 
     if max_request_bytes <= 0:
         raise ValueError("max_request_bytes must be positive")

@@ -1,16 +1,4 @@
-"""Shared FastAPI dependencies for control-plane route modules.
-
-Example:
-    ```python
-    deps = ControlPlaneDeps(
-        session_maker=session_maker,
-        admin_token="dev-admin",
-        oidc_actor_resolver=None,
-        oidc_admin_group=None,
-        ui_auth_config=None,
-    )
-    ```
-"""
+"""Shared FastAPI dependencies for control-plane route modules."""
 
 from __future__ import annotations
 
@@ -81,13 +69,7 @@ class RevisionConflictResponse(HTTPException):
 
 @dataclass(frozen=True)
 class ControlPlaneDeps:
-    """Route dependency bundle for auth checks and service session handling.
-
-    Example:
-        ```python
-        actor = deps.require_admin("Bearer dev-admin")
-        ```
-    """
+    """Route dependency bundle for auth checks and service session handling."""
 
     session_maker: sessionmaker[Session]
     admin_token: str

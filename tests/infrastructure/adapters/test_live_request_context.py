@@ -76,7 +76,7 @@ class Provider:
         self.targets = []
         self.created.append(self)
 
-    def describe(self, catalog, target):
+    def resolve(self, catalog, target):
         assert not self.closed
         self.targets.append(target)
         return _table()
@@ -237,10 +237,10 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
 
     event.listen(engine, "checkout", checkout)
     event.listen(engine, "checkin", checkin)
-    original = Provider.describe
+    original = Provider.resolve
     edited = False
 
-    def describe(self, catalog, target):
+    def resolve(self, catalog, target):
         nonlocal edited
         assert checked_out == 0, "Provider IO must not hold a configuration connection"
         if not edited:
@@ -248,7 +248,7 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
             _edit(factory, policy=True)
         return original(self, catalog, target)
 
-    monkeypatch.setattr(Provider, "describe", describe)
+    monkeypatch.setattr(Provider, "resolve", resolve)
     registry = LiveConfigCatalogRegistry(store)
     identity = FakeIdentity(Principal(id="user1", groups=[], attributes={}))
 

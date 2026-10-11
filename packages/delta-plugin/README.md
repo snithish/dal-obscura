@@ -1,6 +1,6 @@
 # Delta Lake plugin
 
-`dal-obscura-delta` 0.2.0 implements SDK API 2 with catalog `delta.directory` and
+`dal-obscura-delta` 0.2.0 implements SDK API 2 with catalogs `delta.directory` / `delta.catalog` and
 format `delta`. The package imports the public SDK, delta-rs and Arrow; it does not
 import service internals. It is an optional, independently admitted wheel.
 
@@ -14,7 +14,7 @@ uv build --wheel --out-dir dist/plugins-0.2.0 packages/delta-plugin
 uv pip install dist/plugins-0.2.0/dal_obscura_delta-0.2.0-py3-none-any.whl
 uv run --no-sync python scripts/build_plugin_lock.py \
   --output /tmp/delta-plugin-lock.json \
-  --plugin catalog:delta.directory --plugin table_format:delta
+  --plugin catalog:delta.directory --plugin catalog:delta.catalog --plugin table_format:delta
 ```
 
 Merge these selections into the deployment's generated lock, using the same
@@ -38,18 +38,34 @@ literal dotted segment differs from multiple segments:
 Paths must remain inside the configured root; each Delta table's log, data,
 checkpoint and deletion-vector files must remain inside that table directory.
 Local symlinks and shallow clones referencing files outside the table root are
-rejected. Roots and registries may use local paths, file URIs, or AWS S3 URIs.
+rejected. Roots and registries use official delta-rs object-store transports, including local, S3, Azure and GCS.
 For S3, use `{"root":"s3://bucket/data","tables_path":"s3://bucket/data/tables.json"}`.
-Storage credentials come from the worker AWS provider chain, never configuration
+Storage credentials come from worker native provider chains and optional operator
+`DAL_OBSCURA_DELTA_STORAGE_OPTIONS` JSON, never configuration
 handles or tickets. Membership is captured when the immutable catalog configuration opens;
 publish a new catalog revision after changing the registry. Table resolution
 captures the current Delta table UUID and version, without refreshing old handles.
 
+For catalog-managed or cross-root tables, configure `delta.catalog` with explicit
+registered locations instead of a directory registry:
+
+```json
+{"tables": [
+  {"namespace": ["retail"], "name": "sales", "location": "s3://bucket/sales"},
+  {"namespace": ["prod", "retail"], "name": "orders", "location": "uc://prod.retail.orders"}
+]}
+```
+
+Unity lookup/authentication belongs to delta-rs. Registering identifiers defines
+discovery scope because its public Python client has no catalog-listing API. The
+resolved storage location and UUID/version are captured; workers reopen that pinned
+location with their own credentials. No custom catalog HTTP client is used.
+
 ## Parallel reads and deletes
 
-The public Arrow dataset API cannot read deletion-vector tables or independently
-split their scans by row group. The adapter therefore combines Arrow row-group
-readers with masks already decoded by Delta Kernel; this small bridge is needed
+COW uses the public delta-rs Arrow dataset and its row-group fragment subsets.
+The public dataset rejects deletion-vector tables. For MoR the adapter combines
+Arrow row-group readers with masks already decoded by Delta Kernel; this small bridge is needed
 for independently executable parallel tickets.
 
 Delta-rs 1.5.0 owns transaction-log replay, checkpoint handling, snapshot
@@ -84,8 +100,9 @@ forward to newer data. Configure Delta retention longer than ticket lifetime.
 
 ## Supported scope and budgets
 
-- Local filesystem and AWS S3 tables. Other object stores and catalog-managed
-  Delta tables are not supported. Arrow and delta-rs own storage IO.
+- Official delta-rs object-store backends own every log/data/DV transport.
+  `delta.catalog` also resolves native Unity catalog URIs. Other admitted catalogs
+  can emit the same location/version/table-ID handle.
 - Reader protocol 1, or protocol 3 with `deletionVectors`, `timestampNtz` and
   `v2Checkpoint`. Column mapping and unknown reader features fail closed.
 - Registry: at most 128 tables and 1 MiB. Snapshot: at most 10,000 active files

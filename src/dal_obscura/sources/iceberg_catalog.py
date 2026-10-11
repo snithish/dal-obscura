@@ -1,8 +1,8 @@
-"""Built-in SQL Iceberg catalog using the same public SDK as installed plugins."""
+"""Official PyIceberg catalog backends through the public plugin SDK."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import monotonic
 from typing import Any
 
@@ -27,7 +27,7 @@ from dal_obscura.sources.discovery import (
 )
 from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error, _table_identifier
 
-_ICEBERG_CATALOG_ID = "iceberg.sql"
+_ICEBERG_CATALOG_ID = "iceberg.catalog"
 _ICEBERG_FORMAT_ID = "iceberg"
 _BUILTIN_DISTRIBUTION = "dal-obscura"
 _BUILTIN_VERSION = __version__
@@ -38,14 +38,20 @@ DESCRIPTOR = PluginDescriptor(
     config_version=1,
     distribution=_BUILTIN_DISTRIBUTION,
     version=_BUILTIN_VERSION,
-    display_name="Iceberg SQL catalog",
+    display_name="Apache Iceberg catalog",
     capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
     output_formats=frozenset({_ICEBERG_FORMAT_ID}),
     handle_versions=frozenset({1}),
     config_schema={
         "defaults": {"type": "sql"},
         "fields": [
-            {"name": "uri", "type": "string", "required": True, "secret": False},
+            {
+                "name": "type",
+                "type": "enum",
+                "required": True,
+                "options": ["sql", "rest", "glue", "hive", "dynamodb", "in-memory", "bigquery"],
+            },
+            {"name": "uri", "type": "string", "required": False, "secret": False},
             {"name": "warehouse", "type": "string", "required": False, "secret": False},
             {"name": "user", "type": "string", "required": False, "secret": False},
             {
@@ -59,7 +65,7 @@ DESCRIPTOR = PluginDescriptor(
 )
 
 
-class SqlCatalog:
+class IcebergCatalog:
     descriptor = DESCRIPTOR
 
     def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
@@ -69,7 +75,7 @@ class SqlCatalog:
         self._listing: tuple[str, ...] = ()
         context.check_active()
         if config.plugin_id != self.descriptor.plugin_id:
-            raise ValueError("SQL catalog received an incompatible plugin ID")
+            raise ValueError("Iceberg catalog received an incompatible plugin ID")
         options = dict(config.options)
         self._catalog = _load_iceberg_catalog(
             _provider_catalog_name(config.instance_id, options), _catalog_options(options)
@@ -83,7 +89,7 @@ class SqlCatalog:
     def _provider(self, context: ExecutionContext):
         context.check_active()
         if self._closed:
-            raise ValueError("SQL catalog is closed")
+            raise ValueError("Iceberg catalog is closed")
         return self._catalog
 
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
@@ -123,7 +129,7 @@ class SqlCatalog:
     ) -> DiscoveryPage:
         provider = self._provider(context)
         if not 1 <= limit <= 500:
-            raise ValueError("Invalid SQL discovery page size")
+            raise ValueError("Invalid Iceberg discovery page size")
         if context is not self._listing_context:
             deadline_at = _deadline_at(context)
             identifiers = set()
@@ -147,7 +153,7 @@ class SqlCatalog:
         names = self._listing
         if continuation is not None:
             if not isinstance(continuation, str) or continuation not in names:
-                raise ValueError("Invalid SQL discovery cursor")
+                raise ValueError("Invalid Iceberg discovery cursor")
             names = [name for name in names if name > continuation]
         page = names[:limit]
         return DiscoveryPage(
@@ -168,7 +174,7 @@ class SqlCatalog:
 
 
 def _deadline_at(context: ExecutionContext) -> float:
-    return monotonic() + (context.deadline - datetime.now(timezone.utc)).total_seconds()
+    return monotonic() + (context.deadline - datetime.now(UTC)).total_seconds()
 
 
 def _provider_catalog_name(logical_name: str, options: dict[str, Any]) -> str:
@@ -185,9 +191,13 @@ def _catalog_options(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) -> Any:
-    from pyiceberg.catalog import load_catalog
+    from pyiceberg.catalog import CatalogType, load_catalog
 
     try:
+        if "py-catalog-impl" in catalog_options or "py-io-impl" in catalog_options:
+            raise ValueError("Catalog configuration cannot load arbitrary implementations")
+        if "type" in catalog_options:
+            CatalogType(catalog_options["type"])
         return load_catalog(catalog_name, **catalog_options)
     except Exception as exc:
         raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc

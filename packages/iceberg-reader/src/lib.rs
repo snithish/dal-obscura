@@ -10,18 +10,18 @@ use arrow_pyarrow::ToPyArrow;
 use futures::{StreamExt, TryStreamExt};
 use iceberg::{
     TableIdent,
-    io::{FileIOBuilder, StorageFactory},
+    io::FileIOBuilder,
     scan::{ArrowRecordBatchStream, FileScanTask},
     spec::{NestedFieldRef, Schema, StructType, Type, prune_columns},
     table::StaticTable,
 };
-use iceberg_storage_opendal::{OpenDalResolvingStorageFactory, OpenDalStorageFactory};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTimeoutError, PyValueError},
     prelude::*,
 };
 
 const MAX_FILES: usize = 10_000;
+mod storage;
 fn error(e: impl std::fmt::Display) -> PyErr {
     PyRuntimeError::new_err(e.to_string())
 }
@@ -130,7 +130,7 @@ impl Reader {
         py: Python<'_>,
         location: String,
         snapshot: i64,
-        properties: HashMap<String, String>,
+        file_io: Py<PyAny>,
         seconds: f64,
     ) -> PyResult<Self> {
         let duration = timeout(seconds)?;
@@ -144,13 +144,10 @@ impl Reader {
             );
             let (table, tasks) = runtime.block_on(async {
                 tokio::time::timeout(duration, async {
-                    let factory: Arc<dyn StorageFactory> =
-                        if location.starts_with('/') || location.starts_with("file:") {
-                            Arc::new(OpenDalStorageFactory::Fs)
-                        } else {
-                            Arc::new(OpenDalResolvingStorageFactory::new())
-                        };
-                    let io = FileIOBuilder::new(factory).with_props(properties).build();
+                    let io = FileIOBuilder::new(Arc::new(storage::PythonStorage {
+                        provider: Some(Arc::new(file_io)),
+                    }))
+                    .build();
                     let table = StaticTable::from_metadata_file(
                         &location,
                         TableIdent::from_strs(["native", "scan"]).map_err(error)?,

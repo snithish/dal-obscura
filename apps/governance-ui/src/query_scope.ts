@@ -8,11 +8,10 @@ export function sessionQueryScope(
   return session ? JSON.stringify([session.issuer ?? null, session.principal, generation]) : "anonymous";
 }
 
-/** Inventory keys include actor scope, search and cursor so pages cannot cross sessions. */
+/** One infinite query owns all pages for an actor scope and search. */
 export function assetInventoryQueryKey(
   sessionScope: string,
   search: string,
-  cursor: string | null,
-): readonly [string, string, string, string | null] {
-  return ["asset-inventory", sessionScope, search, cursor];
+): readonly [string, string, string] {
+  return ["asset-inventory", sessionScope, search];
 }

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+case "${1:-}" in delta|iceberg) export SCENARIO="$1" ;; *) echo "Usage: ./run delta|iceberg" >&2; exit 2 ;; esac
+export COMPOSE_PROJECT_NAME="obscura-nested-${SCENARIO}"
+mkdir -p results
+# Always start a fresh, disposable scenario; never touches another project.
+docker compose down --volumes --remove-orphans
+docker compose build planner
+docker compose up -d --wait --wait-timeout 7200 planner worker-1 worker-2 worker-3
+docker compose run --no-deps --rm verify
+printf '\nEvidence: %s/results/%s.json\nCleanup: SCENARIO=%s docker compose -p %s down --volumes\n' "$PWD" "$SCENARIO" "$SCENARIO" "$COMPOSE_PROJECT_NAME"
