@@ -6,9 +6,9 @@ This is the approved improvement program and its implementation record, not a cl
 
 ## Current implementation status
 
-Updated 11 October 2026 after sixteen implementation deliveries. Findings E01–E13
+Updated 12 October 2026 after seventeen implementation deliveries. Findings E01 through E13
 below preserve the original audit baseline; they do not describe every current
-source file. Delivery sections 11–26 record the implemented behavior and its
+source file. Delivery sections 11 through 27 record the implemented behavior and its
 qualification. Local implementation is partial; broader release claims remain gated.
 
 - **UX/UI, E03/E05/E06:** paged catalog results, bounded selection review, exact
@@ -701,3 +701,37 @@ E03 remains partial. This bounds paths within each mask group and original-value
 summary, not the number of distinct mask groups, exemption tokens, complete schema
 transfer, option indexes or provider paging. Real operator and field performance
 qualification remain open.
+
+## 27. Seventeenth implementation delivery. Schema discovery without held transactions
+
+Schema GET now captures the authorized asset binding and immutable catalog
+configuration before provider IO. The route releases its transaction before secret
+resolution and schema discovery, and builds the bounded metadata response without
+a database session. A fresh transaction checks read permission and both revisions
+before returning metadata. Concurrent catalog or asset changes return 409; replacing
+the requesting owner returns 403. Deleted resources return 404. The public response
+shape and its byte budget are unchanged.
+
+The source loader now accepts the captured binding instead of a session. Its
+existing synthetic evaluation caller uses the same capture contract, but still
+holds the evaluation transaction during provider IO. Evaluation requires the next
+separate change. No compatibility helper was added to the production contract.
+
+Using frozen SDK options also exposed references inside arrays that the secret
+resolver did not inspect. The resolver now handles both mutable lists and frozen
+tuples, resolves granted references and rejects mismatched scope. It returns
+detached arrays without changing the captured configuration.
+
+TDD reproduced a held transaction and stale HTTP 200 responses after catalog,
+asset and owner changes. The final rebuilt wheel passes 379 installed schema,
+read, plugin, secret, API and consumer cases without failures or skips. PostgreSQL
+race tests use explicit provider signals and independent requests. Six unchanged
+plugin artifacts were locked and admitted in a fresh environment with production
+source imports disabled. Ruff, types and the unchanged OpenAPI snapshot pass;
+repository fast checks apply at commit.
+
+E10 and E12 remain partially resolved. The tests cover schema GET transaction
+ownership and frozen reference resolution. They do not establish incremental
+schema browsing, deployment or cluster capacity, live provider identity renewal,
+evaluation transaction release, or the broader release requirements. See the
+[schema API contract](control-plane-api.md#schema-discovery) for client recovery.

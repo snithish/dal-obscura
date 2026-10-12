@@ -88,3 +88,24 @@ Providers may still enumerate internally: the built-in Iceberg adapter currently
 enumerates and sorts its bounded inventory for each independently requested page.
 Browsing every page can therefore repeat provider IO. End-to-end paging does not
 remove that upstream limitation or establish live-cloud support.
+
+## Schema discovery
+
+`GET /v1/assets/{asset_id}/schema` requires the asset's read capability and returns
+its authoritative nested metadata. The route captures the asset binding and
+immutable catalog configuration in a short database transaction. It closes the
+transaction before resolving secret references or contacting the provider, and
+builds the bounded response without a database session.
+
+Before returning metadata, a fresh transaction checks read permission and the
+captured asset and catalog revisions. A changed binding returns 409 with the
+current revision, so reload the asset or catalog before retrying. Revoked read
+permission returns 403, and a deleted resource returns 404. Provider failures
+remain sanitized. The response shape and its 8 MiB byte budget are unchanged.
+The endpoint still returns a complete bounded tree; it does not provide incremental
+schema browsing or remove native execution limits.
+
+Synthetic policy evaluation still needs its own transaction change. Its current
+caller uses the immutable schema capture contract, but retains the evaluation
+transaction during provider IO. The schema GET qualification does not establish
+transaction release for that endpoint.

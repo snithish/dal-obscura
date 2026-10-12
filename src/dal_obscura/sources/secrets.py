@@ -221,7 +221,7 @@ def resolve_secret_refs(
             str(key): resolve_secret_refs(nested, provider=provider, expected_scope=expected_scope)
             for key, nested in mapping.items()
         }
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [
             resolve_secret_refs(item, provider=provider, expected_scope=expected_scope)
             for item in value

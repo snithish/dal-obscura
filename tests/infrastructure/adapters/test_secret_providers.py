@@ -202,3 +202,28 @@ def test_resolver_rejects_provider_without_scope_authorization():
             provider=cast(SecretProvider, UnscopedProvider()),
             expected_scope="catalog:analytics",
         )
+
+
+@pytest.mark.parametrize("scope", ["catalog:analytics", "catalog:other"])
+def test_frozen_catalog_arrays_resolve_secret_references_without_bypassing_scope(
+    monkeypatch, scope
+):
+    from dal_obscura_plugin_api import CatalogConfig
+
+    monkeypatch.setenv("CATALOG_TOKEN", "private-token")
+    provider = EnvSecretProvider(config={"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}})
+    config = CatalogConfig(
+        "fixture.catalog",
+        "analytics",
+        1,
+        {"channels": [{"headers": {"secret": "CATALOG_TOKEN", "scope": scope}}]},
+    )
+    if scope == "catalog:other":
+        with pytest.raises(ValueError, match="scope does not match"):
+            resolve_secret_refs(
+                config.options, provider=provider, expected_scope="catalog:analytics"
+            )
+    else:
+        assert resolve_secret_refs(
+            config.options, provider=provider, expected_scope="catalog:analytics"
+        ) == {"channels": [{"headers": "private-token"}]}

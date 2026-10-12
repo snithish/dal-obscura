@@ -62,10 +62,15 @@ def evaluate_asset_policy(
         mapping_evidence = {"mode": "provider_claims", "provider_ordinal": provider_ordinal}
     _validate_synthetic_rows(rows)
     supplied_row_count = 0 if rows is None else len(rows)
-    loaded_schema = schema_service.load_asset_schema(
+    captured = schema_service.capture_asset_schema(
         store,
         asset_id,
         actor,
+        egress_allowlist=egress_allowlist,
+        plugin_registry=plugin_registry,
+    )
+    loaded_schema = schema_service.load_asset_schema(
+        captured,
         egress_allowlist=egress_allowlist,
         plugin_registry=plugin_registry,
         secret_provider=secret_provider,

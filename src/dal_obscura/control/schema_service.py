@@ -13,10 +13,12 @@ from sqlalchemy.orm import Session
 
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.catalog_service import (
-    validate_admitted_catalog_options,
+    CatalogDiscovery,
+    capture_catalog_discovery,
+    ensure_catalog_discovery_current,
     validate_catalog_options,
 )
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.control.errors import ConfigurationConflictError, ValidationFailure
 from dal_obscura.control.policy_service import ensure_asset_capability
 from dal_obscura.policy.mask_types import SUPPORTED_MASK_TYPES
 from dal_obscura.policy.paths import (
@@ -41,8 +43,6 @@ from dal_obscura.sources.secrets import (
     resolve_secret_refs,
 )
 from dal_obscura.storage import assets as _db_assets
-from dal_obscura.storage import catalogs as _db_catalogs
-from dal_obscura.storage import workspace as _db_workspace
 
 MAX_SCHEMA_RESPONSE_BYTES = 8 * 1024 * 1024
 _RESPONSE_ENCODER = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"), allow_nan=False)
@@ -62,34 +62,79 @@ class _SchemaResponseBudget:
                 )
 
 
-def get_asset_schema(
+@dataclass(frozen=True)
+class AssetSchemaDiscovery:
+    """An authorized immutable binding; no database session crosses provider IO."""
+
+    asset_id: UUID
+    revision: int
+    name: str
+    backend: str
+    table_identifier: str
+    catalog: CatalogDiscovery
+
+
+def capture_asset_schema(
     store: Session,
     asset_id: UUID,
     actor: ControlPlaneActor,
     *,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: PluginRegistry | None = None,
+) -> AssetSchemaDiscovery:
+    ensure_asset_capability(store, asset_id, actor, "read")
+    asset = _db_assets.get_workspace_asset(store, asset_id)
+    catalog = capture_catalog_discovery(
+        store,
+        str(asset["catalog"]),
+        egress_allowlist=egress_allowlist,
+        plugin_registry=plugin_registry,
+    )
+    return AssetSchemaDiscovery(
+        asset_id=asset_id,
+        revision=int(cast(int | str, asset["revision"])),
+        name=str(asset["name"]),
+        backend=str(asset["backend"]),
+        table_identifier=str(asset.get("table_identifier") or asset["name"]),
+        catalog=catalog,
+    )
+
+
+def ensure_asset_schema_current(
+    store: Session, captured: AssetSchemaDiscovery, actor: ControlPlaneActor
+) -> None:
+    """Recheck authorization and binding after provider IO, before exposing metadata."""
+    ensure_asset_capability(store, captured.asset_id, actor, "read")
+    asset = _db_assets.get_workspace_asset(store, captured.asset_id)
+    revision = int(cast(int | str, asset["revision"]))
+    if revision != captured.revision:
+        raise ConfigurationConflictError(
+            "Asset changed during schema discovery; refresh schema", current_revision=revision
+        )
+    ensure_catalog_discovery_current(store, captured.catalog)
+
+
+def get_asset_schema(
+    captured: AssetSchemaDiscovery,
+    *,
+    egress_allowlist: tuple[str, ...] = (),
+    plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
-    ensure_asset_capability(store, asset_id, actor, "read")
-    schema = load_asset_schema(
-        store,
-        asset_id,
-        actor,
+    arrow_schema = load_asset_schema(
+        captured,
         egress_allowlist=egress_allowlist,
         plugin_registry=plugin_registry,
         secret_provider=secret_provider,
     )
-    arrow_schema = schema
-    asset = _db_assets.get_workspace_asset(store, asset_id)
     try:
         scope_digest = schema_scope_digest(arrow_schema)
     except ValueError as exc:
         raise ValidationFailure(str(exc)) from exc
     result: dict[str, object] = {
-        "asset_id": str(asset_id),
-        "catalog": asset["catalog"],
-        "target": asset["name"],
+        "asset_id": str(captured.asset_id),
+        "catalog": captured.catalog.config.instance_id,
+        "target": captured.name,
         "schema_version": 1,
         "schema_fingerprint": schema_fingerprint(arrow_schema),
         "stable_field_ids": schema_has_stable_ids(arrow_schema),
@@ -106,31 +151,30 @@ def get_asset_schema(
 
 
 def load_asset_schema(
-    store: Session,
-    asset_id: UUID,
-    actor: ControlPlaneActor,
+    captured: AssetSchemaDiscovery,
     *,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> pa.Schema:
-    """Loads the authoritative admitted schema without reading table rows."""
-
-    ensure_asset_capability(store, asset_id, actor, "read")
-    asset = _db_assets.get_workspace_asset(store, asset_id)
-    context = _db_workspace.get_workspace(store)
-    if context is None:
-        raise LookupError("No workspace has been configured")
-    catalog = _db_catalogs.get_workspace_catalog(store, str(asset["catalog"]))
-    options = cast(dict[str, object], catalog["options"])
-    validate_admitted_catalog_options(str(catalog["plugin_id"]), options, plugin_registry)
-    validate_catalog_options(options, egress_allowlist=egress_allowlist)
+    """Loads one captured authoritative source schema without a database session."""
+    config = captured.catalog.config
+    asset: dict[str, object] = {
+        "name": captured.name,
+        "backend": captured.backend,
+        "table_identifier": captured.table_identifier,
+    }
+    catalog: dict[str, object] = {
+        "name": config.instance_id,
+        "plugin_id": config.plugin_id,
+        "revision": config.revision,
+    }
     options = cast(
         dict[str, object],
         resolve_secret_refs(
-            options,
+            config.options,
             provider=secret_provider or EnvSecretProvider(),
-            expected_scope=f"catalog:{catalog['name']}",
+            expected_scope=f"catalog:{config.instance_id}",
         ),
     )
     try:

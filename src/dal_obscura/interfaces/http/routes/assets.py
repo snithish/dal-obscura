@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dal_obscura.control import asset_service, policy_service, schema_service
 from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.errors import AuthorizationFailure
+from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.runtime import ControlContext
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
@@ -85,16 +85,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> AssetSchemaResponse:
-        return deps.with_transaction(
-            lambda service: schema_service.get_asset_schema(
-                service.session,
-                asset_id,
-                actor,
-                egress_allowlist=service.catalog_egress_allowlist,
-                plugin_registry=service.plugin_registry,
-                secret_provider=service.secret_provider,
-            )
-        )
+        return _discover_asset_schema(deps, asset_id, actor)
 
     @api.post(
         "/v1/assets/{asset_id}/tickets/revoke",
@@ -268,3 +259,30 @@ def _reject_self_escalation(
             raise AuthorizationFailure(
                 "Cannot grant yourself a capability you do not already hold."
             ) from exc
+
+
+def _discover_asset_schema(
+    deps: ControlPlaneDeps, asset_id: UUID, actor: ControlPlaneActor
+) -> AssetSchemaResponse:
+    captured = deps.with_transaction(
+        lambda service: schema_service.capture_asset_schema(
+            service.session,
+            asset_id,
+            actor,
+            egress_allowlist=service.catalog_egress_allowlist,
+            plugin_registry=service.plugin_registry,
+        )
+    )
+    try:
+        payload = schema_service.get_asset_schema(
+            captured,
+            egress_allowlist=deps.catalog_egress_allowlist,
+            plugin_registry=deps.plugin_registry,
+            secret_provider=deps.secret_provider,
+        )
+    except ValidationFailure as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    deps.with_transaction(
+        lambda service: schema_service.ensure_asset_schema_current(service.session, captured, actor)
+    )
+    return AssetSchemaResponse.model_validate(payload)

@@ -11,10 +11,12 @@ import pytest
 from dal_obscura_plugin_api import PluginDescriptor, SchemaDescriptor, TableHandle, TableIdentifier
 from pyiceberg.schema import Schema
 from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringType, StructType
+from sqlalchemy.orm import Session
 
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.schema_service import (
+    capture_asset_schema,
     get_asset_schema,
     schema_fingerprint,
 )
@@ -24,6 +26,19 @@ from dal_obscura.sources.plugin_runtime import _close_plugin_preserving_error
 from dal_obscura.sources.plugins import PluginRegistry
 from dal_obscura.sources.secrets import EnvSecretProvider
 from tests.support.schema_catalog import schema_registry
+
+
+def discover_schema(
+    store: Session, asset_id: UUID, actor: ControlPlaneActor, **options: Any
+) -> dict[str, object]:
+    captured = capture_asset_schema(
+        store,
+        asset_id,
+        actor,
+        egress_allowlist=options.get("egress_allowlist", ()),
+        plugin_registry=options.get("plugin_registry"),
+    )
+    return get_asset_schema(captured, **options)
 
 
 class _FakeTable:
@@ -52,6 +67,7 @@ class _FakeStore:
         assert asset_id == self.asset_id
         return {
             "id": str(asset_id),
+            "revision": 0,
             "backend": "iceberg",
             "catalog": "analytics",
             "name": "default.events",
@@ -65,6 +81,7 @@ class _FakeStore:
         assert name == "analytics"
         return {
             "name": "analytics",
+            "id": "00000000-0000-4000-8000-000000000002",
             "plugin_id": "iceberg.catalog",
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         }
@@ -131,7 +148,7 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
         calls.append((name, options))
         return catalog
 
-    result = get_asset_schema(
+    result = discover_schema(
         store,  # type: ignore[arg-type]
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
@@ -200,6 +217,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             assert asset_id == self.asset_id
             return {
                 "id": str(self.asset_id),
+                "revision": 0,
                 "catalog": "analytics",
                 "name": "default.events",
                 "table_identifier": "default.events",
@@ -210,6 +228,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             assert name == "analytics"
             return {
                 "name": name,
+                "id": "00000000-0000-4000-8000-000000000002",
                 "plugin_id": "fixture.catalog",
                 "revision": 3,
                 "options": {"uri": "https://catalog.example"},
@@ -289,7 +308,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
                 return lambda value, context: PublicFormat()
             raise AssertionError((kind, plugin_id))
 
-    result = get_asset_schema(
+    result = discover_schema(
         PublicStore(asset_id),  # type: ignore[arg-type]
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
@@ -309,7 +328,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 
     format_close_fails = True
     with pytest.raises(ValidationFailure, match="Schema discovery failed"):
-        get_asset_schema(
+        discover_schema(
             PublicStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -330,7 +349,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             return super().load(kind, plugin_id)
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed"):
-        get_asset_schema(
+        discover_schema(
             PublicStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -354,7 +373,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             return super().load(kind, plugin_id)
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed"):
-        get_asset_schema(
+        discover_schema(
             PublicStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -367,6 +386,7 @@ def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factor
     store = _FakeStore(asset_id)
     cast(Any, store).get_workspace_catalog = lambda name: {
         "name": name,
+        "id": "00000000-0000-4000-8000-000000000002",
         "plugin_id": "fixture.catalog",
         "revision": 1,
         "options": {"uri": "https://catalog.example", "debug": True},
@@ -392,7 +412,7 @@ def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factor
             raise AssertionError("unknown options must fail before factory loading")
 
     with pytest.raises(ValidationFailure, match="unsupported fields"):
-        get_asset_schema(
+        discover_schema(
             store,  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -411,6 +431,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
         "get_workspace_catalog",
         lambda name: {
             "name": name,
+            "id": "00000000-0000-4000-8000-000000000002",
             "plugin_id": "iceberg.catalog",
             "options": {"uri": "https://blocked.example/catalog"},
         },
@@ -423,7 +444,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
         raise AssertionError("provider must not be called for a denied host")
 
     with pytest.raises(ValidationFailure, match="egress allowlist"):
-        get_asset_schema(
+        discover_schema(
             store,  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -444,6 +465,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         "get_workspace_catalog",
         lambda name: {
             "name": name,
+            "id": "00000000-0000-4000-8000-000000000002",
             "plugin_id": "iceberg.catalog",
             "options": {
                 "uri": "https://catalog.example/api",
@@ -457,7 +479,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         received.update(options)
         return _FakeCatalog(_FakeTable(_nested_schema()))
 
-    get_asset_schema(
+    discover_schema(
         store,  # type: ignore[arg-type]
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
@@ -602,7 +624,7 @@ def test_get_asset_schema_reports_scope_encoding_budget(monkeypatch) -> None:
     )
     asset_id = uuid4()
     with pytest.raises(ValidationFailure, match="Schema encoding exceeds"):
-        get_asset_schema(
+        discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -631,7 +653,7 @@ def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(m
     monkeypatch.setattr(schema_service, "numeric_field_id", record_field)
     asset_id = uuid4()
     with pytest.raises(ValidationFailure, match="Schema response exceeds the 8388608-byte budget"):
-        get_asset_schema(
+        discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -647,7 +669,7 @@ def test_get_asset_schema_preserves_long_names_within_response_budget(monkeypatc
     schema = pa.schema([pa.field(name, pa.struct([pa.field("leaf", pa.string())]))])
     monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
     asset_id = uuid4()
-    result = get_asset_schema(
+    result = discover_schema(
         _FakeStore(asset_id),  # type: ignore[arg-type]
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
@@ -669,7 +691,7 @@ def test_schema_response_budget_matches_serialized_http_contract(monkeypatch) ->
     asset_id = uuid4()
 
     def discover():
-        return get_asset_schema(
+        return discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -724,7 +746,7 @@ def test_schema_identity_preserves_type_semantics(
 def test_get_asset_schema_requires_read_capability() -> None:
     asset_id = uuid4()
     with pytest.raises(AuthorizationFailure):
-        get_asset_schema(
+        discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor("outsider", ()),
@@ -741,7 +763,7 @@ def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
         raise ValueError("failed https://catalog-user:catalog-password@catalog.example")
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed") as failure:
-        get_asset_schema(
+        discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -774,7 +796,7 @@ def test_get_asset_schema_rejects_excessive_node_count() -> None:
     )
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed") as caught:
-        get_asset_schema(
+        discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
@@ -791,7 +813,7 @@ def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
     schema = Schema(NestedField(field_id=MAX_SCHEMA_DEPTH + 2, name="root", field_type=nested))
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed") as caught:
-        get_asset_schema(
+        discover_schema(
             _FakeStore(asset_id),  # type: ignore[arg-type]
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),

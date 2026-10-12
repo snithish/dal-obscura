@@ -128,6 +128,10 @@ and this grant map includes the exact scope and key; a matching reference scope
 alone cannot authorize a provider lookup. Production startup requires a
 non-empty grant map in both planes.
 
+References inside configuration arrays receive the same scope and grant checks,
+including arrays frozen by the SDK. Resolution returns detached provider options
+and leaves the captured reference configuration unchanged.
+
 The environment provider accepts an optional `prefix`. The mounted-file provider
 accepts an absolute `directory` and reads flat regular UTF-8 files on each
 resolution, without caching values. File names must start with an ASCII letter or
