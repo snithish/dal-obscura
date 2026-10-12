@@ -19,7 +19,6 @@ from dal_obscura.policy.models import (
     Principal,
     PrincipalConditionValue,
 )
-from dal_obscura.policy.paths import parse_field_path
 from dal_obscura.policy.policy_resolution import resolve_access
 from dal_obscura.storage import assets as _db_assets
 from dal_obscura.storage import audit as _db_audit
@@ -101,52 +100,49 @@ def revoke_asset_tickets(
     return {"revoked_token_count": revoked_count}
 
 
+def capture_asset_policy(store: Session, asset_id: UUID) -> AssetPolicy:
+    """Read an immutable policy after the caller has authorized its asset binding."""
+    asset = _db_assets.get_workspace_asset(store, asset_id)
+    return AssetPolicy(
+        version=int(cast(int | str, asset["policy_revision"])),
+        catalog=str(asset["catalog"]),
+        target=str(asset["name"]),
+        rules=[
+            _compiled_rule_from_response(rule)
+            for rule in _db_policies.list_policy_rules(store, asset_id)
+        ],
+    )
+
+
 def preview_asset_policy(
-    store: Session,
-    asset_id: UUID,
+    snapshot: AssetPolicy,
+    principal: Principal,
     *,
-    principal: str,
-    groups: list[str],
-    claims: dict[str, object],
-    actor: ControlPlaneActor | None = None,
-    requested_columns: list[str] | None = None,
+    requested_columns: list[str],
     include_mask_values: bool = False,
 ) -> dict[str, object]:
-    """Evaluates current live policy rules for a preview principal."""
-
-    if actor is not None:
-        ensure_asset_capability(store, asset_id, actor, "read")
-    asset = _db_assets.get_workspace_asset(store, asset_id)
-    raw_rules = _db_policies.list_policy_rules(store, asset_id)
-    compiled = _compiled_policy_from_response(asset, raw_rules)
-    policy = compiled.to_policy()
-    rules = policy.datasets[0].rules
-    preview_principal = Principal(
-        id=principal,
-        groups=groups,
-        attributes=_principal_attributes(claims),
-    )
+    """Evaluate one captured policy without a database session."""
+    policy = snapshot.to_policy()
     conditions = [
         {
-            "rule_ordinal": raw["ordinal"],
+            "rule_ordinal": rule.ordinal,
             "key": key,
             "expected": expected,
-            "actual": preview_principal.attributes.get(key),
-            "matched": attributes_match(preview_principal.attributes, {key: expected}),
-            "missing": key not in preview_principal.attributes,
+            "actual": principal.attributes.get(key),
+            "matched": attributes_match(principal.attributes, {key: expected}),
+            "missing": key not in principal.attributes,
         }
-        for raw in raw_rules
-        for key, expected in cast(dict[str, PrincipalConditionValue], raw.get("when", {})).items()
+        for rule in snapshot.rules
+        for key, expected in (rule.when or {}).items()
     ]
-    requested = requested_columns or _preview_columns(asset, rules)
-    matched_ordinal = _first_matching_rule_ordinal(raw_rules, preview_principal)
+    matched_ordinal = _first_matching_rule_ordinal(snapshot.rules, principal)
     try:
         visible_columns, masks, row_filter = resolve_access(
             policy,
-            preview_principal,
-            str(asset["name"]),
-            str(asset["catalog"]),
-            requested,
+            principal,
+            snapshot.target,
+            snapshot.catalog,
+            requested_columns,
         )
     except PermissionError:
         return {
@@ -236,18 +232,6 @@ def ensure_asset_owner(
     raise AuthorizationFailure("Only platform admins or asset owners may revoke asset tokens.")
 
 
-def _compiled_policy_from_response(
-    asset: dict[str, object],
-    raw_rules: list[dict[str, object]],
-) -> AssetPolicy:
-    return AssetPolicy(
-        version=0,
-        catalog=str(asset["catalog"]),
-        target=str(asset["name"]),
-        rules=[_compiled_rule_from_response(rule) for rule in raw_rules],
-    )
-
-
 def _compiled_rule_from_response(raw: dict[str, object]) -> AccessRule:
     masks = cast(dict[str, object], raw.get("masks", {}))
 
@@ -278,58 +262,38 @@ def _compiled_rule_from_response(raw: dict[str, object]) -> AccessRule:
     )
 
 
-def _principal_attributes(claims: dict[str, object]) -> dict[str, str]:
+def preview_principal(
+    principal: str, groups: Sequence[str], claims: dict[str, object]
+) -> Principal:
+    """Normalize synthetic internal attributes through the policy preview boundary."""
     from dal_obscura.control.errors import ValidationFailure
 
     if any(isinstance(value, dict | list) for value in claims.values()):
         raise ValidationFailure(
             "Internal attributes must be scalar values; use provider claims for nested input"
         )
-    return {
+    attributes = {
         str(key): str(value).strip()
         for key, value in claims.items()
         if value is not None and str(value).strip()
     }
+    return Principal(id=principal, groups=groups, attributes=attributes)
 
 
 def _object_list(value: object) -> list[object]:
     return list(value) if isinstance(value, list) else []
 
 
-def _preview_columns(asset: dict[str, object], rules: Sequence[AccessRule]) -> list[str]:
-    schema_fields = cast(list[dict[str, object]], asset.get("schema_fields", []))
-    schema_columns = [str(field["name"]) for field in schema_fields if str(field.get("name", ""))]
-    if schema_columns:
-        paths = {name: parse_field_path(name).segments for name in schema_columns}
-        return [
-            name
-            for name, path in paths.items()
-            if not any(
-                len(other) > len(path) and other[: len(path)] == path for other in paths.values()
-            )
-        ]
-    columns: list[str] = []
-    seen: set[str] = set()
-    for rule in rules:
-        for column in rule.columns:
-            if column == "*" or column in seen:
-                continue
-            columns.append(column)
-            seen.add(column)
-    return columns or ["*"]
-
-
 def _first_matching_rule_ordinal(
-    raw_rules: list[dict[str, object]],
+    rules: Sequence[AccessRule],
     principal: Principal,
 ) -> int | None:
     principal_tokens = set(principal.tokens())
-    for raw_rule in raw_rules:
-        rule = _compiled_rule_from_response(raw_rule)
+    for rule in rules:
         if "*" not in rule.principals and not principal_tokens.intersection(rule.principals):
             continue
         if attributes_match(principal.attributes, rule.when):
-            return int(cast(int | str, raw_rule["ordinal"]))
+            return rule.ordinal
     return None
 
 

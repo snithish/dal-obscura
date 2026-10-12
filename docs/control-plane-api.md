@@ -105,7 +105,27 @@ remain sanitized. The response shape and its 8 MiB byte budget are unchanged.
 The endpoint still returns a complete bounded tree; it does not provide incremental
 schema browsing or remove native execution limits.
 
-Synthetic policy evaluation still needs its own transaction change. Its current
-caller uses the immutable schema capture contract, but retains the evaluation
-transaction during provider IO. The schema GET qualification does not establish
-transaction release for that endpoint.
+## Synthetic policy evaluation
+
+`POST /v1/assets/{asset_id}/policy-evaluate` captures the authorized source binding,
+policy revision, normalized synthetic identity and selected mapping revision in a
+short transaction. User rows are snapshotted as bounded, lossless JSON before
+provider IO. Discovery and DuckDB evaluation run after the transaction closes.
+
+A fresh transaction checks read permission and all captured revisions before the
+response is returned. Changes to the asset, catalog, policy or selected identity
+mapping return 409, so run the evaluation again after reloading the relevant
+configuration. Revoked read permission returns 403. Evaluation does not replace a
+captured policy during work or change permissions in existing Flight tickets.
+
+User rows and identity claims must be finite JSON values whose keys and collection
+kinds survive JSON encoding unchanged. Nonfinite values and values that would be converted or
+stringified are rejected before provider work. Rows retain the existing 100-row
+and 2 MiB encoded input limits. The independent HTTP request-body budget also
+applies to rows and claims together. Omitting rows still uses a fixture created
+with the schema types; an explicit empty array still evaluates zero rows. Mapping evidence now
+includes the captured provider revision when a provider is selected.
+
+Evaluation is a synthetic preview and does not authenticate its supplied identity
+or verify JWTs. Bounded inputs do not establish a process RSS or deployment capacity
+guarantee. The top-level response and generated API contract remain unchanged.

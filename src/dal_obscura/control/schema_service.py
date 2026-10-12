@@ -102,7 +102,7 @@ def capture_asset_schema(
 
 def ensure_asset_schema_current(
     store: Session, captured: AssetSchemaDiscovery, actor: ControlPlaneActor
-) -> None:
+) -> dict[str, object]:
     """Recheck authorization and binding after provider IO, before exposing metadata."""
     ensure_asset_capability(store, captured.asset_id, actor, "read")
     asset = _db_assets.get_workspace_asset(store, captured.asset_id)
@@ -112,6 +112,7 @@ def ensure_asset_schema_current(
             "Asset changed during schema discovery; refresh schema", current_revision=revision
         )
     ensure_catalog_discovery_current(store, captured.catalog)
+    return asset
 
 
 def get_asset_schema(

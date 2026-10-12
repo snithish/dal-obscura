@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from typing import cast
@@ -15,26 +16,39 @@ from sqlalchemy.orm import Session
 from dal_obscura.control import policy_service, schema_service
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.errors import (
+    ConfigurationConflictError,
     ValidationFailure,
 )
-from dal_obscura.control.identity_attributes import map_preview_identity
+from dal_obscura.control.identity_attributes import provider_mapper
 from dal_obscura.policy.filters import deserialize_row_filter
-from dal_obscura.policy.models import MaskRule
+from dal_obscura.policy.models import AssetPolicy, MaskRule, Principal
 from dal_obscura.policy.projection import compile_projection
 from dal_obscura.policy.schema_index import SchemaIndex
 from dal_obscura.read.transform import (
     DuckDBRowTransformAdapter,
 )
 from dal_obscura.sources.plugins import PluginRegistry
-from dal_obscura.sources.secrets import SecretProvider
-from dal_obscura.storage import assets as _db_assets
+from dal_obscura.storage import workspace as _db_workspace
 
 MAX_SYNTHETIC_ROWS = 100
 MAX_SYNTHETIC_BYTES = 2 * 1024 * 1024
 EVALUATOR_VERSION = "duckdb-synthetic-v1"
 
 
-def evaluate_asset_policy(
+@dataclass(frozen=True)
+class PolicyEvaluation:
+    """Captured policy, mapped subject and detached bounded synthetic inputs."""
+
+    source: schema_service.AssetSchemaDiscovery
+    policy: AssetPolicy
+    principal: Principal
+    claims_json: str
+    rows_json: str | None
+    provider_ordinal: int | None
+    provider_revision: int | None
+
+
+def capture_asset_evaluation(
     store: Session,
     asset_id: UUID,
     actor: ControlPlaneActor,
@@ -46,52 +60,84 @@ def evaluate_asset_policy(
     provider_ordinal: int | None = None,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: PluginRegistry | None = None,
-    secret_provider: SecretProvider | None = None,
-) -> dict[str, object]:
-    """Evaluates the current live policy over bounded synthetic rows."""
-
-    policy_service.ensure_asset_reader(store, asset_id, actor)
-    mapping_evidence: dict[str, object] = {"mode": "internal_attributes"}
-    if provider_ordinal is not None:
-        mapped = map_preview_identity(store, provider_ordinal, claims)
-        principal, groups, claims = (
-            mapped.id,
-            list(mapped.groups),
-            cast(dict[str, object], dict(mapped.attributes)),
-        )
-        mapping_evidence = {"mode": "provider_claims", "provider_ordinal": provider_ordinal}
-    _validate_synthetic_rows(rows)
-    supplied_row_count = 0 if rows is None else len(rows)
-    captured = schema_service.capture_asset_schema(
+) -> PolicyEvaluation:
+    source = schema_service.capture_asset_schema(
         store,
         asset_id,
         actor,
         egress_allowlist=egress_allowlist,
         plugin_registry=plugin_registry,
     )
-    loaded_schema = schema_service.load_asset_schema(
-        captured,
-        egress_allowlist=egress_allowlist,
-        plugin_registry=plugin_registry,
-        secret_provider=secret_provider,
+    rows_json = _encode_synthetic_rows(rows)
+    try:
+        claims_json = json.dumps(claims, sort_keys=True, allow_nan=False)
+        if json.loads(claims_json) != claims:
+            raise ValidationFailure("Synthetic identity claims are invalid")
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise ValidationFailure("Synthetic identity claims are invalid") from exc
+    provider_revision = None
+    if provider_ordinal is not None:
+        mapper, provider = provider_mapper(store, provider_ordinal)
+        try:
+            subject = mapper.map_claims(claims)
+        except PermissionError as exc:
+            raise ValidationFailure(str(exc)) from exc
+        provider_revision = int(cast(int | str, provider["revision"]))
+        claims_json = json.dumps(dict(subject.attributes), sort_keys=True, allow_nan=False)
+    else:
+        subject = policy_service.preview_principal(principal, groups, claims)
+    return PolicyEvaluation(
+        source=source,
+        policy=policy_service.capture_asset_policy(store, asset_id),
+        principal=subject,
+        claims_json=claims_json,
+        rows_json=rows_json,
+        provider_ordinal=provider_ordinal,
+        provider_revision=provider_revision,
     )
-    arrow_schema = loaded_schema
-    requested_columns = SchemaIndex(arrow_schema).expand(["*"])
+
+
+def ensure_asset_evaluation_current(
+    store: Session, captured: PolicyEvaluation, actor: ControlPlaneActor
+) -> None:
+    asset = schema_service.ensure_asset_schema_current(store, captured.source, actor)
+    revision = int(cast(int | str, asset["policy_revision"]))
+    if revision != captured.policy.version:
+        raise ConfigurationConflictError(
+            "Policy changed during evaluation; run evaluation again", current_revision=revision
+        )
+    if captured.provider_revision is not None:
+        revision = _db_workspace.get_auth_provider_revision(store)
+        if revision != captured.provider_revision:
+            raise ConfigurationConflictError(
+                "Identity mapping changed during evaluation; run evaluation again",
+                current_revision=revision,
+            )
+
+
+def evaluate_asset_policy(captured: PolicyEvaluation, arrow_schema: pa.Schema) -> dict[str, object]:
+    """Evaluate a captured policy over bounded synthetic rows without database IO."""
+    rows = json.loads(captured.rows_json) if captured.rows_json is not None else None
+    claims = json.loads(captured.claims_json)
+    principal = captured.principal.id
+    groups = list(captured.principal.groups)
+    supplied_row_count = 0 if rows is None else len(rows)
     preview = policy_service.preview_asset_policy(
-        store,
-        asset_id,
-        principal=principal,
-        groups=groups,
-        claims=claims,
-        actor=actor,
-        requested_columns=requested_columns,
+        captured.policy,
+        captured.principal,
+        requested_columns=SchemaIndex(arrow_schema).expand(["*"]),
         include_mask_values=True,
     )
     schema_digest = schema_service.schema_fingerprint(arrow_schema)
+    mapping_evidence: dict[str, object] = {"mode": "internal_attributes"}
+    if captured.provider_ordinal is not None:
+        mapping_evidence = {
+            "mode": "provider_claims",
+            "provider_ordinal": captured.provider_ordinal,
+            "provider_revision": captured.provider_revision,
+        }
     evidence = {
-        "policy_revision": int(
-            cast(int | str, _db_assets.get_workspace_asset(store, asset_id)["policy_revision"])
-        ),
+        "policy_revision": captured.policy.version,
         "schema_fingerprint": schema_digest,
         "persona_fingerprint": _fingerprint(
             json.dumps(
@@ -221,9 +267,9 @@ def _sample_value(name: str, data_type: pa.DataType) -> object:  # noqa: C901
     raise ValidationFailure(f"Synthetic evaluation does not support Arrow type {data_type}")
 
 
-def _validate_synthetic_rows(rows: list[dict[str, object]] | None) -> None:
+def _encode_synthetic_rows(rows: list[dict[str, object]] | None) -> str | None:
     if rows is None:
-        return
+        return None
     if len(rows) > MAX_SYNTHETIC_ROWS:
         raise ValidationFailure(f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_ROWS} rows")
     try:
@@ -231,14 +277,22 @@ def _validate_synthetic_rows(rows: list[dict[str, object]] | None) -> None:
             rows,
             sort_keys=True,
             separators=(",", ":"),
-            default=str,
-        ).encode("utf-8")
-    except (TypeError, ValueError, OverflowError) as exc:
+            allow_nan=False,
+        )
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
         raise ValidationFailure("Synthetic evaluation rows are invalid") from exc
-    if len(encoded) > MAX_SYNTHETIC_BYTES:
+    if len(encoded.encode("utf-8")) > MAX_SYNTHETIC_BYTES:
         raise ValidationFailure(
             f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_BYTES} encoded bytes"
         )
+
+    try:
+        # JSON snapshots must not change map keys or collection kinds.
+        if json.loads(encoded) != rows:
+            raise ValidationFailure("Synthetic evaluation rows are invalid")
+    except RecursionError as exc:
+        raise ValidationFailure("Synthetic evaluation rows are invalid") from exc
+    return encoded
 
 
 def _fingerprint(value: str) -> str:

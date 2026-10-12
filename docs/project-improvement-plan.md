@@ -6,9 +6,9 @@ This is the approved improvement program and its implementation record, not a cl
 
 ## Current implementation status
 
-Updated 12 October 2026 after seventeen implementation deliveries. Findings E01 through E13
+Updated 12 October 2026 after eighteen implementation deliveries. Findings E01 through E13
 below preserve the original audit baseline; they do not describe every current
-source file. Delivery sections 11 through 27 record the implemented behavior and its
+source file. Delivery sections 11 through 28 record the implemented behavior and its
 qualification. Local implementation is partial; broader release claims remain gated.
 
 - **UX/UI, E03/E05/E06:** paged catalog results, bounded selection review, exact
@@ -735,3 +735,42 @@ ownership and frozen reference resolution. They do not establish incremental
 schema browsing, deployment or cluster capacity, live provider identity renewal,
 evaluation transaction release, or the broader release requirements. See the
 [schema API contract](control-plane-api.md#schema-discovery) for client recovery.
+
+## 28. Eighteenth implementation delivery. Policy evaluation without held transactions
+
+Synthetic evaluation captures its source binding, immutable policy, normalized
+subject and mapping revision before provider work. Bounded JSON input snapshots
+keep caller mutations from changing an in-flight evaluation. The HTTP route closes
+its transaction before schema discovery and DuckDB execution, and uses a fresh
+transaction to check permission and captured revisions before returning results.
+Policy or mapping changes return 409 rather than substituting newer rules.
+Revoked read access returns 403. Existing Flight tickets keep their captured policy.
+
+Policy preview now consumes the shared immutable policy and principal models
+without database IO. It reuses compiled rules when checking condition evidence
+and matching ordinals. The unused mapping wrapper and fallback column derivation
+were removed. No alternate policy resolver or compatibility implementation was
+added. Provider mapping still uses the runtime claim mapper and its allowed-value
+checks, and the UI still labels the result as synthetic.
+
+Row and identity snapshots reject values that JSON would change, including
+nonfinite numbers, keys that are not strings and unsupported rich Python values. They do not silently
+stringify or change collection kinds. Rows retain the existing 100-row and 2 MiB
+encoded input budgets, and the HTTP body limit still applies to the whole request.
+Default fixtures created with schema types and explicit empty inputs retain their
+behavior. Mapping evidence includes the captured provider revision.
+
+TDD reproduced held transactions during both provider and DuckDB work. PostgreSQL
+races reproduced stale policy and mapping results and metadata returned after read
+permission changed. The final rebuilt wheel passes 627 installed control API,
+schema, read, plugin, secret and consumer cases without failures or skips. Explicit
+provider and transform signals drive the races. Six unchanged plugin artifacts
+were locked and admitted in the fresh environment with source imports disabled.
+Nine rendered evaluation/identity browser checks pass, along with Ruff, types and
+the unchanged OpenAPI snapshot. Repository fast checks apply at commit.
+
+E10 and E12 remain partially resolved. The change releases evaluation transactions
+and fences stale results; it does not establish cluster fairness, total native RSS,
+live provider identity renewal or the rest of the release requirements. The byte
+budget constrains input snapshots, not every possible native output allocation.
+See the [evaluation contract](control-plane-api.md#synthetic-policy-evaluation).

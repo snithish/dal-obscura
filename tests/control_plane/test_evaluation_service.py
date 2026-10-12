@@ -9,8 +9,8 @@ import pytest
 from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.control.evaluation_service import (
     MAX_SYNTHETIC_BYTES,
+    _encode_synthetic_rows,
     _sample_row,
-    _validate_synthetic_rows,
 )
 from dal_obscura.policy.schema_index import SchemaIndex
 
@@ -79,4 +79,14 @@ def test_sample_row_rejects_unsupported_types_instead_of_inventing_values() -> N
 
 def test_synthetic_row_budget_rejects_encoded_payload_explosion() -> None:
     with pytest.raises(ValidationFailure, match="encoded bytes"):
-        _validate_synthetic_rows([{"payload": "x" * MAX_SYNTHETIC_BYTES}])
+        _encode_synthetic_rows([{"payload": "x" * MAX_SYNTHETIC_BYTES}])
+
+
+@pytest.mark.parametrize(
+    "value",
+    [b"binary", date(2024, 1, 2), Decimal("1.25"), {1: "numeric-key"}, (1, 2)],
+    ids=["binary", "date", "decimal", "numeric-map-key", "tuple"],
+)
+def test_synthetic_row_snapshot_rejects_values_that_json_would_change(value):
+    with pytest.raises(ValidationFailure, match="rows are invalid"):
+        _encode_synthetic_rows([{"value": value}])

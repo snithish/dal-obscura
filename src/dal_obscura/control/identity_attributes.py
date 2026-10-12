@@ -11,7 +11,6 @@ from dal_obscura.control import identity_attributes, policy_service
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.identity.claims import PrincipalClaimMapper
-from dal_obscura.policy.models import Principal
 from dal_obscura.storage import workspace as _db_workspace
 
 
@@ -55,15 +54,6 @@ def provider_mapper(store: Session, ordinal: int) -> tuple[PrincipalClaimMapper,
                 attribute_definitions=args.get("attribute_definitions", {}),
             ), provider
     raise ValidationFailure("Choose an enabled identity provider")
-
-
-def map_preview_identity(store: Session, ordinal: int, claims: dict[str, object]) -> Principal:
-    """Use runtime mapping for a synthetic identity, without authenticating it."""
-    mapper, _ = provider_mapper(store, ordinal)
-    try:
-        return mapper.map_claims(claims)
-    except PermissionError as exc:
-        raise ValidationFailure(str(exc)) from exc
 
 
 def preview_attributes(

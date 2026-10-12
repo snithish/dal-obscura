@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 import dal_obscura.control.identity_attributes as _commands_identity_attributes
-from dal_obscura.control import evaluation_service, policy_service
+from dal_obscura.control import evaluation_service, policy_service, schema_service
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AttributeProviderResponse,
@@ -64,8 +65,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: PolicyEvaluationRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> PolicyEvaluationResponse:
-        return deps.with_transaction(
-            lambda service: evaluation_service.evaluate_asset_policy(
+        captured = deps.with_transaction(
+            lambda service: evaluation_service.capture_asset_evaluation(
                 service.session,
                 asset_id,
                 actor,
@@ -76,8 +77,23 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 provider_ordinal=request.provider_ordinal,
                 egress_allowlist=service.catalog_egress_allowlist,
                 plugin_registry=service.plugin_registry,
-                secret_provider=service.secret_provider,
             )
         )
+        try:
+            schema = schema_service.load_asset_schema(
+                captured.source,
+                egress_allowlist=deps.catalog_egress_allowlist,
+                plugin_registry=deps.plugin_registry,
+                secret_provider=deps.secret_provider,
+            )
+            payload = evaluation_service.evaluate_asset_policy(captured, schema)
+        except ValidationFailure as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        deps.with_transaction(
+            lambda service: evaluation_service.ensure_asset_evaluation_current(
+                service.session, captured, actor
+            )
+        )
+        return PolicyEvaluationResponse.model_validate(payload)
 
     return api
