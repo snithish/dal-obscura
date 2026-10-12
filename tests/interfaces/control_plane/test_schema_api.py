@@ -797,3 +797,47 @@ def test_policy_evaluation_rejects_nonfinite_identity_before_provider_io(
     assert response.status_code == 400, response.json()
     assert response.json()["error"]["message"] == "Synthetic identity claims are invalid"
     assert entered == []
+
+
+@pytest.fixture
+def schema_queries(db_engine):
+    from sqlalchemy import event
+
+    queries = []
+
+    def record(connection, cursor, statement, parameters, context, many):
+        queries.append(statement.lower())
+
+    event.listen(db_engine, "before_cursor_execute", record)
+    try:
+        yield queries
+    finally:
+        event.remove(db_engine, "before_cursor_execute", record)
+
+
+@pytest.mark.parametrize("operation", ["schema", "evaluation"])
+def test_schema_work_does_not_load_admitted_fields_and_reads_policy_only_when_needed(
+    operation, client_factory, monkeypatch, schema_queries
+):
+    client = client_factory()
+    asset = _provision_reviewable_asset(client)
+    monkeypatch.setattr(
+        schema_service, "load_source_schema", lambda **kwargs: pa.schema([("id", pa.int64())])
+    )
+    schema_queries.clear()
+    if operation == "schema":
+        response = client.get(f"/v1/assets/{asset['id']}/schema", headers=ADMIN_HEADERS)
+        assert response.status_code == 200, response.json()
+        assert response.json()["fields"][0]["human_path"] == "id"
+    else:
+        response = client.post(
+            f"/v1/assets/{asset['id']}/policy-evaluate",
+            json={"principal": "user1", "rows": [{"id": 7}]},
+            headers=ADMIN_HEADERS,
+        )
+        assert response.status_code == 200, response.json()
+        assert response.json()["rows"] == [{"id": 7}]
+    assert not any("asset_schema_fields" in query for query in schema_queries)
+    assert sum("policy_rules" in query for query in schema_queries) == (
+        0 if operation == "schema" else 1
+    )

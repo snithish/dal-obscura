@@ -6,9 +6,9 @@ This is the approved improvement program and its implementation record, not a cl
 
 ## Current implementation status
 
-Updated 12 October 2026 after eighteen implementation deliveries. Findings E01 through E13
+Updated 12 October 2026 after nineteen implementation deliveries. Findings E01 through E13
 below preserve the original audit baseline; they do not describe every current
-source file. Delivery sections 11 through 28 record the implemented behavior and its
+source file. Delivery sections 11 through 29 record the implemented behavior and its
 qualification. Local implementation is partial; broader release claims remain gated.
 
 - **UX/UI, E03/E05/E06:** paged catalog results, bounded selection review, exact
@@ -774,3 +774,30 @@ and fences stale results; it does not establish cluster fairness, total native R
 live provider identity renewal or the rest of the release requirements. The byte
 budget constrains input snapshots, not every possible native output allocation.
 See the [evaluation contract](control-plane-api.md#synthetic-policy-evaluation).
+
+## 29. Nineteenth implementation delivery. Narrow schema capture queries
+
+Source and policy capture now use a storage query for source identity and revision
+fields instead of loading the complete asset editor response. Schema GET reads no
+admitted fields or policy rules, and evaluation reads its policy rules once.
+Permission checks, immutable captures and final revision checks remain at their
+owning boundaries. The full editor response retains its authoring collections.
+
+A reproducible 4,000-field fixture measured schema queries 15 to 5 and evaluation
+queries 22 to 7. Median Python peak allocation fell from about 8.2 MB to under
+94 KB. Instrumented schema time was 192.625 to 3.788 ms, and evaluation time was
+315.048 to 8.852 ms. The same-host timings include tracemalloc and HTTP TestClient
+overhead, with provider IO stubbed. They do not establish native RSS, cloud
+throughput or performance for a wide source schema. See the
+[measurement scope and command](schema-capture-performance.md).
+
+TDD reproduced unnecessary admitted-field queries through both HTTP operations.
+The final rebuilt wheel passes 629 installed control API, schema, read, plugin,
+secret and consumer cases without failures or skips, including PostgreSQL races.
+The source paths are disabled in the fresh environment, and exact plugin artifact
+locks are regenerated. Ruff, types and the unchanged OpenAPI contract pass;
+repository fast checks apply at commit.
+
+E03 and E10 remain partially resolved. The query change avoids unrelated metadata
+loads, while incremental schema transfer, field-tree behavior, native planning and
+cluster resource qualification still require their own work.

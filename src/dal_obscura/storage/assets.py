@@ -241,6 +241,30 @@ def list_workspace_assets_page(
     return AssetPage(items=_workspace_asset_rows(session, records), next_cursor=next_cursor)
 
 
+def get_asset_binding(session: Session, asset_id: UUID) -> dict[str, object]:
+    """Read only source identity and revision fields, without authoring collections."""
+    row = (
+        session.execute(
+            select(
+                AssetRecord.id,
+                AssetRecord.target.label("name"),
+                AssetRecord.backend,
+                AssetRecord.table_identifier,
+                AssetRecord.revision,
+                AssetRecord.policy_revision,
+                CatalogRecord.name.label("catalog"),
+            )
+            .join(CatalogRecord, AssetRecord.catalog_id == CatalogRecord.id)
+            .where(AssetRecord.id == asset_id)
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        raise LookupError(f"No asset {asset_id}")
+    return dict(row)
+
+
 def get_workspace_asset(session: Session, asset_id: UUID) -> dict[str, object]:
     from dal_obscura.storage import policies as _policies
 

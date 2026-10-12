@@ -102,7 +102,7 @@ def revoke_asset_tickets(
 
 def capture_asset_policy(store: Session, asset_id: UUID) -> AssetPolicy:
     """Read an immutable policy after the caller has authorized its asset binding."""
-    asset = _db_assets.get_workspace_asset(store, asset_id)
+    asset = _db_assets.get_asset_binding(store, asset_id)
     return AssetPolicy(
         version=int(cast(int | str, asset["policy_revision"])),
         catalog=str(asset["catalog"]),

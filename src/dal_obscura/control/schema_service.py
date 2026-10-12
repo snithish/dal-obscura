@@ -83,7 +83,7 @@ def capture_asset_schema(
     plugin_registry: PluginRegistry | None = None,
 ) -> AssetSchemaDiscovery:
     ensure_asset_capability(store, asset_id, actor, "read")
-    asset = _db_assets.get_workspace_asset(store, asset_id)
+    asset = _db_assets.get_asset_binding(store, asset_id)
     catalog = capture_catalog_discovery(
         store,
         str(asset["catalog"]),
@@ -105,7 +105,7 @@ def ensure_asset_schema_current(
 ) -> dict[str, object]:
     """Recheck authorization and binding after provider IO, before exposing metadata."""
     ensure_asset_capability(store, captured.asset_id, actor, "read")
-    asset = _db_assets.get_workspace_asset(store, captured.asset_id)
+    asset = _db_assets.get_asset_binding(store, captured.asset_id)
     revision = int(cast(int | str, asset["revision"]))
     if revision != captured.revision:
         raise ConfigurationConflictError(

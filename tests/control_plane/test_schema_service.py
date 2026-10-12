@@ -74,6 +74,9 @@ class _FakeStore:
             "table_identifier": "default.events",
         }
 
+    def get_asset_binding(self, asset_id: UUID) -> dict[str, object]:
+        return self.get_workspace_asset(asset_id)
+
     def get_workspace(self) -> object:
         return object()
 
@@ -831,6 +834,7 @@ def query_boundary(monkeypatch):
         [
             "get_workspace",
             "get_workspace_asset",
+            "get_asset_binding",
             "get_workspace_catalog",
             "list_asset_owners",
             "list_asset_grants",
