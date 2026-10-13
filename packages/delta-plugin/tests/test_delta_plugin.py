@@ -326,13 +326,19 @@ def test_cancelled_stream_stops_and_can_be_closed_early(tmp_path, context):
     cancelled = Event()
     active = replace(context, cancel_check=cancelled.is_set)
     _, batches = format.execute(task, active)
-    assert next(batches).num_rows == 8192
+    first = next(batches)
+    assert first.schema.equals(pa.schema([("id", pa.int64())]), check_metadata=True)
+    assert first.column("id").to_pylist() == list(range(first.num_rows))
+    assert 0 < first.num_rows < 20_000
     cancelled.set()
     with pytest.raises(InterruptedError):
         next(batches)
     batches.close()
     _, early = format.execute(task, context)
-    assert next(early).num_rows == 8192
+    first_early = next(early)
+    assert first_early.schema.equals(first.schema, check_metadata=True)
+    assert first_early.column("id").to_pylist() == list(range(first_early.num_rows))
+    assert 0 < first_early.num_rows < 20_000
     early.close()
     format.close()
 

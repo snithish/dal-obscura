@@ -1,0 +1,16 @@
+services:
+  planner:
+    command: [python, -m, debugpy, --listen, 0.0.0.0:5678, --configure-subProcess, "true", /app/.venv/bin/dal-obscura]
+    ports: ["127.0.0.1:5678:5678"]
+  worker-1:
+    command: [python, -m, debugpy, --listen, 0.0.0.0:5679, --configure-subProcess, "true", /app/.venv/bin/dal-obscura]
+    ports: ["127.0.0.1:5679:5679"]
+  worker-2:
+    command: [python, -m, debugpy, --listen, 0.0.0.0:5680, --configure-subProcess, "true", /app/.venv/bin/dal-obscura]
+    ports: ["127.0.0.1:5680:5680"]
+  worker-3:
+    command: [python, -m, debugpy, --listen, 0.0.0.0:5681, --configure-subProcess, "true", /app/.venv/bin/dal-obscura]
+    ports: ["127.0.0.1:5681:5681"]
+  verify:
+    command: [python, -m, debugpy, --listen, 0.0.0.0:5682, --wait-for-client, --configure-subProcess, "true", /example/verify.py]
+    ports: ["127.0.0.1:5682:5682"]

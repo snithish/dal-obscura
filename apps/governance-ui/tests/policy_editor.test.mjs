@@ -40,9 +40,14 @@ test("column exemptions clear only targeted masks while keeping access; all-exem
 test("mask grouping distinguishes equal masks and exemptions", () => {
   const value = rule();
   assert.deepEqual(groupMasks(value, ["email", "phone"]).map((item) => item.columns), [["email"], ["phone"]]);
-  assert.equal(groupMasks({ ...value, masks: { email: { type: "hash" }, phone: { type: "hash" } } }, ["email", "phone"]).length, 1);
+  assert.deepEqual(groupMasks({ ...value, masks: { email: { type: "hash" }, phone: { type: "hash" } } }, ["email", "phone"]), [
+    { mask: { type: "hash" }, columns: ["email", "phone"] },
+  ]);
   const exempted = { ...value, masks: { email: { type: "hash", exempt_principals: ["group:a"] }, phone: { type: "hash", exempt_principals: ["group:b"] } } };
-  assert.equal(groupMasks(exempted, ["email", "phone"]).length, 2);
+  assert.deepEqual(groupMasks(exempted, ["email", "phone"]), [
+    { mask: { type: "hash", exempt_principals: ["group:a"] }, columns: ["email"] },
+    { mask: { type: "hash", exempt_principals: ["group:b"] }, columns: ["phone"] },
+  ]);
 });
 
 test("removing a granted parent clears exclusively covered masks but preserves another grant", () => {
@@ -58,7 +63,11 @@ test("removing a granted parent clears exclusively covered masks but preserves a
 
 test("mask groups treat exemption lists as sets", () => {
   const rule = { columns: ["a", "b"], masks: { a: { type: "hash", exempt_principals: ["b", "a"] }, b: { type: "hash", exempt_principals: ["a", "b"] } } };
-  assert.equal(groupMasks(rule, rule.columns).length, 1);
+  const groups = groupMasks(rule, rule.columns);
+  assert.deepEqual(groups.map(({ columns }) => columns), [["a", "b"]]);
+  assert.deepEqual(groups.map(({ mask }) => ({ type: mask.type, exemptions: [...mask.exempt_principals].sort() })), [
+    { type: "hash", exemptions: ["a", "b"] },
+  ]);
 });
 
 test("nested selection shortcuts expand leaves and exclude entire subtrees", async () => {

@@ -1,21 +1,58 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python: Remote Attach (E2E Server)",
-            "type": "debugpy",
-            "request": "attach",
-            "connect": {
-                "host": "localhost",
-                "port": 5678
-            },
-            "pathMappings": [
-                {
-                    "localRoot": "${workspaceFolder}",
-                    "remoteRoot": "."
-                }
-            ],
-            "justMyCode": false
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Nested MoR: Planner",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "justMyCode": false
+    },
+    {
+      "name": "Nested MoR: Worker 1",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5679 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "justMyCode": false
+    },
+    {
+      "name": "Nested MoR: Worker 2",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5680 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "justMyCode": false
+    },
+    {
+      "name": "Nested MoR: Worker 3",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5681 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "justMyCode": false
+    },
+    {
+      "name": "Nested MoR: Verifier",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5682 },
+      "pathMappings": [{ "localRoot": "${workspaceFolder}/examples/nested-mor/scripts", "remoteRoot": "/example" }],
+      "justMyCode": false
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Nested MoR: Full distributed flow",
+      "configurations": [
+        "Nested MoR: Planner",
+        "Nested MoR: Worker 1",
+        "Nested MoR: Worker 2",
+        "Nested MoR: Worker 3",
+        "Nested MoR: Verifier"
+      ],
+      "preLaunchTask": "Nested MoR: Start debug run"
+    }
+  ]
 }

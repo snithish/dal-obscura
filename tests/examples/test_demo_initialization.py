@@ -4,20 +4,15 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.sources.secrets import EnvSecretProvider
-from dal_obscura.storage.database.db import (
-    create_engine_from_url,
-    migrate_config_store,
-    session_factory,
-)
+from dal_obscura.storage.database.db import session_factory
 from examples.demo.keycloak.scripts import provision_demo, seed_table
 
 
 @pytest.fixture
-def workspace(tmp_path, monkeypatch):
+def workspace(tmp_path, monkeypatch, db_engine, http_client):
     options = {
         "type": "sql",
         "uri": f"sqlite:///{tmp_path}/catalog.db",
@@ -30,28 +25,25 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setenv("ICEBERG_CATALOG_URI", options["uri"])
     monkeypatch.setenv("LOCAL_ICEBERG_URI", options["uri"])
     monkeypatch.setenv("ICEBERG_WAREHOUSE", options["warehouse"])
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    with TestClient(
+    client = http_client(
         create_app(
-            session_factory(engine),
+            session_factory(db_engine),
             admin_token="test-admin",
             secret_provider=EnvSecretProvider(
                 config={"scope_grants": {"catalog:retail_demo": ["LOCAL_ICEBERG_URI"]}}
             ),
         )
-    ) as client:
+    )
 
-        def request(method, path, body=None):
-            response = client.request(
-                method, path, json=body, headers={"authorization": "Bearer test-admin"}
-            )
-            assert response.status_code < 400, response.text
-            return response.json()
+    def request(method, path, body=None):
+        response = client.request(
+            method, path, json=body, headers={"authorization": "Bearer test-admin"}
+        )
+        response.raise_for_status()
+        return response.json()
 
-        monkeypatch.setattr(provision_demo, "_request", request)
-        yield fixture, request
-    engine.dispose()
+    monkeypatch.setattr(provision_demo, "_request", request)
+    yield fixture, request
 
 
 def test_initialization_resumes_after_interrupted_api_write(workspace, monkeypatch):

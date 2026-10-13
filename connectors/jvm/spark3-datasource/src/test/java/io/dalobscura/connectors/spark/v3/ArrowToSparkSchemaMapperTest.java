@@ -9,7 +9,6 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +22,7 @@ class ArrowToSparkSchemaMapperTest {
                         List.of(
                                 new Field(
                                         "id",
-                                        FieldType.nullable(new ArrowType.Int(64, true)),
+                                        FieldType.notNullable(new ArrowType.Int(64, true)),
                                         null),
                                 new Field(
                                         "email",
@@ -56,17 +55,13 @@ class ArrowToSparkSchemaMapperTest {
 
         StructType result = mapper.toStructType(schema);
 
-        assertEquals(DataTypes.LongType, result.fields()[0].dataType());
-        assertEquals(DataTypes.StringType, result.fields()[1].dataType());
-        assertEquals(
-                DataTypes.createArrayType(DataTypes.IntegerType, true),
-                result.fields()[2].dataType());
-
-        StructType profileType = (StructType) result.fields()[3].dataType();
-        StructField activeField = profileType.fields()[0];
-        StructField createdAtField = profileType.fields()[1];
-        assertEquals(DataTypes.BooleanType, activeField.dataType());
-        assertEquals(DataTypes.TimestampType, createdAtField.dataType());
+        assertEquals(new StructType()
+                .add("id", DataTypes.LongType, false)
+                .add("email", DataTypes.StringType, true)
+                .add("scores", DataTypes.createArrayType(DataTypes.IntegerType, true), true)
+                .add("profile", new StructType()
+                        .add("active", DataTypes.BooleanType, true)
+                        .add("created_at", DataTypes.TimestampType, true), true), result);
     }
 
     @Test
@@ -81,7 +76,7 @@ class ArrowToSparkSchemaMapperTest {
 
         StructType result = mapper.toStructType(schema);
 
-        assertEquals(DataTypes.StringType, result.fields()[0].dataType());
+        assertEquals(new StructType().add("email", DataTypes.StringType, true), result);
     }
 
     @Test
@@ -113,8 +108,7 @@ class ArrowToSparkSchemaMapperTest {
 
         StructType result = mapper.toStructType(schema);
 
-        assertEquals(
-                DataTypes.createMapType(DataTypes.StringType, DataTypes.StringType, true),
-                result.fields()[0].dataType());
+        assertEquals(new StructType().add("attributes",
+                DataTypes.createMapType(DataTypes.StringType, DataTypes.StringType, true), true), result);
     }
 }

@@ -1,7 +1,7 @@
 package io.dalobscura.connectors.integration;
 
-import io.dalobscura.connectors.testkit.FixtureBundle;
 import io.dalobscura.connectors.testkit.FixtureBuilderRunner;
+import io.dalobscura.connectors.testkit.FixtureBundle;
 import io.dalobscura.connectors.testkit.LocalDalObscuraServer;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -48,7 +48,17 @@ final class SparkFixture implements AutoCloseable {
 
     static SparkFixture create(String appName) throws Exception {
         FixtureBundle bundle = FixtureBuilderRunner.build();
-        LocalDalObscuraServer server = LocalDalObscuraServer.start(bundle);
+        LocalDalObscuraServer server;
+        try {
+            server = LocalDalObscuraServer.start(bundle);
+        } catch (Exception | Error failure) {
+            try {
+                bundle.close();
+            } catch (Exception cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         String previousToken = System.getProperty(EXECUTOR_TOKEN_PROPERTY);
         System.setProperty(EXECUTOR_TOKEN_PROPERTY, bundle.userToken());
         try {
@@ -65,6 +75,11 @@ final class SparkFixture implements AutoCloseable {
             restoreExecutorToken(previousToken);
             try {
                 server.close();
+            } catch (Exception cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            try {
+                bundle.close();
             } catch (Exception cleanupFailure) {
                 failure.addSuppressed(cleanupFailure);
             }
@@ -122,11 +137,10 @@ final class SparkFixture implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        try {
+        try (bundle; server) {
             spark.close();
         } finally {
             restoreExecutorToken(previousExecutorToken);
-            server.close();
         }
     }
 }

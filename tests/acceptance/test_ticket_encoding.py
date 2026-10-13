@@ -20,6 +20,7 @@ def test_ticket_encoding_is_canonical_and_round_trips() -> None:
     canonical = canonical_ticket_payload_bytes(payload)
     round_trip = TicketPayload.from_dict(json.loads(json.dumps(raw)))
     assert canonical == canonical_ticket_payload_bytes(round_trip)
-    assert json.loads(canonical) == payload.to_dict()
+    assert canonical == json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()
+    assert json.loads(canonical) == raw
     reordered = dict(reversed(list(raw.items())))
     assert canonical == canonical_ticket_payload_bytes(TicketPayload.from_dict(reordered))

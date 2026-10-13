@@ -161,7 +161,7 @@ def test_runtime_config_accepts_secure_production_data_plane(monkeypatch: pytest
     assert config.profile == "production"
 
 
-def test_tls_material_reads_bounded_file_contents(tmp_path):
+def test_tls_material_reads_file_contents(tmp_path):
     certificate = tmp_path / "server.crt"
     certificate.write_bytes(b"PEM-CERTIFICATE")
 

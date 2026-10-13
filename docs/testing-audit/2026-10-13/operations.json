@@ -1,0 +1,1616 @@
+{
+  "starting_revision": "a34de5f0aef1bf0d7c4d7d88d8e4ea9300bb6174",
+  "review_date": "2026-10-13",
+  "counts": {
+    "declarations": 62,
+    "files": 16,
+    "unexamined_declarations": 0
+  },
+  "records": [
+    {
+      "location": "tests/acceptance/test_ticket_encoding.py",
+      "line": 16,
+      "name": "test_ticket_encoding_is_canonical_and_round_trips",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert canonical == canonical_ticket_payload_bytes(round_trip)",
+          "assert json.loads(canonical) == payload.to_dict()",
+          "assert canonical == canonical_ticket_payload_bytes(TicketPayload.from_dict(reordered))"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/read/tickets.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Compare canonical bytes with independently encoded fixture data, rather than another production to_dict result. Compact sorted JSON is the captured wire contract.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/acceptance/test_ticket_encoding.py"
+    },
+    {
+      "location": "tests/architecture/test_mandatory_test_wrapper.py",
+      "line": 25,
+      "name": "test_mandatory_wrapper_rejects_skipped_junit_cases",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result.returncode == 1",
+          "assert \"skipped 1 test\" in result.stderr"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "scripts/require_no_skips.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/architecture/test_mandatory_test_wrapper.py"
+    },
+    {
+      "location": "tests/architecture/test_mandatory_test_wrapper.py",
+      "line": 33,
+      "name": "test_mandatory_wrapper_accepts_complete_junit_cases",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result.returncode == 0"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "scripts/require_no_skips.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/architecture/test_mandatory_test_wrapper.py"
+    },
+    {
+      "location": "tests/benchmarks/test_iceberg_multifile_benchmark.py",
+      "line": 17,
+      "name": "test_benchmark_iceberg_multifile_scan",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert sorted(row[\"id\"] for row in rows) == list(range(16000))"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"iceberg-multifile\")"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/sources/iceberg_plugin.py",
+        "tests/support/plugin_scans.py"
+      ],
+      "history_evidence": "69c5a6ec refactor!: simplify governed reads and modernize format plugins",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_masking_row_filter_benchmarks.py",
+      "line": 19,
+      "name": "test_benchmark_row_filter_only",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert table.num_rows == expected_rows",
+          "assert table.schema.names == [\"id\", \"email\", \"region\"]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"row-filter-mask\")"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/read/transform.py",
+        "src/dal_obscura/policy/projection.py",
+        "tests/support/benchmark_data.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Keep timing setup outside measured execution; assert independently expected ordered IDs, regions and exact scalar/nested hashes so fast wrong results fail.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_masking_row_filter_benchmarks.py",
+      "line": 51,
+      "name": "test_benchmark_mask_only",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert table.num_rows == batch_count * rows_per_batch",
+          "assert table.schema.field(\"id\").type == pa.string()",
+          "assert table.column(\"email\").to_pylist()[:3] == [\"[hidden]\", \"[hidden]\", \"[hidden]\"]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"row-filter-mask\")"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/read/transform.py",
+        "src/dal_obscura/policy/projection.py",
+        "tests/support/benchmark_data.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Keep timing setup outside measured execution; assert independently expected ordered IDs, regions and exact scalar/nested hashes so fast wrong results fail.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_masking_row_filter_benchmarks.py",
+      "line": 85,
+      "name": "test_benchmark_row_filter_and_top_level_masks",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert table.num_rows == expected_rows",
+          "assert table.schema.field(\"id\").type == pa.string()",
+          "assert table.column(\"email\").to_pylist()[:3] == [\"[hidden]\", \"[hidden]\", \"[hidden]\"]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"row-filter-mask\")"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/read/transform.py",
+        "src/dal_obscura/policy/projection.py",
+        "tests/support/benchmark_data.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Keep timing setup outside measured execution; assert independently expected ordered IDs, regions and exact scalar/nested hashes so fast wrong results fail.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_masking_row_filter_benchmarks.py",
+      "line": 119,
+      "name": "test_benchmark_row_filter_and_nested_masks",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert table.num_rows == expected_rows",
+          "assert user_field.type.field(\"address\").type.field(\"zip\").type == pa.string()"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"row-filter-mask\")"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/read/transform.py",
+        "src/dal_obscura/policy/projection.py",
+        "tests/support/benchmark_data.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Keep timing setup outside measured execution; assert independently expected ordered IDs, regions and exact scalar/nested hashes so fast wrong results fail.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_schema_identity_benchmark.py",
+      "line": 36,
+      "name": "test_schema_identity_latency_and_python_allocation",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert benchmark(schema_fingerprint, schema) == expected",
+          "assert schema_fingerprint(schema) == expected"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.parametrize(\"case\", [\"wide-4000\", \"nested-64\", \"metadata-1.2MB\"])",
+        "pytest.mark.benchmark(group=\"schema-identity\", min_rounds=15, max_time=0.2)"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/policy/schema_bounds.py",
+        "src/dal_obscura/control/schema_service.py"
+      ],
+      "history_evidence": "f500b155 fix(schema): bound canonical identity hashing work",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_schema_identity_benchmark.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_ticket_to_response_benchmark.py",
+      "line": 53,
+      "name": "test_benchmark_ticket_to_response_complex_schema",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert table.num_rows == expected_rows",
+          "assert table.schema.field(\"id\").type == pa.string()",
+          "assert user_field.type.field(\"address\").type.field(\"zip\").type == pa.string()",
+          "assert table.column(\"account\").to_pylist()[0][\"status\"] == \"standard\"",
+          "assert table.column(\"user\").to_pylist()[0][\"email\"] == \"[hidden]\""
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"ticket-to-response\", min_rounds=5, max_time=1)"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/read/service.py",
+        "src/dal_obscura/read/transform.py",
+        "tests/support/stream_benchmark.py",
+        "tests/support/memory_probe.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_ticket_to_response_benchmark.py --benchmark-only"
+    },
+    {
+      "location": "tests/benchmarks/test_ticket_to_response_benchmark.py",
+      "line": 120,
+      "name": "test_ticket_to_response_streaming_is_chunked_with_bounded_rss",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert smaller[\"rows\"] == 10_000_000",
+          "assert smaller[\"planned_file_count\"] == 2",
+          "assert smaller[\"endpoint_count\"] == 2",
+          "assert larger[\"rows\"] == LARGE_BENCHMARK_TOTAL_ROWS",
+          "assert larger[\"planned_file_count\"] == LARGE_BENCHMARK_FILE_COUNT",
+          "assert larger[\"rows_per_file\"] == LARGE_BENCHMARK_ROWS_PER_FILE",
+          "assert larger[\"endpoint_count\"] == LARGE_BENCHMARK_MAX_TICKETS",
+          "assert larger[\"rss_delta\"] < LARGE_BENCHMARK_RSS_LIMIT_BYTES",
+          "assert larger[\"rss_delta\"] < smaller[\"rss_delta\"] + 256 * 1024 * 1024",
+          "assert schema[\"id\"] == \"string\"",
+          "assert schema[\"created_at\"] == \"timestamp[us]\"",
+          "assert schema[\"birth_date\"] == \"date32[day]\"",
+          "assert schema[\"nickname\"] in {\"string\", \"large_string\"}",
+          "assert schema[\"user_email\"] in {\"string\", \"large_string\"}",
+          "assert schema[\"user_zip\"] == \"string\"",
+          "assert first_row[\"id\"] != \"0\"",
+          "assert len(first_row[\"id\"]) == 64",
+          "assert first_row[\"account_number\"] != \"ACCT-000000000000\"",
+          "assert first_row[\"account_number\"].endswith(\"0000\")",
+          "assert first_row[\"nickname\"] is None",
+          "assert first_row[\"notes\"] == \"[redacted-note]\"",
+          "assert first_row[\"status\"] == \"benchmark-default\"",
+          "assert first_row[\"user_email\"] == \"u***@example.com\"",
+          "assert len(first_row[\"user_zip\"]) == 64",
+          "assert probe[\"rss_samples\"] > 2",
+          "assert probe[\"chunk_count\"] > probe[\"endpoint_count\"]",
+          "assert probe[\"max_chunk_rows\"] <= _DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
+          "assert probe[\"first_chunk_elapsed_s\"] < probe[\"total_read_elapsed_s\"] * 0.5"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.benchmark(group=\"ticket-to-response-streaming\")"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/read/service.py",
+        "src/dal_obscura/read/transform.py",
+        "tests/support/stream_benchmark.py",
+        "tests/support/memory_probe.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Real 10M/25M native probes preserve streaming/RSS claims. Retire file-count-equals-ticket-count: row groups are independently splittable. Require min(files, task budget) <= tasks <= budget; a copied native planner collapsed to one task fails this bound while preserving row counts.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/benchmarks/test_ticket_to_response_benchmark.py --benchmark-only",
+      "falsification": {
+        "red": "single-task native planner: assert 2 <= 1",
+        "green": "10M and25M probes pass unchanged native source",
+        "record": "rss-parallelism.json"
+      }
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 70,
+      "name": "test_python_sdk_read_batches_does_not_materialize_flight_stream",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result == [batch]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "This declaration uses an injected external Flight reader, not a bound server. Move socket marker to actual server cases so fast CI runs this exact streaming/token/cleanup contract.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 82,
+      "name": "test_python_sdk_batch_stream_closes_reader_when_consumer_stops_early",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert client.reader is not None",
+          "assert client.reader.closed is True",
+          "assert next(stream) == batch"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "This declaration uses an injected external Flight reader, not a bound server. Move socket marker to actual server cases so fast CI runs this exact streaming/token/cleanup contract.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 94,
+      "name": "test_python_sdk_resolves_refreshed_token_for_plan_and_ticket_stream",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert list(sdk.read_batches(catalog=\"analytics\", target=\"users\", columns=[\"id\"])) == [batch]",
+          "assert client.plan_options[0].headers == [(b\"authorization\", b\"Bearer plan-token\")]",
+          "assert client.stream_options[0].headers == [(b\"authorization\", b\"Bearer stream-token\")]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "This declaration uses an injected external Flight reader, not a bound server. Move socket marker to actual server cases so fast CI runs this exact streaming/token/cleanup contract.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 106,
+      "name": "test_python_sdk_rejects_empty_token_from_refresh_provider",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"empty token\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "This declaration uses an injected external Flight reader, not a bound server. Move socket marker to actual server cases so fast CI runs this exact streaming/token/cleanup contract.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 116,
+      "name": "test_python_sdk_reads_authorized_arrow_table",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result.schema.names == [\"id\", \"email\"]",
+          "assert result.column(\"id\").to_pylist() == [1, 3]",
+          "assert result.column(\"email\").to_pylist() == [\"[hidden]\", \"[hidden]\"]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 150,
+      "name": "test_python_sdk_materializes_governed_result_as_polars_dataframe",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert isinstance(result, pl.DataFrame)",
+          "assert result.schema == {\"id\": pl.Int64, \"email\": pl.String}",
+          "assert result.to_dict(as_series=False) == {\"id\": [1, 3], \"email\": [\"[hidden]\", \"[hidden]\"]}"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 183,
+      "name": "test_python_sdk_preserves_nested_masked_arrow_values_in_polars",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result.schema[\"metadata\"] == pl.Struct",
+          "assert result.to_dict(as_series=False)[\"metadata\"] == [\n        {\n            \"preferences\": [\n                {\"name\": \"web\", \"theme\": \"[hidden]\"},\n                {\"name\": \"mobile\", \"theme\": \"[hidden]\"},\n            ]\n        }\n    ]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 227,
+      "name": "test_duckdb_reader_exposes_sdk_results_as_relation",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result == (4,)"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.parametrize(\"columns\", [[\"id\", \"region\"], iter([\"id\", \"region\"])])"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/connectors/test_python_sdk.py",
+      "line": 260,
+      "name": "test_duckdb_reader_does_not_call_materializing_table_api",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert relation.aggregate(\"count(*) AS rows\").fetchone() == (1,)"
+        ],
+        "negative_expectations": [
+          "pytest.fail(\"DuckDB adapter fetched schema outside the read plan\")",
+          "pytest.fail(\"DuckDB adapter materialized the result\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/connectors/python_sdk.py",
+        "tests/support/flight.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "This declaration uses an injected external Flight reader, not a bound server. Move socket marker to actual server cases so fast CI runs this exact streaming/token/cleanup contract.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/connectors/test_python_sdk.py"
+    },
+    {
+      "location": "tests/examples/test_demo_initialization.py",
+      "line": 57,
+      "name": "test_initialization_resumes_after_interrupted_api_write",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert detail[\"policy_revision\"] == 1",
+          "assert detail[\"owners\"] == [\"http://localhost:20080/realms/dal-obscura-demo|g|asset-owners\"]",
+          "assert detail[\"schema_fields\"]",
+          "assert len(detail[\"policy_rules\"]) == 3",
+          "assert (\n        request(\"GET\", \"/v1/settings/auth-providers\")[0][\"args\"][\"issuer\"]\n        == provision_demo.DEMO_OIDC_ISSUER\n    )"
+        ],
+        "negative_expectations": [
+          "pytest.raises(RuntimeError, match=\"injected interruption\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "tests/conftest.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Reuse fresh migrated database and managed HTTP client fixtures. Remove hidden assertion from HTTP transport seam; HTTP errors propagate as real transport errors.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_demo_initialization.py"
+    },
+    {
+      "location": "tests/examples/test_demo_initialization.py",
+      "line": 82,
+      "name": "test_reinitialization_preserves_authored_deny_all_and_settings",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert request(\"GET\", f\"/v1/assets/{asset['id']}\") == before",
+          "assert request(\"GET\", \"/v1/settings/runtime\")[\"ticket_ttl_seconds\"] == 123"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "tests/conftest.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Reuse fresh migrated database and managed HTTP client fixtures. Remove hidden assertion from HTTP transport seam; HTTP errors propagate as real transport errors.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_demo_initialization.py"
+    },
+    {
+      "location": "tests/examples/test_demo_initialization.py",
+      "line": 104,
+      "name": "test_demo_owner_keys_are_issuer_scoped",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert provision_demo._scoped_demo_owners([\"group:asset-owners\", \"asset-owner\"]) == [\n        \"http://localhost:20080/realms/dal-obscura-demo|g|asset-owners\",\n        \"http://localhost:20080/realms/dal-obscura-demo|u|asset-owner\",\n    ]"
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"at least one owner\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "tests/conftest.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Reuse fresh migrated database and managed HTTP client fixtures. Remove hidden assertion from HTTP transport seam; HTTP errors propagate as real transport errors.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_demo_initialization.py"
+    },
+    {
+      "location": "tests/examples/test_demo_initialization.py",
+      "line": 113,
+      "name": "test_catalog_credentials_are_references_not_inline",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert catalog[\"options\"][\"uri\"] == {\n        \"secret\": \"LOCAL_ICEBERG_URI\",\n        \"scope\": \"catalog:retail_demo\",\n    }"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "tests/conftest.py"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Reuse fresh migrated database and managed HTTP client fixtures. Remove hidden assertion from HTTP transport seam; HTTP errors propagate as real transport errors.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_demo_initialization.py"
+    },
+    {
+      "location": "tests/examples/test_keycloak_demo_fixture.py",
+      "line": 11,
+      "name": "test_browser_client_registers_the_demo_logout_return_uri",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert client[\"attributes\"][\"post.logout.redirect.uris\"] == \"${UI_ORIGIN}\"",
+          "assert client[\"attributes\"][\"pkce.code.challenge.method\"] == \"S256\""
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "examples/demo/keycloak/scripts/check_demo.py",
+        "examples/demo/keycloak/keycloak/realm.json"
+      ],
+      "history_evidence": "37fb407c fix(governance): preserve schema scroll and complete SSO logout",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_keycloak_demo_fixture.py"
+    },
+    {
+      "location": "tests/examples/test_keycloak_demo_fixture.py",
+      "line": 18,
+      "name": "test_provision_demo_preserves_nested_live_schema_identities",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert [(field[\"field_id\"], field[\"path\"]) for field in fields] == [\n        (\"10\", [\"customer\"]),\n        (\"11\", [\"customer\", \"email\"]),\n        (\"12\", [\"tags\"]),\n        (\"13\", [\"tags\", \"$element\"]),\n    ]",
+          "assert fields[0][\"nullable\"] is False",
+          "assert fields[1][\"nullable\"] is True"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "examples/demo/keycloak/scripts/check_demo.py",
+        "examples/demo/keycloak/keycloak/realm.json"
+      ],
+      "history_evidence": "37fb407c fix(governance): preserve schema scroll and complete SSO logout",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_keycloak_demo_fixture.py"
+    },
+    {
+      "location": "tests/examples/test_keycloak_demo_fixture.py",
+      "line": 88,
+      "name": "test_provision_demo_rejects_schema_without_provider_field_ids",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(RuntimeError, match=\"provider identity\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "examples/demo/keycloak/scripts/check_demo.py",
+        "examples/demo/keycloak/keycloak/realm.json"
+      ],
+      "history_evidence": "37fb407c fix(governance): preserve schema scroll and complete SSO logout",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_keycloak_demo_fixture.py"
+    },
+    {
+      "location": "tests/examples/test_keycloak_demo_fixture.py",
+      "line": 100,
+      "name": "test_read_check_never_treats_service_failure_as_denial",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(RuntimeError, match=\"backend unavailable\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "examples/demo/keycloak/scripts/check_demo.py",
+        "examples/demo/keycloak/keycloak/realm.json"
+      ],
+      "history_evidence": "37fb407c fix(governance): preserve schema scroll and complete SSO logout",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_keycloak_demo_fixture.py"
+    },
+    {
+      "location": "tests/examples/test_keycloak_demo_fixture.py",
+      "line": 115,
+      "name": "test_no_grant_check_rejects_disclosed_values",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(AssertionError, match=\"unexpectedly obtained data\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/provision_demo.py",
+        "examples/demo/keycloak/scripts/check_demo.py",
+        "examples/demo/keycloak/keycloak/realm.json"
+      ],
+      "history_evidence": "37fb407c fix(governance): preserve schema scroll and complete SSO logout",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_keycloak_demo_fixture.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 15,
+      "name": "test_configuration_is_stable_private_and_has_one_browser_identity",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert first == second",
+          "assert (tmp_path / \".env\").stat().st_mode & 0o777 == 0o600",
+          "assert cli.public_urls(first) == {\n        \"ui\": \"http://localhost:28821\",\n        \"issuer\": \"http://localhost:20080/realms/dal-obscura-demo\",\n        \"flight\": \"grpc+tcp://localhost:28115\",\n    }",
+          "assert len(first[\"ADMIN_TOKEN\"]) >= 32",
+          "assert first[\"APP_DB_PASSWORD\"] != first[\"ICEBERG_DB_PASSWORD\"]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 31,
+      "name": "test_invalid_port_never_writes_configuration",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert not (tmp_path / \".env\").exists()"
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"port\")"
+        ]
+      },
+      "parameter_rows": [
+        "pytest.mark.parametrize(\"port\", [\"0\", \"65536\", \"bad\", \"28821\\nOTHER=bad\"])"
+      ],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 37,
+      "name": "test_duplicate_ports_rejected",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"distinct\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 42,
+      "name": "test_incomplete_existing_configuration_never_rotates_secrets",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert path.read_text() == \"ADMIN_TOKEN=keep-this-value\\n\""
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"incomplete\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 50,
+      "name": "test_changed_port_requires_explicit_reconfiguration",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.read_config(tmp_path) == initial"
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"already configured\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 58,
+      "name": "test_missing_configuration_gives_initialization_command",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"demo init\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 64,
+      "name": "test_reachable_but_unrelated_service_is_a_port_conflict",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=str(port))"
+        ]
+      },
+      "parameter_rows": [
+        "pytest.mark.socket"
+      ],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 76,
+      "name": "test_closed_connection_does_not_make_a_free_port_look_occupied",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert client.recv(1) == b\"\""
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [
+        "pytest.mark.socket"
+      ],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 89,
+      "name": "test_concurrent_start_fails_without_touching_state",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"another demo command\")",
+          "pytest.fail(\"second operation must not acquire lock\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 99,
+      "name": "test_start_waits_for_runtime_to_release_a_recently_stopped_port",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert attempts == [(\"127.0.0.1\", 28821)] * 2"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 124,
+      "name": "test_secret_redaction_includes_generated_credentials",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert values[\"APP_DB_PASSWORD\"] not in redacted",
+          "assert values[\"ADMIN_TOKEN\"] not in redacted"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 134,
+      "name": "test_iceberg_seed_is_atomic_multifile_and_preserves_edits",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert len(list(table.scan().plan_files())) == 2",
+          "assert catalog.load_table(fixture[\"target\"]).scan().to_arrow().num_rows == 5"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 158,
+      "name": "test_failed_iceberg_seed_does_not_publish_partial_table",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert not load_catalog(\"retail_demo\", **options).table_exists(fixture[\"target\"])",
+          "assert (\n        load_catalog(\"retail_demo\", **options)\n        .load_table(fixture[\"target\"])\n        .scan()\n        .to_arrow()\n        .num_rows\n        == 4\n    )"
+        ],
+        "negative_expectations": [
+          "pytest.raises(RuntimeError, match=\"injected interruption\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 198,
+      "name": "test_failed_reset_preserves_credentials",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.main([\"reset\"]) == 1",
+          "assert (tmp_path / \".env\").read_bytes() == original"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_local_demo.py",
+      "line": 212,
+      "name": "test_reset_can_recover_incomplete_configuration",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.main([\"reset\"]) == 0",
+          "assert not (tmp_path / \".env\").exists()"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "examples/demo/keycloak/scripts/demo.py",
+        "examples/demo/keycloak/scripts/seed_table.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 24,
+      "name": "test_secure_configuration_is_private_stable_and_distinct",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.initialize(tmp_path, {}) == first",
+          "assert first[\"PROJECT_NAME\"].startswith(\"dal-obscura-secure-local-\")",
+          "assert cli.public_urls(first) == {\n        \"ui\": \"https://localhost:28443\",\n        \"issuer\": \"https://localhost:24443/realms/dal-obscura-demo\",\n        \"flight\": \"grpc+tls://localhost:28815\",\n    }",
+          "assert (tmp_path / \".env\").stat().st_mode & 0o777 == 0o600",
+          "assert len({first[key] for key in cli.SECRET_KEYS}) == len(cli.SECRET_KEYS)"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 38,
+      "name": "test_tls_generation_is_atomic_stable_private_and_correctly_scoped",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert {path.name: path.read_bytes() for path in directory.iterdir()} == before",
+          "assert directory.stat().st_mode & 0o777 == 0o700",
+          "assert len({path.read_bytes() for path in keys}) == len(keys)",
+          "assert all(path.stat().st_mode & 0o777 == 0o600 for path in keys)",
+          "assert set(names.get_values_for_type(x509.DNSName)) == {\"localhost\", \"keycloak\"}",
+          "assert ExtendedKeyUsageOID.CLIENT_AUTH in eku",
+          "assert ExtendedKeyUsageOID.SERVER_AUTH not in eku"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 58,
+      "name": "test_incomplete_tls_never_rotates_existing_credentials",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert (directory / \"ca.key\").read_text() == \"preserve\""
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"incomplete\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 68,
+      "name": "test_failed_certificate_generation_leaves_no_partial_identity",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert not (tmp_path / \".tls\").exists()"
+        ],
+        "negative_expectations": [
+          "pytest.raises(RuntimeError, match=\"injected\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 80,
+      "name": "test_mismatched_server_key_fails_before_startup",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=r\"key.*certificate\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 89,
+      "name": "test_failed_reset_preserves_ca_and_credentials",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.main([\"reset\"]) == 1",
+          "assert (tmp_path / \".env\").read_bytes() == before",
+          "assert (directory / \"ca.key\").read_text() == \"preserve\""
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 107,
+      "name": "test_reset_can_recover_incomplete_configuration_without_other_projects",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.main([\"reset\"]) == 0",
+          "assert calls[0][0].startswith(\"dal-obscura-secure-local-\")",
+          "assert not (tmp_path / \".env\").exists()",
+          "assert not (tmp_path / \".tls\").exists()"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 125,
+      "name": "test_failed_tls_cleanup_keeps_reset_credentials_for_retry",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.main([\"reset\"]) == 1",
+          "assert (tmp_path / \".env\").read_bytes() == before"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 141,
+      "name": "test_reset_unlinks_tls_symlink_without_deleting_target",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert cli.main([\"reset\"]) == 0",
+          "assert not (tmp_path / \".tls\").exists()",
+          "assert (outside / \"ca.key\").read_text() == \"preserve\""
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/examples/test_secure_local_demo.py",
+      "line": 155,
+      "name": "test_mtls_check_does_not_treat_unreachable_service_as_certificate_rejection",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ConnectionRefusedError, match=\"unreachable\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "deployment/local-secure/scripts/demo.py",
+        "deployment/local-secure/scripts/check_secure.py"
+      ],
+      "history_evidence": "e659072f feat(demo)!: rebuild local profiles with reliable secure startup",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/examples/test_secure_local_demo.py"
+    },
+    {
+      "location": "tests/test_e2e_smoke.py",
+      "line": 346,
+      "name": "test_e2e_flight_server_with_iceberg",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert table.num_rows == 2",
+          "assert table.schema.field(\"id\").type == pa.int64()",
+          "assert table.schema.field(\"email\").type == pa.string()",
+          "assert pa.types.is_struct(table.schema.field(\"metadata\").type)",
+          "assert data[0][\"metadata\"][\"preferences\"][0][\"name\"] == \"web\"",
+          "assert data[0][\"metadata\"][\"preferences\"][0][\"theme\"] == \"dark\"",
+          "assert client.get_flight_info(descriptor, options=unscoped_options).endpoints"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/interfaces/cli/read.py",
+        "src/dal_obscura/identity/oidc.py",
+        "src/dal_obscura/interfaces/flight/server.py"
+      ],
+      "history_evidence": "69c5a6ec refactor!: simplify governed reads and modernize format plugins",
+      "rationale": "Remove environment-controlled debug startup that could block a routine test. Close Flight client and stop/kill child on teardown. Preserve real JWT/JWKS/native read path.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_e2e_smoke.py"
+    },
+    {
+      "location": "tests/test_logging_config.py",
+      "line": 7,
+      "name": "test_json_formatter_includes_extra_fields",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert payload[\"message\"] == \"hello\"",
+          "assert payload[\"table\"] == \"users\"",
+          "assert payload[\"columns\"] == [\"id\"]",
+          "assert payload[\"resident_memory_bytes\"] == 1234"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/logging_config.py"
+      ],
+      "history_evidence": "b3c53179 perf(streaming): stream DuckDB Arrow transforms and log RSS",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_logging_config.py"
+    },
+    {
+      "location": "tests/test_memory_probe.py",
+      "line": 4,
+      "name": "test_memory_probe_sees_allocations_before_any_output",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert result[\"finished\"]",
+          "assert result[\"rss_samples\"] > 2",
+          "assert result[\"rss_delta\"] >= 24 * 1024 * 1024"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "tests/support/memory_probe.py"
+      ],
+      "history_evidence": "61f2b7d2 feat(governance)!: simplify policy authoring and harden governed reads",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_memory_probe.py"
+    },
+    {
+      "location": "tests/test_observability.py",
+      "line": 8,
+      "name": "test_metrics_aggregate_success_and_error_without_dynamic_labels",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert snapshot[\"flight.get_schema\"][\"success\"][\"count\"] == 1",
+          "assert snapshot[\"flight.get_schema\"][\"error\"][\"count\"] == 1",
+          "assert set(snapshot) == {\"flight.get_schema\"}"
+        ],
+        "negative_expectations": [
+          "pytest.raises(RuntimeError)"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/observability.py"
+      ],
+      "history_evidence": "69c5a6ec refactor!: simplify governed reads and modernize format plugins",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_observability.py"
+    },
+    {
+      "location": "tests/test_observability.py",
+      "line": 22,
+      "name": "test_metrics_reject_unbounded_or_high_cardinality_operation_names",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"invalid\")",
+          "pytest.raises(ValueError, match=\"invalid\")",
+          "pytest.raises(ValueError, match=\"outcome\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/observability.py"
+      ],
+      "history_evidence": "69c5a6ec refactor!: simplify governed reads and modernize format plugins",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_observability.py"
+    },
+    {
+      "location": "tests/test_observability.py",
+      "line": 33,
+      "name": "test_metrics_limit_counts_operations_not_outcomes",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert metrics.snapshot()[\"operation.0\"][\"error\"] == {\n        \"count\": 1,\n        \"duration_seconds\": 0.5,\n    }"
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"operation limit\")"
+        ]
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "src/dal_obscura/observability.py"
+      ],
+      "history_evidence": "69c5a6ec refactor!: simplify governed reads and modernize format plugins",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_observability.py"
+    },
+    {
+      "location": "tests/test_observability.py",
+      "line": 48,
+      "name": "test_metrics_reject_invalid_durations_without_recording",
+      "status": "reviewed",
+      "decision": "keep",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert metrics.snapshot() == {}"
+        ],
+        "negative_expectations": [
+          "pytest.raises(ValueError, match=\"duration\")"
+        ]
+      },
+      "parameter_rows": [
+        "pytest.mark.parametrize(\"duration\", [-1, float(\"nan\"), float(\"inf\"), float(\"-inf\")])"
+      ],
+      "source_evidence": [
+        "src/dal_obscura/observability.py"
+      ],
+      "history_evidence": "69c5a6ec refactor!: simplify governed reads and modernize format plugins",
+      "rationale": "Retain observable operational, external dependency or pure logic proof represented by the exact assertions. Similar tests at another boundary do not cover this owner.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_observability.py"
+    },
+    {
+      "location": "tests/test_support_build_connector_fixture.py",
+      "line": 61,
+      "name": "test_connector_fixture_matches_rows_and_live_policy",
+      "status": "reviewed",
+      "decision": "repair",
+      "actual_detectable_failure": {
+        "assertions": [
+          "assert metadata[\"uri\"] == f\"grpc+tcp://localhost:{FIXED_DUMMY_PORT}\"",
+          "assert metadata[\"user_token\"]",
+          "assert iceberg_table.metadata.format_version == 2",
+          "assert set(expected[\"partition_fields\"]) <= {\n        field.name for field in iceberg_table.spec().fields\n    }",
+          "assert table.num_rows == expected[\"row_count\"] == 125_000",
+          "assert expected[\"counts\"] == {\n        \"policy_row_count\": sum(row[\"region\"] == \"us\" and row[\"active\"] is True for row in rows),\n        \"enterprise_row_count\": sum(row[\"market\"] == \"enterprise\" for row in rows),\n        \"policy_and_enterprise_row_count\": sum(\n            row[\"region\"] == \"us\" and row[\"active\"] is True and row[\"market\"] == \"enterprise\"\n            for row in rows\n        ),\n        \"high_score_row_count\": sum(row[\"score\"] >= 900.0 for row in rows),\n    }",
+          "assert samples[\"region_even\"] == rows[0][\"region\"]",
+          "assert samples[\"region_odd\"] == rows[1][\"region\"]",
+          "assert asset is not None",
+          "assert asset.backend == \"iceberg\"",
+          "assert asset.table_identifier == metadata[\"target\"]",
+          "assert [rule.ordinal for rule in rules] == [10, 20]",
+          "assert mask_types == set(expected[\"mask_rule_types\"])",
+          "assert rules[0].row_filter_sql == expected[\"policy_row_filter\"]",
+          "assert masks[\"notes\"][\"value\"] == samples[\"redacted_note\"]",
+          "assert masks[\"status\"][\"value\"] == samples[\"default_status\"]",
+          "assert masks[\"user.preferences.theme\"][\"value\"] == samples[\"masked_preference_theme\"]"
+        ],
+        "negative_expectations": []
+      },
+      "parameter_rows": [],
+      "source_evidence": [
+        "tests/support/build_connector_fixture.py",
+        "connectors/jvm/connector-testkit-jvm/src/main/java/io/dalobscura/connectors/testkit/FixtureBuilderRunner.java"
+      ],
+      "history_evidence": "d7d1439d refactor(core)!: consolidate governed read and control ownership",
+      "rationale": "Pin documented 125000-row fixture totals, all six mask types and actual stored filter independently of metadata computed by the builder.",
+      "supporting_hooks": "Controlled filesystem, process, HTTP, clock and Flight dependencies remain external seams. Benchmark task codec isolates source restoration cost; real passive-task restoration remains in native multi-file and plugin qualification lanes.",
+      "risk": "Keep fixture data and timed work separate; live cloud, SSO and release attestations are not certified by these local tests.",
+      "validation_command": "uv run --no-sync pytest tests/test_support_build_connector_fixture.py"
+    }
+  ]
+}

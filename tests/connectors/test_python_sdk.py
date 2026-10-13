@@ -16,8 +16,6 @@ from tests.support.flight import (
 )
 from tests.support.policy import allow_rule
 
-pytestmark = pytest.mark.socket
-
 
 class _StreamingReader:
     def __init__(self, batch):
@@ -113,6 +111,7 @@ def test_python_sdk_rejects_empty_token_from_refresh_provider():
         sdk.plan(catalog="analytics", target="users", columns=["id"])
 
 
+@pytest.mark.socket
 def test_python_sdk_reads_authorized_arrow_table():
     schema = id_email_region_schema()
     batch = id_email_region_batch(
@@ -147,6 +146,7 @@ def test_python_sdk_reads_authorized_arrow_table():
     assert result.column("email").to_pylist() == ["[hidden]", "[hidden]"]
 
 
+@pytest.mark.socket
 def test_python_sdk_materializes_governed_result_as_polars_dataframe():
     schema = id_email_region_schema()
     batch = id_email_region_batch(
@@ -180,6 +180,7 @@ def test_python_sdk_materializes_governed_result_as_polars_dataframe():
     assert result.to_dict(as_series=False) == {"id": [1, 3], "email": ["[hidden]", "[hidden]"]}
 
 
+@pytest.mark.socket
 def test_python_sdk_preserves_nested_masked_arrow_values_in_polars():
     schema = metadata_schema()
     table_format = StubTableFormat(
@@ -224,6 +225,7 @@ def test_python_sdk_preserves_nested_masked_arrow_values_in_polars():
 
 
 @pytest.mark.parametrize("columns", [["id", "region"], iter(["id", "region"])])
+@pytest.mark.socket
 def test_duckdb_reader_exposes_sdk_results_as_relation(columns):
     schema = id_email_region_schema()
     batch = id_email_region_batch(

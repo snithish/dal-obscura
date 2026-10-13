@@ -8,7 +8,7 @@ PACKAGE_DIR = Path(__file__).parents[2] / "packages" / "plugin-api"
 
 def test_plugin_api_import_boundary_excludes_service_and_provider_modules() -> None:
     modules: set[str] = set()
-    for path in (PACKAGE_DIR / "src/dal_obscura_plugin_api").glob("*.py"):
+    for path in (PACKAGE_DIR / "src/dal_obscura_plugin_api").rglob("*.py"):
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

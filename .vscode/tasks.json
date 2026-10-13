@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "nestedMorScenario",
+      "type": "pickString",
+      "description": "Nested MoR scenario",
+      "options": ["delta", "iceberg"],
+      "default": "delta"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "Nested MoR: Start debug run",
+      "type": "shell",
+      "command": "bash",
+      "args": ["${workspaceFolder}/examples/nested-mor/debug", "${input:nestedMorScenario}"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "nested-mor-debug",
+        "base": "$tsc-watch",
+        "background": {
+          "activeOnStart": false,
+          "beginsPattern": "^Starting nested MoR debugger run",
+          "endsPattern": "^NESTED_MOR_DEBUG_READY"
+        }
+      }
+    },
+    {
+      "label": "Nested MoR: Stop debug stack",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "compose", "-p", "obscura-nested-${input:nestedMorScenario}",
+        "-f", "${workspaceFolder}/examples/nested-mor/compose.yaml",
+        "-f", "${workspaceFolder}/examples/nested-mor/compose.debug.yaml",
+        "down", "--volumes", "--remove-orphans"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

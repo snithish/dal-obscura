@@ -274,7 +274,6 @@ def run_catalog_checks(  # noqa: C901
         if page_size <= 0 or max_pages <= 0 or max_namespaces <= 0 or max_tables <= 0:
             raise ValueError("catalog discovery budgets must be positive")
         context.check_active()
-        context.check_active()
         namespaces = plugin.list_namespaces(context)
         context.check_active()
         if not isinstance(namespaces, tuple) or any(

@@ -49,10 +49,16 @@ test("schema reference and column picker virtualize 10k fields and keep search r
   await search.fill("field_9999");
   await expect(picker.getByRole("option", { name: /field_9999/ })).toBeVisible();
   await search.fill("");
+  const firstOption = picker.getByRole("option", { name: /^field_0\b/ });
+  await expect(firstOption).toHaveAttribute("aria-setsize", "10000");
+  await expect(firstOption).toHaveClass(/active/);
+  // Virtual scrolling must not turn a stationary pointer hover into a key press.
+  await page.mouse.move(0, 0);
   const durations: number[] = [];
   for (let index = 0; index < 20; index += 1) {
     const started = await page.evaluate(() => performance.now());
     await search.press("ArrowDown");
+    await expect(picker.getByRole("option", { name: new RegExp(`^field_${index + 1}\\b`) })).toHaveClass(/active/);
     const finished = await page.evaluate(() => performance.now());
     durations.push(finished - started);
   }
@@ -75,7 +81,8 @@ test("authenticated policy workspace meets local web-vitals thresholds", async (
       }
     }).observe({ type: "layout-shift", buffered: true });
   });
-  await page.goto("/#assets", { waitUntil: "networkidle" });
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "orders", exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => window.__dalObscuraWebVitals);
   expect(metrics.lcp).not.toBeNull();

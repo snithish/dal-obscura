@@ -36,57 +36,33 @@ def test_filters_and_masks_preserve_results_across_batch_boundaries():
     assert output.column("id").to_pylist() == ["hidden"] * 4
 
 
-def test_duckdb_transform_disables_external_access(monkeypatch):
-    result_batch = pa.record_batch([pa.array([1])], names=["id"])
-    captured_configs: list[dict[str, object]] = []
+def test_duckdb_transform_denies_external_file_access(monkeypatch, tmp_path):
+    source = tmp_path / "private.csv"
+    source.write_text("secret\nprivate-value\n")
+    destination = tmp_path / "export.csv"
+    real_connect = duckdb_transform.duckdb.connect
 
-    class FakeRelation:
-        def query(self, table_name: str, query: str):
-            del table_name, query
-            return self
+    def checked_connect(**kwargs):
+        connection = real_connect(**kwargs)
+        try:
+            with pytest.raises(duckdb_transform.duckdb.PermissionException, match="disabled"):
+                connection.execute("SELECT * FROM read_csv(?)", [str(source)])
+            with pytest.raises(duckdb_transform.duckdb.PermissionException, match="disabled"):
+                connection.execute(f"COPY (SELECT 'private-value') TO '{destination}'")
+            with pytest.raises(duckdb_transform.duckdb.PermissionException, match="disabled"):
+                connection.execute(f"LOAD '{tmp_path / 'untrusted.duckdb_extension'}'")
+        except BaseException:
+            connection.close()
+            raise
+        return connection
 
-        def to_arrow_reader(self, batch_size: int):
-            del batch_size
-            return iter([result_batch])
-
-    class FakeConnection:
-        def execute(self, query: str) -> None:
-            del query
-
-        def from_arrow(self, reader: pa.RecordBatchReader):
-            del reader
-            return FakeRelation()
-
-        def close(self) -> None:
-            return None
-
-    def fake_connect(**kwargs):
-        captured_configs.append(kwargs)
-        return FakeConnection()
-
-    monkeypatch.setattr(duckdb_transform.duckdb, "connect", fake_connect)
-    adapter = DuckDBRowTransformAdapter()
-
-    list(
-        adapter.apply_filters_and_masks_stream(
-            [pa.record_batch([pa.array([1], type=pa.int64())], names=["id"])],
-            ["id"],
-            None,
-            {},
-        )
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", checked_connect)
+    batch = pa.record_batch([pa.array([1], type=pa.int64())], names=["id"])
+    result = pa.Table.from_batches(
+        list(DuckDBRowTransformAdapter().apply_filters_and_masks_stream([batch], ["id"], None, {}))
     )
-
-    assert captured_configs == [
-        {
-            "config": {
-                "enable_external_access": "false",
-                "autoload_known_extensions": "false",
-                "autoinstall_known_extensions": "false",
-                "threads": 1,
-                "memory_limit": "512MB",
-            }
-        }
-    ]
+    assert result.to_pylist() == [{"id": 1}]
+    assert not destination.exists()
 
 
 def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatch):
@@ -252,7 +228,9 @@ def test_duckdb_transform_streams_chunked_output(monkeypatch):
     result_batches = list(adapter.apply_filters_and_masks_stream([input_batch], ["id"], None, {}))
 
     assert [batch.num_rows for batch in result_batches] == [2, 2, 2]
-    assert sum(batch.num_rows for batch in result_batches) == 6
+    result = pa.Table.from_batches(result_batches)
+    assert result.schema.equals(input_batch.schema, check_metadata=True)
+    assert result.to_pylist() == [{"id": 0}, {"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}, {"id": 5}]
 
 
 @pytest.mark.heavy

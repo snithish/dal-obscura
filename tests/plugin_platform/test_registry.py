@@ -486,14 +486,36 @@ def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -
         ),
     )
 
+    import hashlib
+
+    descriptor_digest = hashlib.sha256(
+        json.dumps(
+            {
+                "kind": "catalog",
+                "plugin_id": "iceberg.catalog",
+                "api_version": "2",
+                "config_version": 1,
+                "distribution": "plugin-wheel",
+                "version": "1.2.3",
+                "capabilities": [],
+                "config_schema": {},
+                "display_name": "",
+                "output_formats": [],
+                "handle_versions": [1],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    artifact_digest = hashlib.sha256(b"plugin.py\0trusted = True\n\0").hexdigest()
     lock = build_plugin_lock("catalog", entry, descriptor)
 
     assert lock == (
         "plugin-wheel",
         "1.2.3",
         "2",
-        _descriptor_digest(descriptor),
-        _artifact_digest(entry),
+        descriptor_digest,
+        artifact_digest,
     )
 
 

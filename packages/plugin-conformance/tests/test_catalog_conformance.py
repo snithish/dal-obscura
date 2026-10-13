@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from threading import Event
 from typing import cast
 
 import pytest
@@ -120,18 +121,14 @@ def test_catalog_runner_validates_budgets_before_provider_calls() -> None:
 
 
 def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
-    called = []
-
     class ExpiredCatalog:
         descriptor = _catalog_descriptor()
 
         def list_namespaces(self, context):
-            del context
-            return (("default",),)
+            pytest.fail("Expired context reached namespace discovery")
 
         def list_tables(self, context, *, continuation, limit):
-            del context, continuation, limit
-            return DiscoveryPage(())
+            pytest.fail("Expired context reached table discovery")
 
         def close(self):
             return None
@@ -142,7 +139,6 @@ def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
 
     assert result.to_dict()["status"] == "failed"
     assert any("deadline" in failure for failure in result.failures)
-    assert called == []
 
 
 def test_catalog_runner_rejects_omitted_expected_table():
@@ -201,19 +197,14 @@ def test_catalog_runner_rejects_duplicate_and_cyclic_pages(plugin_type, message)
 
 def test_catalog_runner_stops_before_requesting_after_cancellation():
     users = TableIdentifier(namespace=("default",), name="users")
-    calls = 0
+    cancelled = Event()
     requested = 0
-
-    def cancelled() -> bool:
-        nonlocal calls
-        calls += 1
-        return calls >= 2
 
     class _CancelledCatalog:
         descriptor = _catalog_descriptor()
 
         def list_namespaces(self, context):
-            del context
+            cancelled.set()
             return (("default",),)
 
         def close(self):
@@ -226,7 +217,7 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
             return DiscoveryPage((users,), continuation="next")
 
     result = run_catalog_checks(
-        cast(CatalogPlugin, _CancelledCatalog()), _catalog_context(cancel_check=cancelled)
+        cast(CatalogPlugin, _CancelledCatalog()), _catalog_context(cancel_check=cancelled.is_set)
     )
     assert result.to_dict()["status"] == "failed"
     assert any("cancelled" in failure for failure in result.failures)

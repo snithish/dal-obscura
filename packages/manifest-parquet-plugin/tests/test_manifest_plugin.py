@@ -275,25 +275,30 @@ def test_manifest_catalog_paginates_with_string_continuation_tokens(tmp_path):
 
 
 def test_manifest_catalog_accepts_structured_dotted_table_names(tmp_path):
-    root, manifest, _table = _write_fixture(tmp_path)
+    root, manifest, _ = _write_fixture(tmp_path)
     payload = json.loads(manifest.read_text())
-    entry = payload["tables"].pop("default.users")
-    entry["namespace"] = ["default"]
-    entry["name"] = "users.with.dot"
-    payload["tables"]["opaque-key"] = entry
+    original = payload["tables"].pop("default.users")
+    identifiers = [TableIdentifier(("a.b",), "c"), TableIdentifier(("a",), "b.c")]
+    payload["tables"] = {
+        str(index): {
+            **original,
+            "namespace": list(identifier.namespace),
+            "name": identifier.name,
+            "files": [f"part-{index}.parquet"],
+        }
+        for index, identifier in enumerate(identifiers)
+    }
     manifest.write_text(json.dumps(payload))
-
-    catalog = ManifestCatalog(
-        CatalogConfig(
-            plugin_id="manifest",
-            instance_id="fixture",
-            revision=1,
-            options={"root": str(root), "manifest_path": str(manifest)},
-        ),
-        _context(),
-    )
-    page = catalog.list_tables(_context(), limit=1)
-    assert page.entries == (TableIdentifier(namespace=("default",), name="users.with.dot"),)
+    context = _context()
+    catalog = ManifestCatalog(_config_for_manifest(root, manifest), context)
+    first = catalog.list_tables(context, limit=1)
+    second = catalog.list_tables(context, continuation=first.continuation, limit=1)
+    assert first.entries + second.entries == (identifiers[1], identifiers[0])
+    assert second.continuation is None
+    for index, identifier in enumerate(identifiers):
+        handle = catalog.resolve_table(identifier, context)
+        assert handle.identifier == identifier
+        assert handle.metadata["files"] == (f"part-{index}.parquet",)
 
 
 def test_manifest_catalog_requires_structured_identifiers(tmp_path):
@@ -307,7 +312,7 @@ def test_manifest_catalog_requires_structured_identifiers(tmp_path):
         ManifestCatalog(_config_for_manifest(root, manifest), _context())
 
 
-def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
+def test_manifest_rejects_member_escape(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     payload = json.loads(manifest.read_text())
     payload["tables"]["default.users"]["files"] = ["../outside.parquet"]
@@ -350,7 +355,7 @@ def test_manifest_rejects_symlinked_member(tmp_path):
         )
 
 
-def test_manifest_and_format_reject_expired_context(tmp_path):
+def test_manifest_catalog_rejects_expired_context(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     expired = ExecutionContext(
         deadline=datetime.now(UTC) - timedelta(seconds=1), correlation_id="expired"
@@ -393,10 +398,16 @@ def test_parquet_format_accepts_explicit_full_projection(tmp_path):
         ),
         context,
     )
-    assert tasks
-    output_schema, batches = plugin.execute(tasks[0], context)
-    assert output_schema == table.schema
-    assert pa.Table.from_batches(batches).num_rows == 1
+    rows = []
+    for task in tasks:
+        output_schema, batches = plugin.execute(task, context)
+        assert output_schema.equals(table.schema, check_metadata=True)
+        rows.extend(pa.Table.from_batches(batches, schema=output_schema).to_pylist())
+    assert sorted(rows, key=lambda row: row["id"]) == [
+        {"id": 1, "profile": {"email": "a@example.com"}},
+        {"id": 2, "profile": {"email": "b@example.com"}},
+        {"id": 3, "profile": None},
+    ]
 
 
 def test_parquet_format_rejects_member_schema_drift(tmp_path):
@@ -506,14 +517,6 @@ def test_parquet_groups_all_row_groups_within_task_budget(tmp_path):
         _, batches = plugin.execute(task, context)
         rows.extend(pa.Table.from_batches(batches).to_pylist())
     assert sorted(rows, key=lambda row: row["id"]) == expected.to_pylist()
-
-
-def test_manifest_identity_keys_distinguish_literal_dots():
-    from dal_obscura_manifest_parquet.catalog import _identifier_key
-
-    assert _identifier_key(TableIdentifier(namespace=("a.b",), name="c")) != _identifier_key(
-        TableIdentifier(namespace=("a",), name="b.c")
-    )
 
 
 def test_parquet_reads_literal_dotted_column_without_nested_sibling(tmp_path):

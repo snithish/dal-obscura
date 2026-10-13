@@ -28,6 +28,23 @@ dependency jobs. Results remain in ignored `results/delta.json` and
 `results/iceberg.json`. The stack uses ephemeral Moto S3 storage; removing its
 container deletes its objects. PostgreSQL/state volumes are removed by cleanup.
 
+## VS Code debugging
+
+Install the Microsoft Python extension and Docker Compose. In Run and Debug, select
+**Nested MoR: Full distributed flow**. VS Code asks for `delta` or `iceberg`, starts
+a fresh scenario, and waits until the verifier is listening. The compound attaches
+to the planner, all three workers and the verifier; set breakpoints in `src/` and
+`examples/nested-mor/scripts/verify.py` before starting. `justMyCode` is disabled,
+so stepping can enter plugin and dependency code. The verifier waits for VS Code
+before planning begins. Worker debug servers start with the services and accept
+the compound's debugger connections.
+
+The debugger publishes ports 5678–5682 on loopback only. Use **Nested MoR: Stop
+debug stack** from Tasks when finished; it removes only the selected scenario's
+Compose project and volumes. Equivalent terminal entry point is
+`./debug delta` or `./debug iceberg`; attach the same compound when its ready
+message appears. The ordinary `./run` flow remains unchanged.
+
 From the repository root, embed completed evidence into the report:
 
 ```bash

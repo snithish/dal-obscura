@@ -27,7 +27,7 @@ class FlightDalObscuraReadClientTest {
         DalObscuraFlightProto.PlanRequest decoded =
                 DalObscuraFlightProto.PlanRequest.parseFrom(payload);
 
-        assertEquals(FlightDalObscuraReadClient.PROTOCOL_VERSION, decoded.getProtocolVersion());
+        assertEquals(1, decoded.getProtocolVersion());
         assertEquals("analytics", decoded.getCatalog());
         assertEquals("default.users", decoded.getTarget());
         assertEquals(List.of("id", "email"), decoded.getColumnsList());
@@ -36,6 +36,12 @@ class FlightDalObscuraReadClientTest {
         assertEquals(DalObscuraFlightProto.FieldPathSegment.Kind.FIELD,
                 decoded.getColumnPaths(0).getSegments(0).getKind());
         assertEquals("id", decoded.getColumnPaths(0).getSegments(0).getName());
+        assertEquals(1, decoded.getColumnPaths(0).getVersion());
+        assertEquals(1, decoded.getColumnPaths(1).getVersion());
+        assertEquals(1, decoded.getColumnPaths(1).getSegmentsCount());
+        assertEquals(DalObscuraFlightProto.FieldPathSegment.Kind.FIELD,
+                decoded.getColumnPaths(1).getSegments(0).getKind());
+        assertEquals("email", decoded.getColumnPaths(1).getSegments(0).getName());
     }
 
     @Test

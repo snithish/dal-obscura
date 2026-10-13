@@ -34,32 +34,44 @@ test("reauthentication does not reuse cached inventory for the same identity", a
   client.clear();
 });
 
-test("inventory query keys include session and search", () => {
-  assert.deepEqual(assetInventoryQueryKey("issuer|alice", "orders"), [
-    "asset-inventory",
-    "issuer|alice",
-    "orders",
-  ]);
+test("inventory search results stay separate within one session", () => {
+  const client = new QueryClient();
+  try {
+    const orders = assetInventoryQueryKey("issuer|alice", "orders");
+    const invoices = assetInventoryQueryKey("issuer|alice", "invoices");
+    client.setQueryData(orders, { items: ["orders"] });
+    assert.equal(client.getQueryData(invoices), undefined);
+    client.setQueryData(invoices, { items: ["invoices"] });
+    assert.deepEqual(client.getQueryData(orders), { items: ["orders"] });
+    assert.deepEqual(client.getQueryData(invoices), { items: ["invoices"] });
+  } finally {
+    client.clear();
+  }
 });
 
 test("query cache deduplicates one session page without sharing another session", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  let calls = 0;
-  const load = () => {
-    calls += 1;
-    return Promise.resolve({ items: [calls] });
-  };
-  const aliceKey = assetInventoryQueryKey("issuer|alice", "");
-  const [first, second] = await Promise.all([
-    client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
-    client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
-  ]);
-  assert.deepEqual(first, { items: [1] });
-  assert.deepEqual(second, { items: [1] });
-  await client.fetchQuery({
-    queryKey: assetInventoryQueryKey("issuer|bob", ""),
-    queryFn: load,
-  });
-  assert.equal(calls, 2);
-  client.clear();
+  try {
+    let calls = 0;
+    const load = () => {
+      calls += 1;
+      return Promise.resolve({ items: [calls] });
+    };
+    const aliceKey = assetInventoryQueryKey("issuer|alice", "");
+    const [first, second] = await Promise.all([
+      client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
+      client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
+    ]);
+    assert.deepEqual(first, { items: [1] });
+    assert.deepEqual(second, { items: [1] });
+    const bob = await client.fetchQuery({
+      queryKey: assetInventoryQueryKey("issuer|bob", ""),
+      queryFn: load,
+    });
+    assert.deepEqual(bob, { items: [2] });
+    assert.deepEqual(client.getQueryData(aliceKey), { items: [1] });
+    assert.equal(calls, 2);
+  } finally {
+    client.clear();
+  }
 });

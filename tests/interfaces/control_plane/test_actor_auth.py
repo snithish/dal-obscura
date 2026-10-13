@@ -616,7 +616,6 @@ def test_non_owner_cannot_read_asset_policy_or_preview(client_factory):
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
     detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
-    rules = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
     preview = client.post(
         f"/v1/assets/{asset}/policy-evaluate",
         json={"principal": "analyst", "groups": [], "claims": {}},
@@ -626,7 +625,6 @@ def test_non_owner_cannot_read_asset_policy_or_preview(client_factory):
     assert inventory.status_code == 200
     assert inventory.json() == []
     assert detail.status_code == 403
-    assert rules.status_code == 403
     assert preview.status_code == 403
     attributes = client.get(
         f"/v1/assets/{asset}/identity-attributes", headers=_bearer("outsider-token")
@@ -684,7 +682,6 @@ def test_asset_owner_can_delegate_read_without_edit_or_grant(client_factory):
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
     detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
-    rules = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
     replace = client.put(
         f"/v1/assets/{asset}/policy",
         json={
@@ -701,7 +698,6 @@ def test_asset_owner_can_delegate_read_without_edit_or_grant(client_factory):
     assert inventory.json()[0]["id"] == str(asset)
     assert detail.status_code == 200
     assert detail.json()["id"] == str(asset)
-    assert rules.status_code == 200
     assert replace.status_code == 403
 
 

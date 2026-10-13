@@ -58,13 +58,15 @@ def test_schema_read_reuses_the_schema_admitted_with_the_source(setup, monkeypat
         access_context=registry,
     )
     try:
-        reader.schema(
+        result = reader.schema(
             PlanRequest(catalog="analytics", target="default.users", columns=["id"]),
             AuthenticationRequest(headers={}),
         )
     finally:
         registry.close()
     assert calls == 1
+    assert result.output_schema.equals(pa.schema([("id", pa.int64())]), check_metadata=True)
+    assert result.policy_version == 4
 
 
 class Provider:
@@ -392,8 +394,10 @@ def test_assets_share_provider_but_use_their_own_physical_binding(setup):
     registry.close()
 
 
-def test_target_snapshot_needs_three_selects_and_no_global_counter_or_inventory(setup):
-    engine, _, store = setup
+def test_target_snapshot_cost_stays_bounded_as_unrelated_assets_grow(setup):
+    from uuid import uuid4
+
+    engine, factory, store = setup
     statements = []
 
     def observe(conn, cursor, statement, parameters, context, many):
@@ -402,15 +406,33 @@ def test_target_snapshot_needs_three_selects_and_no_global_counter_or_inventory(
 
     event.listen(engine, "after_cursor_execute", observe)
     try:
-        store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        first, _ = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        baseline = len(statements)
+        with factory() as session:
+            catalog = session.scalar(select(CatalogRecord))
+            session.add_all(
+                [
+                    AssetRecord(
+                        id=uuid4(),
+                        catalog_id=catalog.id,
+                        target=f"unrelated.{index}",
+                        backend="iceberg",
+                        table_identifier=f"unrelated.{index}",
+                        options_json={},
+                        revision=1,
+                        policy_revision=1,
+                    )
+                    for index in range(20)
+                ]
+            )
+            session.commit()
+        statements.clear()
+        second, _ = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        assert second == first
+        assert len(statements) == baseline
+        assert len(statements) <= 3
     finally:
         event.remove(engine, "after_cursor_execute", observe)
-    assert len(statements) == 3
-    assert all("workspace" not in sql for sql in statements)
-    assert "FROM assets JOIN catalogs" in statements[0]
-    assert "WHERE catalogs.name" in statements[0]
-    assert "WHERE policy_rules.asset_id" in statements[1]
-    assert "WHERE asset_schema_fields.asset_id" in statements[2]
 
 
 def test_slow_eviction_close_does_not_block_warm_provider(setup, monkeypatch):

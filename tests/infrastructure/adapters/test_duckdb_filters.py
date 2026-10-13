@@ -1,6 +1,5 @@
 import pyarrow as pa
 
-import dal_obscura.read.transform as duckdb_transform
 from dal_obscura.policy.filters import parse_row_filter
 from dal_obscura.policy.models import MaskRule
 from dal_obscura.read.transform import (
@@ -50,44 +49,17 @@ def test_duckdb_transform_filters_original_masked_values_before_output_mask():
     assert result.column("email").to_pylist() == ["[hidden]"]
 
 
-def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
-    result_batch = pa.record_batch([pa.array([10])], names=["id"])
-
-    class FakeRelation:
-        def __init__(self) -> None:
-            self.query_calls: list[tuple[str, str]] = []
-
-        def query(self, table_name: str, query: str):
-            self.query_calls.append((table_name, query))
-            return self
-
-        def to_arrow_reader(self, batch_size: int):
-            del batch_size
-            return iter([result_batch])
-
-    class FakeConnection:
-        def __init__(self) -> None:
-            self.relation = FakeRelation()
-
-        def execute(self, query: str) -> None:
-            del query
-
-        def from_arrow(self, reader: pa.RecordBatchReader):
-            del reader
-            return self.relation
-
-        def close(self) -> None:
-            return None
-
-    fake_connection = FakeConnection()
-    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_kwargs: fake_connection)
+def test_duckdb_transform_evaluates_function_filters_on_hidden_values():
     adapter = DuckDBRowTransformAdapter()
     input_batch = pa.record_batch(
-        [pa.array([1], type=pa.int64()), pa.array(["us"], type=pa.string())],
+        [
+            pa.array([1, 2, 3, 4], type=pa.int64()),
+            pa.array(["US", "eu", None, "us"], type=pa.string()),
+        ],
         names=["id", "region"],
     )
 
-    list(
+    batches = list(
         adapter.apply_filters_and_masks_stream(
             [input_batch],
             ["id"],
@@ -96,6 +68,6 @@ def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
         )
     )
 
-    assert fake_connection.relation.query_calls == [
-        ("input", 'SELECT "id" AS "id" FROM input WHERE LOWER(region) = \'us\'')
-    ]
+    result = pa.Table.from_batches(batches)
+    assert result.schema.equals(pa.schema([pa.field("id", pa.int64())]), check_metadata=True)
+    assert result.to_pylist() == [{"id": 1}, {"id": 4}]

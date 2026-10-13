@@ -1,12 +1,10 @@
-from pathlib import Path
+import hashlib
 
 import pyarrow as pa
 import pytest
 
 from dal_obscura.sources.catalogs import (
-    CatalogConfig,
     CatalogRegistry,
-    ServiceConfig,
 )
 from tests.support.flight import (
     build_flight_service,
@@ -19,35 +17,14 @@ from tests.support.iceberg import create_iceberg_table
 from tests.support.iceberg_flight import service_config_from_raw
 from tests.support.policy import allow_rule
 
-pytestmark = pytest.mark.heavy
-
-
-def _build_registry(
-    catalogs: dict[str, CatalogConfig],
-) -> CatalogRegistry:
-    return CatalogRegistry(ServiceConfig(catalogs=catalogs))
-
-
-def _build_registry_from_config(service_config: ServiceConfig) -> CatalogRegistry:
-    return CatalogRegistry(service_config)
-
-
-def build_service_config(
-    tmp_path: Path,
-    *,
-    service_config: dict[str, object],
-    policy: dict[str, object],
-) -> tuple[ServiceConfig, None]:
-    del tmp_path, policy
-    return service_config_from_raw(service_config), None
+pytestmark = [pytest.mark.heavy, pytest.mark.socket]
 
 
 def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
     table_id_one = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
     table_id_two = create_iceberg_table(tmp_path, "ice_two", "warehouse-two", [10, 11, 12, 13])
-    service_config, _policy_path = build_service_config(
-        tmp_path,
-        service_config={
+    service_config = service_config_from_raw(
+        {
             "catalogs": {
                 "ice_one": {
                     "options": {
@@ -65,40 +42,9 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
                 },
             },
         },
-        policy={
-            "version": 1,
-            "catalogs": {
-                "ice_one": {
-                    "targets": {
-                        "default.users": {
-                            "rules": [
-                                {
-                                    "principals": ["user1"],
-                                    "columns": ["id", "email", "region"],
-                                    "masks": {"id": {"type": "hash"}},
-                                    "row_filter": "region = 'us'",
-                                }
-                            ]
-                        },
-                    }
-                },
-                "ice_two": {
-                    "targets": {
-                        "default.users": {
-                            "rules": [
-                                {
-                                    "principals": ["user1"],
-                                    "columns": ["id", "email", "region"],
-                                }
-                            ]
-                        }
-                    }
-                },
-            },
-        },
     )
 
-    catalog_registry = _build_registry_from_config(service_config)
+    catalog_registry = CatalogRegistry(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
@@ -124,17 +70,22 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         )
 
         assert info_one.schema.field("id").type == pa.string()
-        assert table_one.num_rows == 2
-        assert set(table_one.column("region").to_pylist()) == {"us"}
-        assert set(table_two.column("region").to_pylist()) == {"eu", "us"}
-        assert table_two.num_rows == 4
+        assert table_one.to_pylist() == [
+            {"id": hashlib.sha256(b"2").hexdigest(), "email": "user2@example.com", "region": "us"},
+            {"id": hashlib.sha256(b"4").hexdigest(), "email": "user4@example.com", "region": "us"},
+        ]
+        assert table_two.to_pylist() == [
+            {"id": 10, "email": "user10@example.com", "region": "us"},
+            {"id": 11, "email": "user11@example.com", "region": "eu"},
+            {"id": 12, "email": "user12@example.com", "region": "us"},
+            {"id": 13, "email": "user13@example.com", "region": "eu"},
+        ]
 
 
 def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_column(tmp_path):
     table_id = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
-    service_config, _policy_path = build_service_config(
-        tmp_path,
-        service_config={
+    service_config = service_config_from_raw(
+        {
             "catalogs": {
                 "ice_one": {
                     "options": {
@@ -145,28 +96,10 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
                 },
             },
         },
-        policy={
-            "version": 1,
-            "catalogs": {
-                "ice_one": {
-                    "targets": {
-                        table_id: {
-                            "rules": [
-                                {
-                                    "principals": ["user1"],
-                                    "columns": ["id", "email", "region"],
-                                    "row_filter": "id > 1",
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-        },
     )
 
     server = build_flight_service(
-        catalog_registry=_build_registry_from_config(service_config),
+        catalog_registry=CatalogRegistry(service_config),
         policy_rules=[
             {
                 "principals": ["user1"],
@@ -195,9 +128,8 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
 
 def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
     create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
-    service_config, _policy_path = build_service_config(
-        tmp_path,
-        service_config={
+    service_config = service_config_from_raw(
+        {
             "catalogs": {
                 "ice_one": {
                     "options": {
@@ -208,26 +140,9 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
                 },
             },
         },
-        policy={
-            "version": 1,
-            "catalogs": {
-                "ice_one": {
-                    "targets": {
-                        "default.users": {
-                            "rules": [
-                                {
-                                    "principals": ["user1"],
-                                    "columns": ["id", "email", "region"],
-                                }
-                            ]
-                        }
-                    }
-                },
-            },
-        },
     )
 
-    catalog_registry = _build_registry_from_config(service_config)
+    catalog_registry = CatalogRegistry(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[
@@ -258,9 +173,8 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
             list(range(100_001, 200_001)),
         ],
     )
-    service_config, _policy_path = build_service_config(
-        tmp_path,
-        service_config={
+    service_config = service_config_from_raw(
+        {
             "catalogs": {
                 "ice_one": {
                     "options": {
@@ -271,28 +185,9 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
                 },
             },
         },
-        policy={
-            "version": 1,
-            "catalogs": {
-                "ice_one": {
-                    "targets": {
-                        table_id: {
-                            "rules": [
-                                {
-                                    "principals": ["user1"],
-                                    "columns": ["id", "email", "region"],
-                                    "masks": {"id": {"type": "hash"}},
-                                    "row_filter": "region = 'us'",
-                                }
-                            ]
-                        }
-                    }
-                },
-            },
-        },
     )
 
-    catalog_registry = _build_registry_from_config(service_config)
+    catalog_registry = CatalogRegistry(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[
@@ -315,4 +210,14 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
         assert len(info.endpoints) == 2
         assert info.schema.field("id").type == pa.string()
         assert table.num_rows == 100_000
-        assert set(table.column("region").to_pylist()) == {"us"}
+        assert set(
+            zip(
+                table.column("id").to_pylist(),
+                table.column("email").to_pylist(),
+                table.column("region").to_pylist(),
+                strict=True,
+            )
+        ) == {
+            (hashlib.sha256(str(value).encode()).hexdigest(), f"user{value}@example.com", "us")
+            for value in range(2, 200_001, 2)
+        }

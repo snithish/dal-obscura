@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+scenario="${1:-delta}"
+case "$scenario" in delta|iceberg) ;; *) echo "Usage: ./debug delta|iceberg" >&2; exit 2 ;; esac
+export SCENARIO="$scenario"
+project="obscura-nested-$scenario"
+compose=(docker compose -p "$project" -f compose.yaml -f compose.debug.yaml)
+
+echo "Starting nested MoR debugger run ($scenario)"
+"${compose[@]}" down --volumes --remove-orphans
+"${compose[@]}" build planner
+"${compose[@]}" up -d --wait --wait-timeout 7200 planner worker-1 worker-2 worker-3
+
+"${compose[@]}" run --service-ports --no-deps --rm verify &
+verify_pid=$!
+ports=(5678 5679 5680 5681 5682)
+ready=false
+for _ in $(seq 1 600); do
+  if ! kill -0 "$verify_pid" 2>/dev/null; then
+    wait "$verify_pid"
+    echo "Verifier exited before debugger became ready" >&2
+    exit 1
+  fi
+  all_ready=true
+  for port in "${ports[@]}"; do
+    if ! (echo >/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1; then
+      all_ready=false
+      break
+    fi
+  done
+  if "$all_ready"; then
+    ready=true
+    break
+  fi
+  sleep 1
+done
+if ! "$ready"; then
+  kill "$verify_pid" 2>/dev/null || true
+  wait "$verify_pid" || true
+  echo "Timed out waiting for all debugger ports: ${ports[*]}" >&2
+  "${compose[@]}" ps >&2
+  "${compose[@]}" logs --tail=80 planner worker-1 worker-2 worker-3 >&2
+  exit 1
+fi
+echo "NESTED_MOR_DEBUG_READY: all debugger ports are open; attaching now"
+wait "$verify_pid"
+echo "Nested MoR debugger run complete. Results: results/$scenario.json"
+echo "Stop stack with: docker compose -p $project -f compose.yaml -f compose.debug.yaml down --volumes"

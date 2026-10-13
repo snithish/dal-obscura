@@ -739,30 +739,6 @@ def _seed_live_asset(
     session.commit()
 
 
-def test_live_authorizer_changes_effective_version_after_policy_edit(db_session: Session):
-    _seed_live_asset(db_session, policy_version=123)
-    authorizer = PublishedPolicy(
-        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset(
-            catalog="analytics", target="default.users"
-        )
-    )
-    initial_version = authorizer.asset.policy_version
-    asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
-    rule = db_session.scalar(select(PolicyRuleRecord))
-    assert asset is not None and rule is not None
-
-    rule.columns_json = ["email"]
-    asset.policy_revision += 1
-    db_session.commit()
-
-    current_version = (
-        LiveConfigStore(session_factory(db_session.get_bind().engine))
-        .get_asset(catalog="analytics", target="default.users")
-        .policy_version
-    )
-    assert current_version != initial_version
-
-
 def test_explicit_allow_all_does_not_require_a_frozen_column_selection():
     asset = LiveAsset(
         catalog="analytics",

@@ -1,5 +1,9 @@
 # Testing guide
 
+The [whole project audit](testing-audit/2026-10-13/README.md) records test ownership,
+retention and transfer decisions, deliberate fault controls, and qualification
+limits for the October 2026 review.
+
 Tests are organized around observable behaviors and the boundary that owns each
 contract. Use named parameter cases when inputs vary but the behavior and assertion
 remain the same. Keep separate tests when failures mean different things.

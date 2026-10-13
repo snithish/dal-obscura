@@ -179,6 +179,20 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    env:
+      DAL_OBSCURA_POSTGRES_TEST_URL: postgresql+psycopg://dal_obscura:dal_obscura_test_password@127.0.0.1:5432/dal_obscura
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: dal_obscura
+          POSTGRES_PASSWORD: dal_obscura_test_password
+          POSTGRES_DB: dal_obscura
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dal_obscura -d dal_obscura"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v6

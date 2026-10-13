@@ -358,18 +358,6 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         "import sys; from dal_obscura.interfaces.cli.read import main; sys.exit(main())",
     ]
 
-    if os.environ.get("DEBUG_SERVER") == "1":
-        cmd = [
-            sys.executable,
-            "-m",
-            "debugpy",
-            "--listen",
-            "0.0.0.0:5678",
-            "--wait-for-client",
-            "-m",
-            "dal_obscura.interfaces.cli.read",
-        ]
-
     process = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
@@ -447,5 +435,13 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         assert client.get_flight_info(descriptor, options=unscoped_options).endpoints
 
     finally:
-        process.terminate()
-        process.wait(timeout=5)
+        try:
+            if client is not None:
+                client.close()
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)

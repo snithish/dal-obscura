@@ -3,14 +3,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.request import Request
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
-import dal_obscura.identity.oidc as jwks_module
 from dal_obscura.identity.contracts import (
     AuthenticationRequest,
     MissingCredentialsError,
@@ -145,39 +143,38 @@ def test_oidc_discovery_does_not_double_append_issuer_slash():
     assert requested == [f"{ISSUER}/.well-known/openid-configuration"]
 
 
-def test_jwks_transport_does_not_follow_redirects(monkeypatch):
-    seen: dict[str, Any] = {}
+@pytest.mark.socket
+def test_oidc_discovery_does_not_follow_redirects():
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+    from urllib.error import HTTPError
 
-    class Response:
-        def __enter__(self):
-            return self
+    requests = []
 
-        def __exit__(self, *args):
-            return False
+    class Redirect(BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            self.send_response(302)
+            self.send_header("Location", "/unapproved-jwks")
+            self.end_headers()
 
-        def read(self):
-            return b'{"keys": []}'
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
 
-    class Opener:
-        def open(self, request, *, timeout):
-            seen["request"] = request
-            seen["timeout"] = timeout
-            return Response()
-
-    def build(handler):
-        seen["handler"] = handler
-        return Opener()
-
-    monkeypatch.setattr(jwks_module, "build_opener", build)
-    assert jwks_module._fetch_json("http://127.0.0.1:9999/jwks") == {"keys": []}
-    assert isinstance(seen["request"], Request)
-    assert seen["request"].full_url == "http://127.0.0.1:9999/jwks"
-    assert seen["timeout"] == 5
-    assert isinstance(seen["handler"], jwks_module._NoRedirectHandler)
-    assert (
-        seen["handler"].redirect_request(None, None, 302, "Found", {}, "https://attacker.example")
-        is None
-    )
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Redirect)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        issuer = f"http://127.0.0.1:{server.server_port}/issuer"
+        with pytest.raises(HTTPError) as error:
+            OidcJwksIdentityProvider(issuer=issuer)
+        assert error.value.code == 302
+        assert requests == ["/issuer/.well-known/openid-configuration"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
 
 
 def test_ignores_non_signing_jwks_entries():

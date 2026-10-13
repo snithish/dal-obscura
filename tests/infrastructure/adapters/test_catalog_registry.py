@@ -265,19 +265,44 @@ class FakePyIcebergTable:
         properties: ClassVar[dict[str, str]] = {"warehouse": "s3://warehouse"}
 
 
-def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory(tmp_path):
-    config = ServiceConfig(
-        catalogs={
-            "analytics": CatalogConfig(
-                name="analytics",
-                options={"uri": f"sqlite:///{tmp_path}/warehouse.db"},
-            )
-        }
+def test_catalog_registry_reads_iceberg_through_admitted_plugin_factory(tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    import pyarrow as pa
+
+    from dal_obscura.read.request import PlanRequest
+    from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
+
+    create_iceberg_table(tmp_path, "routing", "warehouse", append_batches=[[0, 1]])
+    registry = CatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "analytics": CatalogConfig(
+                    name="analytics",
+                    options={
+                        **iceberg_sql_catalog_options(tmp_path, "routing", "warehouse"),
+                        "provider_catalog_name": "routing",
+                    },
+                )
+            }
+        ),
+        plugin_registry=create_builtin_plugin_registry(),
     )
-
-    registry = CatalogRegistry(config, plugin_registry=create_builtin_plugin_registry())
-
-    assert isinstance(cast(Any, registry._catalogs["analytics"])._catalog, IcebergCatalog)
+    try:
+        source = registry.resolve("analytics", "default.users")
+        schema = source.get_schema()
+        projected = pa.schema([schema.field("id")], metadata=schema.metadata)
+        plan = source.plan(PlanRequest(target="default.users", columns=["id"]), max_tickets=2)
+        rows = []
+        for task in plan.tasks:
+            output_schema, batches = task.table_format.execute(
+                task.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+            )
+            assert output_schema.equals(projected, check_metadata=True)
+            rows.extend(pa.Table.from_batches(batches, schema=output_schema).to_pylist())
+        assert sorted(rows, key=lambda row: row["id"]) == [{"id": 0}, {"id": 1}]
+    finally:
+        registry.close()
 
 
 def test_catalog_registry_close_releases_adapters_and_rejects_reuse(monkeypatch):

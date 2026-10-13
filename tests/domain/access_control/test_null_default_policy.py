@@ -44,7 +44,7 @@ def test_row_only_rules_do_not_unmask_columns():
     )
     columns, masks, row_filter = resolve([rule])
     assert columns == ["email", "country"]
-    assert len(masks) == 2
+    assert masks == {"email": MaskRule(type="null"), "country": MaskRule(type="null")}
     assert row_filter == "(country = 'US')"
 
 

@@ -12,6 +12,7 @@ COPY src ./src
 COPY packages/plugin-api ./packages/plugin-api
 COPY packages/iceberg-reader ./packages/iceberg-reader
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --dev --extra server --extra postgres --extra cloud --no-install-package dal-obscura-iceberg-reader
+RUN uv pip install --no-deps debugpy==1.8.17
 COPY --from=native /wheels /wheels
 RUN uv pip install --no-deps /wheels/*.whl
 COPY packages/delta-plugin /delta-plugin

@@ -3,12 +3,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from time import sleep
+from threading import Barrier, Event
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from dal_obscura_iceberg_rest.catalog import RestCatalog, _snapshot_id
+from dal_obscura_iceberg_rest.catalog import RestCatalog
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
 
@@ -74,15 +74,14 @@ def test_rest_catalog_closes_response_when_cancelled_after_request() -> None:
             closed.append(True)
 
     session = SimpleNamespace()
-    session.request = lambda method, url, **kwargs: Response()
-    checks = 0
+    cancelled = Event()
 
-    def cancel_check() -> bool:
-        nonlocal checks
-        checks += 1
-        return checks >= 2
+    def request(method, url, **kwargs):
+        cancelled.set()
+        return Response()
 
-    context = replace(_context(), cancel_check=cancel_check)
+    session.request = request
+    context = replace(_context(), cancel_check=cancelled.is_set)
     token = module._ACTIVE_REQUEST_BUDGET.set((context, 5.0, 30.0))
     try:
         module._install_request_timeout(session, 5.0, 30.0)
@@ -155,7 +154,8 @@ def test_rest_catalog_rejects_non_string_provider_identifier_segments():
         plugin.list_tables(_context(), limit=10)
 
 
-def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
+@pytest.mark.parametrize("snapshot_shape", ["property", "method"])
+def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle(snapshot_shape):
     plugin = RestCatalog(_config(), _context())
 
     class FakeSnapshot:
@@ -171,13 +171,17 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
             assert identifier == ("default", "users")
             return FakeTable()
 
+    if snapshot_shape == "method":
+        FakeTable.current_snapshot = lambda self: FakeSnapshot()
     plugin._catalog = FakeCatalog()
     handle = plugin.resolve_table(TableIdentifier(namespace=("default",), name="users"), _context())
     assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}
+    assert handle.snapshot_id == "42"
 
 
 def test_rest_catalog_rechecks_cancellation_after_table_load() -> None:
     plugin = RestCatalog(_config(), _context())
+    cancelled = Event()
 
     class FakeTable:
         metadata_location = "https://storage.example/metadata/v1.json"
@@ -185,30 +189,13 @@ def test_rest_catalog_rechecks_cancellation_after_table_load() -> None:
     class FakeCatalog:
         def load_table(self, identifier):
             assert identifier == ("default", "users")
+            cancelled.set()
             return FakeTable()
 
     plugin._catalog = FakeCatalog()
-    checks = 0
-
-    def cancelled() -> bool:
-        nonlocal checks
-        checks += 1
-        return checks >= 3
-
-    context = replace(_context(), cancel_check=cancelled)
+    context = replace(_context(), cancel_check=cancelled.is_set)
     with pytest.raises(InterruptedError, match="cancelled"):
         plugin.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
-
-
-def test_snapshot_id_supports_pyiceberg_method_shape() -> None:
-    class FakeSnapshot:
-        snapshot_id = 42
-
-    class FakeTable:
-        def current_snapshot(self):
-            return FakeSnapshot()
-
-    assert _snapshot_id(FakeTable()) == "42"
 
 
 def test_rest_catalog_bounds_namespace_listing():
@@ -227,28 +214,40 @@ def test_rest_catalog_bounds_namespace_listing():
         plugin.list_tables(_context(), limit=10)
 
 
-def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch) -> None:
+def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch):
     plugin = RestCatalog(_config(), _context())
-    calls = 0
+    entered, release = Event(), Event()
+    ready = Barrier(8)
+    created = []
 
-    class FakeCatalog:
-        pass
+    class Provider:
+        def list_namespaces(self, namespace):
+            return [("default",)]
 
-    def load_catalog(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        sleep(0.01)
-        return FakeCatalog()
+    def create(*args, **kwargs):
+        created.append(Provider())
+        entered.set()
+        assert release.wait(5), "Provider release was not signalled"
+        return created[-1]
 
-    monkeypatch.setattr(
-        "dal_obscura_iceberg_rest.catalog._create_catalog",
-        lambda *args, **kwargs: load_catalog(*args, **kwargs),
-    )
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        values = list(executor.map(lambda _: plugin._load_catalog(_context()), range(8)))
+    monkeypatch.setattr("dal_obscura_iceberg_rest.catalog._create_catalog", create)
 
-    assert calls == 1
-    assert all(value is values[0] for value in values)
+    def list_namespaces():
+        ready.wait(timeout=5)
+        return plugin.list_namespaces(_context())
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(list_namespaces) for _ in range(8)]
+            try:
+                assert entered.wait(5)
+            finally:
+                release.set()
+            assert [future.result(timeout=5) for future in futures] == [(("default",),)] * 8
+        assert len(created) == 1
+    finally:
+        release.set()
+        plugin.close()
 
 
 def test_rest_catalog_close_releases_provider_session_and_is_terminal() -> None:

@@ -1,8 +1,15 @@
 package io.dalobscura.connectors.testkit;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-public final class FixtureBundle {
+public final class FixtureBundle implements AutoCloseable {
+    private final Path outputDirectory;
     private final String uri;
     private final int jwksPort;
     private final String catalog;
@@ -16,30 +23,7 @@ public final class FixtureBundle {
     private final List<Long> sampleUsEvenIds;
     private final int maskedZipHashLength;
 
-    public FixtureBundle(
-            String uri,
-            String catalog,
-            String target,
-            String userToken,
-            String databaseUrl,
-            String jwtSecret,
-            String ticketSecret) {
-        this(
-                uri,
-                -1,
-                catalog,
-                target,
-                userToken,
-                databaseUrl,
-                jwtSecret,
-                ticketSecret,
-                -1L,
-                false,
-                List.of(),
-                -1);
-    }
-
-    public FixtureBundle(
+    FixtureBundle(
             String uri,
             int jwksPort,
             String catalog,
@@ -51,7 +35,9 @@ public final class FixtureBundle {
             long expectedRowCount,
             boolean supportsMultipleTickets,
             List<Long> sampleUsEvenIds,
-            int maskedZipHashLength) {
+            int maskedZipHashLength,
+            Path outputDirectory) {
+        this.outputDirectory = outputDirectory;
         this.uri = uri;
         this.jwksPort = jwksPort;
         this.catalog = catalog;
@@ -112,5 +98,19 @@ public final class FixtureBundle {
 
     public int maskedZipHashLength() {
         return maskedZipHashLength;
+    }
+
+    @Override
+    public void close() throws IOException {
+        deleteDirectory(outputDirectory);
+    }
+
+    static void deleteDirectory(Path directory) throws IOException {
+        if (directory == null || !Files.exists(directory)) return;
+        List<Path> entries;
+        try (Stream<Path> paths = Files.walk(directory)) {
+            entries = paths.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+        }
+        for (Path entry : entries) Files.deleteIfExists(entry);
     }
 }

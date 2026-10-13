@@ -23,13 +23,14 @@ from dal_obscura.storage.database.db import (
 )
 
 
-def _client(http_client, db_engine, nonce_resolver) -> TestClient:
+def _client(http_client, db_engine, nonce_resolver, **app_options) -> TestClient:
     engine = db_engine
     return http_client(
         create_app(
             session_factory(engine),
             admin_token="test-admin",
             oidc_nonce_actor_resolver=nonce_resolver,
+            **app_options,
             ui_auth_config={
                 "authority": "https://issuer.example/realms/demo",
                 "client_id": "dal-obscura-ui",
@@ -339,7 +340,10 @@ def test_successful_oidc_callback_clears_client_login_limit(
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
     client = _client(
-        http_client, db_engine, lambda token, nonce_hash: {"principal": "alice", "groups": []}
+        http_client,
+        db_engine,
+        lambda token, nonce_hash: {"principal": "alice", "groups": []},
+        login_rate_limit_attempts=1,
     )
 
     start = client.get("/auth/login", follow_redirects=False)
@@ -351,8 +355,6 @@ def test_successful_oidc_callback_clears_client_login_limit(
     )
 
     assert callback.status_code == 303
-    # A successful callback resets the client window, so the default limiter
-    # can immediately admit another login start.
     assert client.get("/auth/login", follow_redirects=False).status_code == 303
 
 

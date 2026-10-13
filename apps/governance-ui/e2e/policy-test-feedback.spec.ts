@@ -24,7 +24,7 @@ test("policy test shows running state and actionable server errors inside modal"
   await authenticatedApi(page);
   const deferred = deferredResponse();
   await page.route("**/policy-evaluate", async (route) => {
-    deferred.markStarted(); await deferred.wait();
+    deferred.markStarted(page, route.request()); await deferred.wait();
     await route.fulfill({ status: 422, json: { error: { code: "validation_error", message: "Request validation failed", field_errors: [{ field: "claims", message: "Use a string for region.", type: "value_error" }] } } });
   });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");

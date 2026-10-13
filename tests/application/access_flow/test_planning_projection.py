@@ -46,7 +46,6 @@ def test_plan_access_expands_wildcard_columns():
 
     assert authorizer.last_requested_columns == ["id", "region"]
     assert ticket_codec.signed_payloads[0].scan["full_row_filter"] == "region = 'us'"
-    assert ticket_codec.signed_payloads[0].scan["full_row_filter"] is not None
 
 
 def test_wildcard_preserves_literal_field_names_during_authorization() -> None:
@@ -73,28 +72,6 @@ def test_wildcard_preserves_literal_field_names_during_authorization() -> None:
 
     assert authorizer.last_requested_columns == paths
     assert result.output_schema.names == schema.names
-
-
-@pytest.mark.parametrize("columns", [[], ["*", "id"], ["id", "id"]])
-def test_plan_access_rejects_ambiguous_or_empty_column_requests(columns):
-    _schema, decision, table_format = _build_use_case_dependencies()
-    use_case = make_read_service(
-        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        access_context=StaticAccessContext(
-            authorizer=FakeAuthorizer(decision=decision),
-            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
-        ),
-        ticket_codec=FakeTicketCodec(),
-        ticket_store=FakeTicketStore(),
-        ticket_ttl_seconds=300,
-        max_tickets=1,
-        max_ticket_exchanges=1,
-    )
-
-    with pytest.raises(ValueError, match="columns"):
-        use_case.plan(
-            PlanRequest(catalog="catalog1", target="users", columns=columns), AUTHORIZATION_HEADER
-        )
 
 
 def test_plan_access_accepts_nested_requested_columns():

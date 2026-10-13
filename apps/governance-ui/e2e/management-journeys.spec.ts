@@ -91,12 +91,16 @@ test("administrator access management submits owner and grant changes", async ({
   await expect(page.getByRole("heading", { name: "Owners and delegated capabilities" })).toBeVisible();
 
   await page.getByLabel("Owner principals").fill("alex@example.invalid, steward@example.invalid");
+  const owners = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/owners"));
   await page.getByRole("button", { name: "Save owners" }).click();
+  expect((await owners).postDataJSON()).toEqual({ expected_revision: 1, owners: ["alex@example.invalid", "steward@example.invalid"] });
   await expect(page.getByText("Owners updated.")).toBeVisible();
 
   await page.getByRole("button", { name: "Add capability" }).click();
   await page.getByLabel("Grant principal 1").fill("group:data-stewards");
+  const grants = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/grants"));
   await page.getByRole("button", { name: "Save capabilities" }).click();
+  expect((await grants).postDataJSON()).toEqual({ expected_revision: 1, grants: [{ principal: "group:data-stewards", capability: "read" }] });
   await expect(page.getByText("Delegated capabilities updated. Changes take effect on the next authorized request.")).toBeVisible();
 });
 
@@ -107,7 +111,9 @@ test("administrator settings submits staged runtime changes", async ({ page }) =
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("11");
 
   await page.getByLabel("Ticket TTL (seconds)").fill("30");
+  const saved = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/settings/runtime"));
   await page.getByRole("button", { name: "Save runtime settings" }).click();
+  expect((await saved).postDataJSON()).toEqual({ expected_revision: 1, ticket_ttl_seconds: 30, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }] });
   await expect(page.getByText("Runtime settings saved to live configuration.")).toBeVisible();
 });
 
@@ -128,7 +134,9 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await page.getByLabel("Name").fill("warehouse");
   await page.getByLabel("Catalog URI").fill("https://warehouse.example");
   await page.getByLabel("Password secret reference").fill("catalog/warehouse");
+  const saved = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/catalogs/warehouse"));
   await page.getByRole("button", { name: "Save connection" }).click();
+  expect((await saved).postDataJSON()).toEqual({ plugin_id: "synthetic.catalog.iceberg", options: { uri: "https://warehouse.example", password: { secret: "catalog/warehouse", scope: "catalog:warehouse" } } });
   await expect(page.getByText("Connection saved. Discovery remains bounded to this configured catalog.")).toBeVisible();
 });
 

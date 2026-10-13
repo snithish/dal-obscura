@@ -693,4 +693,5 @@ def test_public_format_keeps_deep_metadata_and_plans_native_top_level_projection
 
     partition = planned.tasks[0].partition
     assert isinstance(partition, PublicPluginPartition)
+    assert partition.task.to_json() == {"fragment": 0}
     assert partition.schema.equals(expected, check_metadata=True)

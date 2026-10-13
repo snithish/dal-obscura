@@ -425,9 +425,8 @@ def test_implicit_list_element_mask_paths_are_rejected():
         [pa.field("contacts", pa.list_(pa.struct([pa.field("email", pa.string())])))]
     )
 
-    for operation in (compile_projection,):
-        with pytest.raises(ValueError, match="does not contain a struct"):
-            operation(schema, ["contacts"], {"contacts.email": MaskRule(type="hash")})
+    with pytest.raises(ValueError, match="does not contain a struct"):
+        compile_projection(schema, ["contacts"], {"contacts.email": MaskRule(type="hash")})
 
 
 @pytest.mark.parametrize(
@@ -441,9 +440,15 @@ def test_implicit_list_element_mask_paths_are_rejected():
 def test_mask_schema_and_execution_reject_the_same_invalid_configuration(mask):
     schema = pa.schema([pa.field("id", pa.int64())])
 
-    for operation in (compile_projection,):
-        with pytest.raises(ValueError):
-            operation(schema, ["id"], {"id": mask})
+    with pytest.raises(ValueError):
+        compile_projection(schema, ["id"], {"id": mask})
+    batch = pa.record_batch([pa.array([7])], schema=schema)
+    with pytest.raises(ValueError):
+        list(
+            DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
+                [batch], ["id"], None, {"id": mask}
+            )
+        )
 
 
 @pytest.mark.parametrize("container", ["struct", "list", "map"])

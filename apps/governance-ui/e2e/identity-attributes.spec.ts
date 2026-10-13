@@ -4,7 +4,7 @@ import { assetId, identityApi } from "./identity-fixture";
 
 test.beforeEach(async ({ page }) => { await identityApi(page); });
 
-test("condition key changes clear values and preserve exact comma-containing values", async ({ page }) => {
+test("condition key changes clear values and save the new attribute domain", async ({ page }) => {
   await page.goto(`/?asset=${assetId}#assets`);
   await page.getByText("Identity attribute conditions (1)", { exact: true }).click();
   await page.getByRole("combobox", { name: "Attribute 1", exact: true }).click();

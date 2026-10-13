@@ -138,7 +138,6 @@ export const SecretReferenceEditing: Story = {
     await expect(secretField).toHaveAttribute("type", "password");
     await expect(secretField).toHaveValue("vault/catalog/password");
     await expect(canvas.getByText(/Secret references remain deployment-managed/)).toBeVisible();
-    await expect(canvas.queryByText("super-secret-password")).not.toBeInTheDocument();
   },
 };
 

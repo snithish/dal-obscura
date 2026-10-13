@@ -21,12 +21,28 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class DalObscuraPartitionReaderTest {
+    private static final String TOKEN_PROPERTY = "dal.obscura.test.token";
+    private String previousToken;
+
+    @BeforeEach
+    void setExecutorToken() {
+        previousToken = System.getProperty(TOKEN_PROPERTY);
+        System.setProperty(TOKEN_PROPERTY, "executor-token");
+    }
+
+    @AfterEach
+    void restoreExecutorToken() {
+        if (previousToken == null) System.clearProperty(TOKEN_PROPERTY);
+        else System.setProperty(TOKEN_PROPERTY, previousToken);
+    }
+
     private static DalObscuraExecutorAuthProvider executorAuth() {
-        System.setProperty("dal.obscura.test.token", "executor-token");
-        return DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token");
+        return DalObscuraExecutorAuthProvider.fromSystemProperty(TOKEN_PROPERTY);
     }
 
     @Test

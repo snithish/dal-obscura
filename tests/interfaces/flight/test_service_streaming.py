@@ -173,16 +173,19 @@ def test_flight_service_health_action_returns_ok():
         ),
         policy_rules=[allow_rule(["id", "region"])],
     )
-    assert any(action.type == "healthz" for action in server.list_actions(None))
-    action = flight.Action("healthz", b"")
+    try:
+        assert any(action.type == "healthz" for action in server.list_actions(None))
+        action = flight.Action("healthz", b"")
 
-    results = list(server.do_action(None, action))
+        results = list(server.do_action(None, action))
 
-    assert len(results) == 1
-    assert results[0].body.to_pybytes() == b'{"status":"ok","service":"data-plane"}'
+        assert len(results) == 1
+        assert results[0].body.to_pybytes() == b'{"status":"ok","service":"data-plane"}'
+    finally:
+        server.shutdown()
 
 
-def test_get_schema_returns_masked_authorized_schema(tmp_path):
+def test_get_schema_returns_masked_authorized_schema():
     schema = pa.schema(
         [
             pa.field("id", pa.int64()),
@@ -206,7 +209,6 @@ def test_get_schema_returns_masked_authorized_schema(tmp_path):
         batches=(batch,),
     )
 
-    del tmp_path
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[
@@ -233,8 +235,7 @@ def test_get_schema_returns_masked_authorized_schema(tmp_path):
         assert result.schema.field("email").type == pa.string()
 
 
-def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
-    del tmp_path
+def test_streaming_contract_emits_multiple_batches(monkeypatch):
     monkeypatch.setattr(
         "dal_obscura.read.transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
         2,
@@ -271,9 +272,7 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
         assert result.column("id").num_chunks >= 2
 
 
-def test_flight_streaming_supports_nested_projection_with_policy_and_requested_row_filters(
-    tmp_path,
-):
+def test_flight_streaming_supports_nested_projection_with_policy_and_requested_row_filters():
     user_type = pa.struct(
         [
             pa.field("email", pa.string()),
@@ -316,7 +315,6 @@ def test_flight_streaming_supports_nested_projection_with_policy_and_requested_r
         batches=(batch,),
     )
 
-    del tmp_path
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[
@@ -359,7 +357,7 @@ def test_flight_streaming_supports_nested_projection_with_policy_and_requested_r
         assert all(len(user["address"]["zip"]) == 64 for user in users)
 
 
-def test_flight_parent_projection_nulls_ungranted_nested_siblings(tmp_path):
+def test_flight_parent_projection_nulls_ungranted_nested_siblings():
     profile_type = pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())])
     schema = pa.schema([pa.field("profile", profile_type)])
     batch = pa.record_batch(
@@ -374,7 +372,6 @@ def test_flight_parent_projection_nulls_ungranted_nested_siblings(tmp_path):
         batches=(batch,),
     )
 
-    del tmp_path
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[allow_rule(["profile.name"])],
@@ -393,7 +390,7 @@ def test_flight_parent_projection_nulls_ungranted_nested_siblings(tmp_path):
     assert client_schema == info.schema
 
 
-def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
+def test_flight_streaming_masks_list_of_struct_fields():
     schema = metadata_schema()
     batch = metadata_batch()
     table_format = StubTableFormat(
@@ -404,7 +401,6 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
         batches=(batch,),
     )
 
-    del tmp_path
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[
@@ -436,8 +432,7 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
         assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
 
 
-def test_flight_schema_matches_duckdb_list_output(tmp_path):
-    del tmp_path
+def test_flight_schema_matches_duckdb_list_output():
     schema = metadata_schema(large_list=True)
     batch = metadata_batch(large_list=True)
     table_format = StubTableFormat(
@@ -475,8 +470,7 @@ def test_flight_schema_matches_duckdb_list_output(tmp_path):
     assert table.column("metadata").to_pylist()[0]["preferences"][0]["theme"] == "dark"
 
 
-def test_do_get_rejects_principal_mismatch(tmp_path):
-    del tmp_path
+def test_do_get_rejects_principal_mismatch():
     schema = id_region_schema()
     batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
@@ -491,23 +485,25 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
         table_format=table_format,
         policy_rules=[allow_rule(["id", "region"])],
     )
-    descriptor = command_descriptor(
-        {
-            "catalog": "analytics",
-            "target": "test.table",
-            "columns": ["id", "region"],
-        }
-    )
-    plan_context = DummyContext(headers=[authorization_header("user1")])
-    info = server.get_flight_info(plan_context, descriptor)
+    try:
+        descriptor = command_descriptor(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "region"],
+            }
+        )
+        plan_context = DummyContext(headers=[authorization_header("user1")])
+        info = server.get_flight_info(plan_context, descriptor)
 
-    do_get_context = DummyContext(headers=[authorization_header("user2")])
-    with pytest.raises(flight.FlightUnauthorizedError):
-        server.do_get(do_get_context, info.endpoints[0].ticket)
+        do_get_context = DummyContext(headers=[authorization_header("user2")])
+        with pytest.raises(flight.FlightUnauthorizedError):
+            server.do_get(do_get_context, info.endpoints[0].ticket)
+    finally:
+        server.shutdown()
 
 
-def test_descriptor_authorization_field_is_not_accepted(tmp_path):
-    del tmp_path
+def test_descriptor_authorization_field_is_not_accepted():
     schema = id_region_schema()
     batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
@@ -522,21 +518,23 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
         table_format=table_format,
         policy_rules=[allow_rule(["id", "region"])],
     )
-    descriptor = command_descriptor(
-        {
-            "catalog": "analytics",
-            "target": "test.table",
-            "columns": ["id", "region"],
-            "authorization": f"Bearer {make_jwt('user1')}",
-        }
-    )
+    try:
+        descriptor = command_descriptor(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "region"],
+                "authorization": f"Bearer {make_jwt('user1')}",
+            }
+        )
 
-    with pytest.raises(flight.FlightUnauthorizedError):
-        server.get_flight_info(DummyContext(headers=[]), descriptor)
+        with pytest.raises(flight.FlightUnauthorizedError):
+            server.get_flight_info(DummyContext(headers=[]), descriptor)
+    finally:
+        server.shutdown()
 
 
-def test_do_get_keeps_captured_policy_after_policy_change(tmp_path):
-    del tmp_path
+def test_do_get_keeps_captured_policy_after_policy_change():
     schema = id_region_schema()
     batch = id_region_batch([1, 2], ["us", "eu"])
     table_format = StubTableFormat(
@@ -577,8 +575,7 @@ def test_do_get_keeps_captured_policy_after_policy_change(tmp_path):
         assert updated.column("region").to_pylist() == ["us"]
 
 
-def test_do_get_requires_authorization_header(tmp_path):
-    del tmp_path
+def test_do_get_requires_authorization_header():
     schema = id_region_schema()
     batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
@@ -593,18 +590,21 @@ def test_do_get_requires_authorization_header(tmp_path):
         table_format=table_format,
         policy_rules=[allow_rule(["id", "region"])],
     )
-    descriptor = command_descriptor(
-        {
-            "catalog": "analytics",
-            "target": "test.table",
-            "columns": ["id", "region"],
-        }
-    )
-    plan_context = DummyContext(headers=[authorization_header("user1")])
-    info = server.get_flight_info(plan_context, descriptor)
+    try:
+        descriptor = command_descriptor(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "region"],
+            }
+        )
+        plan_context = DummyContext(headers=[authorization_header("user1")])
+        info = server.get_flight_info(plan_context, descriptor)
 
-    with pytest.raises(flight.FlightUnauthorizedError):
-        server.do_get(DummyContext(headers=[]), info.endpoints[0].ticket)
+        with pytest.raises(flight.FlightUnauthorizedError):
+            server.do_get(DummyContext(headers=[]), info.endpoints[0].ticket)
+    finally:
+        server.shutdown()
 
 
 @pytest.mark.parametrize("after_first_batch", [False, True])

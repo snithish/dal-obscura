@@ -147,17 +147,20 @@ def test_ticket_to_response_streaming_is_chunked_with_bounded_rss(tmp_path, benc
 
     for probe in (smaller, larger):
         assert probe["rss_samples"] > 2
+        assert (
+            min(probe["planned_file_count"], LARGE_BENCHMARK_MAX_TICKETS)
+            <= probe["endpoint_count"]
+            <= LARGE_BENCHMARK_MAX_TICKETS
+        )
         assert probe["chunk_count"] > probe["endpoint_count"]
         assert probe["max_chunk_rows"] <= _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
         assert probe["first_chunk_elapsed_s"] < probe["total_read_elapsed_s"] * 0.5
 
     assert smaller["rows"] == 10_000_000
     assert smaller["planned_file_count"] == 2
-    assert smaller["endpoint_count"] == 2
     assert larger["rows"] == LARGE_BENCHMARK_TOTAL_ROWS
     assert larger["planned_file_count"] == LARGE_BENCHMARK_FILE_COUNT
     assert larger["rows_per_file"] == LARGE_BENCHMARK_ROWS_PER_FILE
-    assert larger["endpoint_count"] == LARGE_BENCHMARK_MAX_TICKETS
     assert larger["rss_delta"] < LARGE_BENCHMARK_RSS_LIMIT_BYTES
     assert larger["rss_delta"] < smaller["rss_delta"] + 256 * 1024 * 1024
 

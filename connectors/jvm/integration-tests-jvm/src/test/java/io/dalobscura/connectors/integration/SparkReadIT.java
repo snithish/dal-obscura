@@ -1,17 +1,28 @@
 package io.dalobscura.connectors.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 
 class SparkReadIT {
+    @Test
+    void removesFixtureFilesAfterClosingSparkAndFlight() throws Exception {
+        Path directory;
+        try (SparkFixture fixture = SparkFixture.create("spark-fixture-cleanup-it")) {
+            directory = Path.of(fixture.bundle().databaseUrl().substring("sqlite+pysqlite:///".length())).getParent();
+        }
+        assertFalse(Files.exists(directory), "Fixture files remain after their Spark and Flight consumers close");
+    }
+
     @Test
     void readsNestedProjectionWithPushedFilters() throws Exception {
         try (SparkFixture fixture = SparkFixture.create("spark-nested-projection-it")) {
@@ -69,15 +80,14 @@ class SparkReadIT {
             assertEquals("[redacted-note]", topLevelRow.getString(1));
             assertEquals("partner-visible", topLevelRow.getString(2));
             assertNull(topLevelRow.get(3));
-            assertNotEquals("ACCT-000000000016", topLevelRow.getString(4));
-            assertTrue(topLevelRow.getString(4).endsWith("0016"));
-            assertEquals(fixture.bundle().maskedZipHashLength(), nestedRow.getString(0).length());
-            assertTrue(nestedRow.getString(0).matches("[0-9a-f]+"));
+            assertEquals("*************0016", topLevelRow.getString(4));
+            assertEquals("5c52a3a41f05ae53a6a75f01b0f49052c8cf5e43084ca97d3ba42ab848374e9f",
+                    nestedRow.getString(0));
         }
     }
 
     @Test
-    void usesBroadAndSelectivePlanningAppropriatelyForTheHeavyFixture() throws Exception {
+    void countsBroadAndSelectiveGovernedReadsForTheHeavyFixture() throws Exception {
         try (SparkFixture fixture = SparkFixture.create("spark-broad-planning-it")) {
             Dataset<Row> broad = fixture.read().filter("market IS NOT NULL");
             long broadCount = broad.count();

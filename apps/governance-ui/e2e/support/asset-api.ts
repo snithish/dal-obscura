@@ -35,7 +35,7 @@ export async function installAssetApi(page: Page, options: AuthenticatedApiOptio
     if (path === "/v1/assets/page") {
       const search = new URL(request.url()).searchParams.get("search");
       if (search === "stale" && options.deferredInventory) {
-        options.deferredInventory.markStarted();
+        options.deferredInventory.markStarted(page, route.request());
         await options.deferredInventory.wait();
       }
       if (search === "stale") return route.fulfill({ json: { items: [{ ...inventory, name: "stale-orders" }], next_cursor: null } });
@@ -72,7 +72,7 @@ export async function installAssetApi(page: Page, options: AuthenticatedApiOptio
       }
       if (suffix === "policy" && request.method() === "PUT") {
         if (options.deferredSave) {
-          options.deferredSave.markStarted();
+          options.deferredSave.markStarted(page, route.request());
           await options.deferredSave.wait();
         }
         const payload = request.postDataJSON() as { expected_revision: number; revoke_existing_tokens?: boolean; rules?: Array<Record<string, unknown>> };
@@ -88,7 +88,7 @@ export async function installAssetApi(page: Page, options: AuthenticatedApiOptio
       if (suffix === "tickets/revoke" && request.method() === "POST") return route.fulfill({ json: { asset_id: assetId, revoked_token_count: 2 } });
       if (suffix === "policy-evaluate" && request.method() === "POST") {
         if (options.deferredEvaluate) {
-          options.deferredEvaluate.markStarted();
+          options.deferredEvaluate.markStarted(page, route.request());
           await options.deferredEvaluate.wait();
         }
         return route.fulfill({ json: { decision: "deny", allowed_columns: [], masks: [], row_filter: null, rows: [], input_rows: 0, output_rows: 0, evidence: {}, schema: "", status: "completed" } });

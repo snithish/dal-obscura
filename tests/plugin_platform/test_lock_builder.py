@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 from importlib import metadata
-from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 
 import pytest
-from dal_obscura_plugin_api import PluginKind
 
 from dal_obscura.sources.plugins.registry import PluginAdmissionError
 from scripts.build_plugin_lock import build_document, parse_selection, write_lock
@@ -22,52 +18,72 @@ def test_parse_selection_requires_an_admitted_plugin_kind() -> None:
         parse_selection("format:parquet.dataset")
 
 
-def test_build_document_uses_static_descriptor_and_sorts_rows(monkeypatch) -> None:
-    distribution = SimpleNamespace(name="fixture-dist", version="1.2.3")
-    entries: list[tuple[PluginKind, metadata.EntryPoint]] = [
-        (
-            "catalog",
-            metadata.EntryPoint(name="zeta", value="pkg:zeta", group="dal_obscura.catalogs.v2"),
-        ),
-        (
-            "catalog",
-            metadata.EntryPoint(name="alpha", value="pkg:alpha", group="dal_obscura.catalogs.v2"),
-        ),
-    ]
-    for _kind, entry in entries:
-        object.__setattr__(entry, "dist", distribution)
-    monkeypatch.setattr(
-        "scripts.build_plugin_lock.load_static_plugin_descriptor",
-        lambda entry: SimpleNamespace(
-            kind="catalog",
-            plugin_id=str(entry.name),
-            api_version="2",
-            config_version=1,
-            distribution="fixture-dist",
-            version="1.2.3",
-        ),
+def test_build_document_reads_installed_descriptors_and_sorts_rows(tmp_path):
+    import hashlib
+    import json
+
+    from tests.support.installed_plugin import installed_plugin
+
+    entries = []
+    expected = []
+    for plugin_id in ("zeta.delta", "alpha.delta"):
+        root = tmp_path / plugin_id
+        root.mkdir()
+        installed_plugin(root)
+        info = root / "acme_delta_plugin-1.0.dist-info"
+        entry_file = info / "entry_points.txt"
+        entry_file.write_text(entry_file.read_text().replace("acme.delta", plugin_id))
+        descriptor_file = info / "dal_obscura-plugin.json"
+        descriptor_file.write_text(descriptor_file.read_text().replace("acme.delta", plugin_id))
+        distribution = metadata.Distribution.at(info)
+        entries.append(("catalog", next(iter(distribution.entry_points))))
+        descriptor = {
+            "kind": "catalog",
+            "plugin_id": plugin_id,
+            "api_version": "2",
+            "config_version": 1,
+            "distribution": "acme-delta-plugin",
+            "version": "1.0",
+            "capabilities": [],
+            "config_schema": {},
+            "display_name": "",
+            "output_formats": [],
+            "handle_versions": [1],
+        }
+        descriptor_digest = hashlib.sha256(
+            json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        artifact_digest = hashlib.sha256()
+        for path in sorted(info.iterdir()):
+            artifact_digest.update(str(path.relative_to(root)).encode() + b"\0")
+            artifact_digest.update(path.read_bytes() + b"\0")
+        expected.append(
+            {
+                "kind": "catalog",
+                "plugin_id": plugin_id,
+                "lock": [
+                    "acme-delta-plugin",
+                    "1.0",
+                    "2",
+                    descriptor_digest,
+                    artifact_digest.hexdigest(),
+                ],
+            }
+        )
+    document = build_document(
+        [("catalog", "zeta.delta"), ("catalog", "alpha.delta")], entry_points=entries
     )
-    monkeypatch.setattr(
-        "scripts.build_plugin_lock.build_plugin_lock",
-        lambda _kind, entry, _descriptor: (
-            "fixture-dist",
-            "1.2.3",
-            "1",
-            "a" * 64,
-            "b" * 64,
-        ),
-    )
-
-    document = build_document([("catalog", "zeta"), ("catalog", "alpha")], entry_points=entries)
-
-    assert document["version"] == 1
-    rows = cast(list[dict[str, object]], document["plugins"])
-    assert [row["plugin_id"] for row in rows] == ["alpha", "zeta"]
+    assert document == {"version": 1, "plugins": sorted(expected, key=lambda row: row["plugin_id"])}
 
 
-def test_write_lock_is_atomic_and_refuses_overwrite(tmp_path: Path) -> None:
+def test_write_lock_preserves_exact_document_and_refuses_overwrite(tmp_path):
+    import json
+
     output = tmp_path / "plugin-lock.json"
-    write_lock(output, {"version": 1, "plugins": []})
-    assert output.read_text().endswith("\n")
+    document: dict[str, object] = {"version": 1, "plugins": [{"plugin_id": "fixture"}]}
+    write_lock(output, document)
+    expected = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+    assert output.read_bytes() == expected
     with pytest.raises(PluginAdmissionError, match="refusing to overwrite"):
         write_lock(output, {"version": 1, "plugins": []})
+    assert output.read_bytes() == expected

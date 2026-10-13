@@ -1,3 +1,5 @@
+import hashlib
+
 import pyarrow as pa
 import pytest
 
@@ -45,6 +47,13 @@ def test_benchmark_row_filter_only(benchmark):
     )
     assert table.num_rows == expected_rows
     assert table.schema.names == ["id", "email", "region"]
+    assert table.column("id").to_pylist() == list(range(0, 32_768, 2))
+    assert table.column("region").to_pylist() == ["us"] * 16_384
+    assert table.column("email").to_pylist()[:3] == [
+        "user0@example.com",
+        "user2@example.com",
+        "user4@example.com",
+    ]
 
 
 @pytest.mark.benchmark(group="row-filter-mask")
@@ -79,6 +88,10 @@ def test_benchmark_mask_only(benchmark):
     assert table.num_rows == batch_count * rows_per_batch
     assert table.schema.field("id").type == pa.string()
     assert table.column("email").to_pylist()[:3] == ["[hidden]", "[hidden]", "[hidden]"]
+    assert table.column("id").to_pylist()[:3] == [
+        hashlib.sha256(value).hexdigest() for value in (b"0", b"1", b"2")
+    ]
+    assert table.column("region").to_pylist()[:3] == ["us", "eu", "us"]
 
 
 @pytest.mark.benchmark(group="row-filter-mask")
@@ -113,6 +126,10 @@ def test_benchmark_row_filter_and_top_level_masks(benchmark):
     assert table.num_rows == expected_rows
     assert table.schema.field("id").type == pa.string()
     assert table.column("email").to_pylist()[:3] == ["[hidden]", "[hidden]", "[hidden]"]
+    assert table.column("id").to_pylist()[:3] == [
+        hashlib.sha256(value).hexdigest() for value in (b"0", b"2", b"4")
+    ]
+    assert table.column("region").to_pylist() == ["us"] * 16_384
 
 
 @pytest.mark.benchmark(group="row-filter-mask")
@@ -146,3 +163,18 @@ def test_benchmark_row_filter_and_nested_masks(benchmark):
     assert table.num_rows == expected_rows
     user_field = table.schema.field("user")
     assert user_field.type.field("address").type.field("zip").type == pa.string()
+    assert table.column("id").to_pylist()[:3] == [1, 2, 4]
+    assert table.column("user").to_pylist()[:3] == [
+        {
+            "email": "user1@example.com",
+            "address": {"zip": hashlib.sha256(b"10001").hexdigest(), "city": "city-1"},
+        },
+        {
+            "email": "user2@example.com",
+            "address": {"zip": hashlib.sha256(b"10002").hexdigest(), "city": "city-2"},
+        },
+        {
+            "email": "user4@example.com",
+            "address": {"zip": hashlib.sha256(b"10004").hexdigest(), "city": "city-4"},
+        },
+    ]

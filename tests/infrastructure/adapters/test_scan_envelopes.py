@@ -104,7 +104,11 @@ def test_scan_envelope_can_cover_a_large_splittable_table():
             ),
         ),
     )
-    assert len(codec.decode(codec.encode(task)).partition.task.to_json()["files"]) == 512
+    restored = codec.decode(codec.encode(task))
+    assert restored.partition.task.to_json()["files"] == [
+        f"/warehouse/{index}.parquet" for index in range(512)
+    ]
+    assert restored.schema.equals(pa.schema([("id", pa.int64())]), check_metadata=True)
 
 
 @pytest.mark.parametrize(

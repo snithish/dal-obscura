@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public final class FixtureBuilderRunner {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -17,6 +20,19 @@ public final class FixtureBuilderRunner {
 
     public static FixtureBundle build() throws Exception {
         Path outputDir = Files.createTempDirectory("spark-connector-fixture");
+        try {
+            return build(outputDir);
+        } catch (Exception | Error failure) {
+            try {
+                FixtureBundle.deleteDirectory(outputDir);
+            } catch (IOException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
+    }
+
+    private static FixtureBundle build(Path outputDir) throws Exception {
         int port = reservePort();
         int jwksPort = reservePort();
 
@@ -32,19 +48,47 @@ public final class FixtureBuilderRunner {
                         "--jwks-port",
                         Integer.toString(jwksPort));
         builder.directory(workspaceRoot().toFile());
-        builder.redirectErrorStream(true);
+        Path log = outputDir.resolve("fixture-builder.log");
+        builder.redirectErrorStream(true).redirectOutput(log.toFile());
 
         Process process = builder.start();
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IllegalStateException("Fixture builder failed:\n" + output);
+        try {
+            if (!process.waitFor(120, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Fixture builder exceeded its 120-second deadline");
+            }
+            String output = readOutput(log);
+            if (process.exitValue() != 0) {
+                throw new IllegalStateException("Fixture builder failed:\n" + output);
+            }
+            return parseFixturePayload(extractJsonPayload(output), outputDir);
+        } catch (Exception | Error failure) {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            try {
+                if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                    failure.addSuppressed(new IllegalStateException("Fixture builder did not stop after termination"));
+                }
+            } catch (InterruptedException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+                Thread.currentThread().interrupt();
+            }
+            throw failure;
         }
-
-        return parseFixturePayload(extractJsonPayload(output));
     }
 
-    static FixtureBundle parseFixturePayload(String payload) throws IOException {
+    private static String readOutput(Path log) throws IOException {
+        try (FileChannel channel = FileChannel.open(log)) {
+            int length = (int) Math.min(channel.size(), 64 * 1024);
+            ByteBuffer output = ByteBuffer.allocate(length);
+            channel.position(channel.size() - length);
+            while (output.hasRemaining() && channel.read(output) > 0) {
+                // Read only the bounded tail, where the fixture emits its JSON result.
+            }
+            return new String(output.array(), 0, output.position(), StandardCharsets.UTF_8);
+        }
+    }
+
+    static FixtureBundle parseFixturePayload(String payload, Path outputDirectory) throws IOException {
         JsonNode node = MAPPER.readTree(payload);
         JsonNode expected = requireObject(node, "expected");
         return new FixtureBundle(
@@ -59,7 +103,8 @@ public final class FixtureBuilderRunner {
                 requireLong(expected, "row_count"),
                 requireBoolean(expected, "supports_multiple_tickets"),
                 requireLongArray(expected, "sample_us_even_ids"),
-                requireInt(expected, "masked_zip_hash_length"));
+                requireInt(expected, "masked_zip_hash_length"),
+                outputDirectory);
     }
 
     private static JsonNode requireObject(JsonNode node, String fieldName) {

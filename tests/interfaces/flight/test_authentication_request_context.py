@@ -10,8 +10,6 @@ from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.read.contracts import GetSchemaResult
 from tests.support.flight import command_descriptor
 
-pytestmark = pytest.mark.socket
-
 
 class DummyContext:
     def __init__(self, headers):
@@ -84,6 +82,7 @@ def test_authentication_request_rejects_duplicate_auth_headers():
         authentication_request_from_context(context, method="get_flight_info")
 
 
+@pytest.mark.socket
 def test_flight_service_passes_authentication_request_to_use_case():
     get_schema = RecordingGetSchemaUseCase()
     service = DataAccessFlightService(

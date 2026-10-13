@@ -8,7 +8,9 @@ import io.dalobscura.connectors.client.DalObscuraPlannedPartition;
 import io.dalobscura.connectors.client.DalObscuraPlannedRead;
 import io.dalobscura.connectors.client.DalObscuraReadClient;
 import io.dalobscura.connectors.client.DalObscuraTicketStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -84,6 +86,13 @@ class DalObscuraScanBuilderTest {
             output.writeObject(partitions[0]);
             String serialized = buffer.toString(java.nio.charset.StandardCharsets.ISO_8859_1);
             org.junit.jupiter.api.Assertions.assertFalse(serialized.contains("token-123"));
+            try (ObjectInputStream input = new ObjectInputStream(new ByteArrayInputStream(buffer.toByteArray()))) {
+                DalObscuraInputPartition restored = (DalObscuraInputPartition) input.readObject();
+                assertEquals("ticket-a", restored.plannedPartition().ticket());
+                assertEquals(List.of(), restored.plannedPartition().locations());
+                assertEquals("dal.obscura.test.token", restored.executorAuthProvider().reference());
+                assertEquals(new StructType().add("id", "long"), restored.requiredSchema());
+            }
         }
     }
 

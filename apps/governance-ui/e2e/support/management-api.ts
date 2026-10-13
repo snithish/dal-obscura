@@ -48,13 +48,13 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
         if (!cursor) return route.fulfill({ json: { items: [event("asset.policy.replace", "filtered-policy")], next_cursor: "audit-next" } });
         return route.fulfill({ json: { items: [event("asset.tokens.revoke", "filtered-revoke")], next_cursor: null } });
       }
-      auditCalls += 1;
-      if (auditCalls === 1 && options.deferredAudit) {
-        options.deferredAudit.markStarted();
+      const auditCall = ++auditCalls;
+      if (auditCall === 1 && options.deferredAudit) {
+        options.deferredAudit.markStarted(page, route.request());
         await options.deferredAudit.wait();
       }
-      const action = auditCalls === 1 ? "stale-audit" : "fresh-audit";
-      return route.fulfill({ json: { items: [{ id: `event-${auditCalls}`, actor: "alex@example.invalid", action, resource_type: "workspace", resource_id: "workspace", outcome: "success", details: {}, correlation_id: null, created_at: "2026-09-21T00:00:00Z" }], next_cursor: null } });
+      const action = auditCall === 1 ? "stale-audit" : "fresh-audit";
+      return route.fulfill({ json: { items: [{ id: `event-${auditCall}`, actor: "alex@example.invalid", action, resource_type: "workspace", resource_id: "workspace", outcome: "success", details: {}, correlation_id: null, created_at: "2026-09-21T00:00:00Z" }], next_cursor: null } });
     }
     if (path === "/v1/workspace/summary") return route.fulfill({ json: { asset_count: 1, catalog_count: 1, enabled_auth_provider_count: 1, missing_policy_count: 0, runtime_configured: true, unowned_asset_count: 0 } });
     if (path === "/v1/workspace/observations") return route.fulfill({ json: { available: true, data_plane: { status: "ready", reason: "synthetic fixture" }, generation: null, observed_at: "2026-09-21T00:00:00Z", source: "synthetic fixture" } });
@@ -72,14 +72,14 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
     }
     if (options.admin && path === "/v1/catalogs") {
       if (options.configuredConnections) return route.fulfill({ json: [configuredCatalog] });
-      catalogCalls += 1;
-      if (catalogCalls === 1 && options.deferredConnections) {
-        options.deferredConnections.markStarted();
+      const catalogCall = ++catalogCalls;
+      if (catalogCall === 1 && options.deferredConnections) {
+        options.deferredConnections.markStarted(page, route.request());
         await options.deferredConnections.wait();
       }
       if (!options.deferredConnections) return route.fulfill({ json: [] });
-      const catalogName = catalogCalls === 1 ? "stale-catalog" : "fresh-catalog";
-      return route.fulfill({ json: [{ id: `catalog-${catalogCalls}`, name: catalogName, module: "synthetic.catalog", plugin_id: null, options: {}, status: "ready", revision: catalogCalls, discovered_table_count: 0, governed_asset_count: 0 }] });
+      const catalogName = catalogCall === 1 ? "stale-catalog" : "fresh-catalog";
+      return route.fulfill({ json: [{ id: `catalog-${catalogCall}`, name: catalogName, module: "synthetic.catalog", plugin_id: null, options: {}, status: "ready", revision: catalogCall, discovered_table_count: 0, governed_asset_count: 0 }] });
     }
     const catalogMatch = path.match(/^\/v1\/catalogs\/([^/]+)(?:\/(.*))?$/);
     if (options.admin && options.configuredConnections && catalogMatch) {
@@ -88,24 +88,24 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
       if (request.method() === "PUT" && !suffix) return route.fulfill({ json: { ...configuredCatalog, name: catalogName, id: `catalog-${catalogName}` } });
       if (suffix === "diagnostics") return route.fulfill({ json: { catalog: catalogName, status: "ready", message: "Catalog reachable", checked_at: "2026-09-21T00:00:00Z", table_count: 1, sample_tables: ["orders"] } });
       if (suffix === "tables") {
-        discoveryCalls += 1;
-        if (discoveryCalls === 1 && options.deferredDiscovery) {
-          options.deferredDiscovery.markStarted();
+        const discoveryCall = ++discoveryCalls;
+        if (discoveryCall === 1 && options.deferredDiscovery) {
+          options.deferredDiscovery.markStarted(page, route.request());
           await options.deferredDiscovery.wait();
         }
-        const tableName = options.deferredDiscovery ? (discoveryCalls === 1 ? "stale-orders" : "fresh-orders") : "orders";
+        const tableName = options.deferredDiscovery ? (discoveryCall === 1 ? "stale-orders" : "fresh-orders") : "orders";
         return route.fulfill({ json: { catalog: catalogName, revision: 1, next_cursor: null, tables: [{ name: tableName, backend: "iceberg", table_identifier: `demo.${tableName}`, target: tableName, governed: false }] } });
       }
     }
     if (options.admin && path === "/v1/settings/runtime") {
       if (request.method() === "PUT") return route.fulfill({ json: { ticket_ttl_seconds: 30, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }], revision: 2 } });
-      settingsCalls += 1;
-      if (settingsCalls === 1 && options.deferredSettings) {
-        options.deferredSettings.markStarted();
+      const settingsCall = ++settingsCalls;
+      if (settingsCall === 1 && options.deferredSettings) {
+        options.deferredSettings.markStarted(page, route.request());
         await options.deferredSettings.wait();
       }
       if (!options.deferredSettings && !options.configuredSettings) return route.fulfill({ json: null });
-      return route.fulfill({ json: { ticket_ttl_seconds: settingsCalls === 1 ? 11 : 22, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }], revision: settingsCalls } });
+      return route.fulfill({ json: { ticket_ttl_seconds: settingsCall === 1 ? 11 : 22, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }], revision: settingsCall } });
     }
     if (options.admin && path === "/v1/settings/auth-providers") return route.fulfill({ json: [] });
     if (options.admin && path === "/v1/settings/auth-providers/revision") return route.fulfill({ json: { revision: 0 } });

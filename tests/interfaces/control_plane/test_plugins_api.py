@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from tests.interfaces.control_plane.workspace_helpers import ADMIN_HEADERS
+from tests.support.actors import _bearer, _client
 
 
 def test_plugin_descriptors_require_platform_admin(client_factory) -> None:
-    client = client_factory()
+    client = _client(client_factory)
 
     assert client.get("/v1/plugins").status_code == 401
+    assert client.get("/v1/plugins", headers=_bearer("owner-token")).status_code == 403
 
 
 def test_plugin_descriptors_expose_only_admitted_bounded_capabilities(client_factory) -> None:

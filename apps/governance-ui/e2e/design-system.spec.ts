@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { authenticatedApi, signedOutApi } from "./fixtures";
+import { authenticatedApi, deferredResponse, signedOutApi } from "./fixtures";
 
 // Component integration only. Real OIDC/Access qualification remains E07.
 test.beforeEach(async ({ page }) => signedOutApi(page));
@@ -119,6 +119,7 @@ test("authenticated policy workspace keeps rendered text and controls readable i
   for (const theme of ["Light theme", "Dark theme"] as const) {
     await page.getByRole("combobox", { name: "Color theme" }).click();
     await page.getByRole("option", { name: theme, exact: true }).click();
+    await expect(page.locator(".policy-save-bar")).toHaveCSS("background-color", theme === "Dark theme" ? "rgb(23, 31, 44)" : "rgb(255, 255, 255)");
     const samples = await renderedContrastSamples(page, ".policy-authoring h2, .policy-authoring h3, .policy-authoring p, .policy-authoring button, .policy-authoring input, .policy-authoring select, .policy-authoring textarea");
     expect(samples.length).toBeGreaterThan(5);
     for (const sample of samples) {
@@ -272,8 +273,8 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
     fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
   });
   let sessionCalls = 0;
-  let staleSchemaRelease: (() => void) | undefined;
-  let staleSchemaStarted: Promise<void> | undefined;
+  const staleSchema = deferredResponse();
+  let schemaDeferred = false;
   await page.route("**/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -291,9 +292,11 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       const id = match[1];
       const name = id === assetA ? "alpha-orders" : "beta-orders";
       const suffix = match[2] ?? "";
-      if (id === assetA && suffix === "schema" && !staleSchemaStarted) {
-        staleSchemaStarted = new Promise((resolve) => { staleSchemaRelease = resolve; });
-        await staleSchemaStarted;
+      if (sessionCalls > 1 && id === assetA) return route.fulfill({ status: 403, json: { detail: "Asset access revoked" } });
+      if (id === assetA && suffix === "schema" && !schemaDeferred) {
+        schemaDeferred = true;
+        staleSchema.markStarted(page, request);
+        await staleSchema.wait();
       }
       if (suffix === "schema") return route.fulfill({ json: schema(id, name) });
       if (suffix === "grants") return route.fulfill({ json: [] });
@@ -311,23 +314,21 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
 
+  await page.getByRole("button", { name: "alpha-orders", exact: true }).click();
+  await staleSchema.started;
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   await page.getByLabel("Local control-plane token").fill("synthetic-token");
   await page.getByRole("button", { name: "Sign in locally" }).click();
+  await expect(page.getByRole("heading", { name: "Asset unavailable" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to assets", exact: true }).click();
   await page.getByRole("button", { name: "beta-orders", exact: true }).click();
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
   expect(await page.getByRole("heading", { name: "alpha-orders" }).count()).toBe(0);
   await expect(page.locator(".policy-save-bar")).toBeVisible();
-  const theme = page.getByRole("combobox", { name: "Color theme" });
-  await theme.click();
-  await page.getByRole("option", { name: "Dark theme", exact: true }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "dark");
-  await expect(page.locator(".policy-save-bar")).toHaveCSS("background-color", "rgb(23, 31, 44)");
-  await theme.click();
-  await page.getByRole("option", { name: "Light theme", exact: true }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "light");
-  await expect(page.locator(".policy-save-bar")).toHaveCSS("background-color", "rgb(255, 255, 255)");
-  staleSchemaRelease?.();
+  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  staleSchema.release();
+  const abandonedSchema = await staleSchema.completed;
+  expect(abandonedSchema.failure()?.errorText).toBe("net::ERR_ABORTED");
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
 });

@@ -27,22 +27,20 @@ from tests.support.use_cases import (
 )
 
 
-def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(monkeypatch):
-    schema, _, table_format = _build_use_case_dependencies()
+def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding():
     payload = ticket_payload(
         catalog="analytics",
         target="default.users",
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
-            "read_payload": encode_scan_task(table_format, schema),
+            "read_payload": "not-a-passive-scan",
             "full_row_filter": None,
             "masks": {},
         },
         nonce="nonce",
     )
     ticket_store = FakeTicketStore()
-    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
     use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         row_transform=FakeRowTransform(),
@@ -51,14 +49,13 @@ def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(mo
         now=lambda: 1000,
     )
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(PermissionError, match="Unauthorized"):
         use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
 
 
-def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
-    schema, _, table_format = _build_use_case_dependencies()
+def test_fetch_stream_rejects_missing_db_ticket_before_decoding():
     payload = ticket_payload(
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
@@ -66,14 +63,13 @@ def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
-            "read_payload": encode_scan_task(table_format, schema),
+            "read_payload": "not-a-passive-scan",
             "full_row_filter": None,
             "masks": {},
         },
         nonce="nonce",
     )
     ticket_store = FakeTicketStore()
-    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
     use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         row_transform=FakeRowTransform(),
@@ -82,14 +78,13 @@ def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
         now=lambda: 1000,
     )
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(PermissionError, match="Unauthorized"):
         use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
 
 
-def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeypatch):
-    schema, _, table_format = _build_use_case_dependencies()
+def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding():
     ticket_id = "00000000-0000-0000-0000-000000000001"
     signed_payload = ticket_payload(
         ticket_id=ticket_id,
@@ -98,7 +93,7 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
-            "read_payload": encode_scan_task(table_format, schema),
+            "read_payload": "not-a-passive-scan",
             "full_row_filter": None,
             "masks": {},
         },
@@ -112,7 +107,6 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
         max_exchanges=1,
         expires_at=signed_payload.expires_at,
     )
-    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
     use_case = make_read_service(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         row_transform=FakeRowTransform(),
@@ -121,7 +115,7 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
         now=lambda: 1000,
     )
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(PermissionError, match="Unauthorized"):
         use_case.fetch("token", AUTHORIZATION_HEADER)
 
     assert ticket_store.reserve_calls == []
@@ -258,6 +252,11 @@ def test_invalid_output_projection_does_not_issue_or_persist_tickets():
     [
         pytest.param({"read_payload": ""}, "Missing read payload", id="missing-read-payload"),
         pytest.param(
+            {"authorization_columns": None},
+            "Invalid authorization columns",
+            id="missing-authorization-columns",
+        ),
+        pytest.param(
             {"masks": {"region": "not-an-object"}}, "Invalid mask payload", id="non-object-mask"
         ),
         pytest.param(
@@ -317,10 +316,3 @@ def test_fetch_stream_rejects_legacy_partition_payload():
 
     with pytest.raises(ValueError, match="Invalid read payload"):
         use_case.fetch("token", AUTHORIZATION_HEADER)
-
-
-def test_scan_decoder_rejects_missing_authorization_columns():
-    from dal_obscura.read.service import _decode_scan
-
-    with pytest.raises(ValueError, match="Invalid authorization columns"):
-        _decode_scan({"read_payload": "cGF5bG9hZA==", "masks": {}, "full_row_filter": None})

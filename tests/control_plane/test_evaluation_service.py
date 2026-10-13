@@ -69,12 +69,8 @@ def test_sample_row_supports_fixed_size_lists_and_top_level_collections() -> Non
 def test_sample_row_rejects_unsupported_types_instead_of_inventing_values() -> None:
     schema = pa.schema([pa.field("duration", pa.duration("us"), nullable=False)])
 
-    try:
+    with pytest.raises(ValidationFailure, match="does not support Arrow type duration"):
         _sample_row(schema)
-    except Exception as exc:
-        assert "does not support Arrow type duration" in str(exc)
-    else:
-        raise AssertionError("unsupported synthetic type must fail closed")
 
 
 def test_synthetic_row_budget_rejects_encoded_payload_explosion() -> None:

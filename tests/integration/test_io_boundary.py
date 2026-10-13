@@ -13,8 +13,6 @@ from dal_obscura.control.catalog_service import validate_catalog_options
 from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.sources.paths import PathRuleEnforcer
 
-pytestmark = pytest.mark.socket
-
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
@@ -85,6 +83,7 @@ def test_rest_plugin_rejects_malformed_catalog_port() -> None:
         RestCatalog(_rest_config(uri="https://catalog.example:not-a-port/v1"), _context())
 
 
+@pytest.mark.socket
 def test_rest_plugin_does_not_follow_redirect_to_new_destination() -> None:
     denied_hits = 0
 

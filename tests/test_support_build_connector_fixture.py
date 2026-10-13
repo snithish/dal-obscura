@@ -75,6 +75,12 @@ def test_connector_fixture_matches_rows_and_live_policy(tmp_path: Path):
     assert table.num_rows == expected["row_count"] == 125_000
     rows = cast(list[dict[str, Any]], table.to_pylist())
     assert expected["counts"] == {
+        "policy_row_count": 41_666,
+        "enterprise_row_count": 50_000,
+        "policy_and_enterprise_row_count": 16_666,
+        "high_score_row_count": 12_500,
+    }
+    assert expected["counts"] == {
         "policy_row_count": sum(row["region"] == "us" and row["active"] is True for row in rows),
         "enterprise_row_count": sum(row["market"] == "enterprise" for row in rows),
         "policy_and_enterprise_row_count": sum(
@@ -109,8 +115,10 @@ def test_connector_fixture_matches_rows_and_live_policy(tmp_path: Path):
                 for rule in rules
                 for mask in rule.masks_json.values()
             }
-            assert mask_types == set(expected["mask_rule_types"])
-            assert rules[0].row_filter_sql == expected["policy_row_filter"]
+            assert mask_types == {"hash", "keep_last", "null", "redact", "default", "email"}
+            assert set(expected["mask_rule_types"]) == mask_types
+            assert rules[0].row_filter_sql == "region = 'us' AND active = true"
+            assert expected["policy_row_filter"] == rules[0].row_filter_sql
             masks = cast(dict[str, dict[str, object]], rules[0].masks_json)
             samples = expected["sample_values"]
             assert masks["notes"]["value"] == samples["redacted_note"]

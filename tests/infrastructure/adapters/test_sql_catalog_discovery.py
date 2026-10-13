@@ -37,8 +37,9 @@ def test_sql_discovery_preserves_literal_names_and_materializes_once_per_operati
     plugin = catalog(monkeypatch, Provider(), operation)
     first = plugin.list_tables(operation, limit=2)
     second = plugin.list_tables(operation, continuation=first.continuation, limit=2)
-    assert first.entries[0] == TableIdentifier(namespace=("weird.ns",), name="a.b")
-    assert len(first.entries) + len(second.entries) == 3
+    assert first.entries + second.entries == tuple(
+        TableIdentifier(namespace=("weird.ns",), name=name) for name in ("a.b", "c", "d")
+    )
     assert calls == [(), ("weird.ns",)]
     plugin.list_tables(context(), limit=2)
     assert len(calls) == 4

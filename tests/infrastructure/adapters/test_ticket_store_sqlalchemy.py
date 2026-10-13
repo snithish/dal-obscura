@@ -47,20 +47,40 @@ def test_ticket_store_reserves_exchanges_until_limit(db_engine):
         store.reserve_exchange(ticket_id, now=1002)
 
 
-def test_ticket_store_persists_many_tickets_in_one_transaction(db_engine):
-    session_maker = session_factory(db_engine)
-    store = SqlAlchemyTicketStore(session_maker)
+def test_ticket_store_persists_every_distinct_payload_in_a_successful_batch(db_engine):
+    store = SqlAlchemyTicketStore(session_factory(db_engine))
+    payloads = {
+        "00000000-0000-0000-0000-000000000007": _payload("00000000-0000-0000-0000-000000000007"),
+        "00000000-0000-0000-0000-000000000008": replace(
+            _payload("00000000-0000-0000-0000-000000000008", expires_at=3000),
+            nonce="nonce-b",
+        ),
+    }
+    store.store_many(list(payloads.values()), max_exchanges=2)
 
-    store.store_many(
-        [
-            _payload("00000000-0000-0000-0000-000000000001"),
-            _payload("00000000-0000-0000-0000-000000000002"),
-        ],
-        max_exchanges=1,
-    )
+    for ticket_id, expected in payloads.items():
+        stored = store.load(ticket_id)
+        assert stored.payload.to_dict() == expected.to_dict()
+        assert stored.exchange_count == 0
+        assert stored.max_exchanges == 2
+        assert stored.expires_at == expected.expires_at
 
-    assert store.load("00000000-0000-0000-0000-000000000001").exchange_count == 0
-    assert store.load("00000000-0000-0000-0000-000000000002").exchange_count == 0
+
+def test_ticket_store_rolls_back_all_new_tickets_when_one_insert_conflicts(db_engine):
+    from sqlalchemy.exc import IntegrityError
+
+    store = SqlAlchemyTicketStore(session_factory(db_engine))
+    first = "00000000-0000-0000-0000-000000000001"
+    conflicting = "00000000-0000-0000-0000-000000000002"
+    store.store_many([_payload(conflicting)], max_exchanges=1)
+    with pytest.raises(IntegrityError):
+        store.store_many([_payload(first), _payload(conflicting)], max_exchanges=1)
+    with pytest.raises(LookupError):
+        store.load(first)
+    with pytest.raises(PermissionError):
+        store.reserve_exchange(first, now=1000)
+    assert store.load(conflicting).payload.nonce == "nonce-a"
+    assert store.load(conflicting).exchange_count == 0
 
 
 def test_ticket_store_rejects_load_and_exchange_after_owner_revocation(db_engine):

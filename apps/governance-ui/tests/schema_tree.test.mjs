@@ -35,7 +35,11 @@ test("flattenSchemaTree only includes expanded descendants", () => {
 
 test("forceExpanded exposes all descendants for search", () => {
   const tree = [node("root", [node("root.child", [node("root.child.leaf")])])];
-  assert.equal(flattenSchemaTree(tree, new Set(), true).length, 3);
+  assert.deepEqual(flattenSchemaTree(tree, new Set(), true).map(({ node: value, depth, index }) => [value.human_path, depth, index]), [
+    ["root", 0, 0],
+    ["root.child", 1, 1],
+    ["root.child.leaf", 2, 2],
+  ]);
 });
 
 test("flattening a synthetic deep chain does not use the JavaScript call stack", () => {

@@ -42,7 +42,7 @@ test("revocation requires explicit confirmation and prevents repeated submission
   const deferred = deferredResponse();
   let requests = 0;
   await page.route("**/tickets/revoke", async (route) => {
-    requests += 1; deferred.markStarted(); await deferred.wait();
+    requests += 1; deferred.markStarted(page, route.request()); await deferred.wait();
     await route.fulfill({ json: { revoked_token_count: 2 } });
   });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001&tab=access#assets");

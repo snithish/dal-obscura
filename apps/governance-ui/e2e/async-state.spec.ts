@@ -17,6 +17,8 @@ test("late catalog discovery cannot replace the current table inventory", async 
   await expect(page.getByRole("cell", { name: "fresh-orders" })).toBeVisible();
 
   deferredDiscovery.release();
+  const abandonedDiscovery = await deferredDiscovery.completed;
+  expect(abandonedDiscovery.failure()?.errorText).toBe("net::ERR_ABORTED");
   await expect(page.getByRole("cell", { name: "fresh-orders" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "stale-orders" })).toHaveCount(0);
 });
@@ -51,6 +53,8 @@ test("late management responses cannot replace the current page", async ({ page 
   await expect(page.getByText("fresh-audit")).toBeVisible();
 
   deferredAudit.release();
+  const abandonedAudit = await deferredAudit.completed;
+  expect(abandonedAudit.failure()?.errorText).toBe("net::ERR_ABORTED");
   await expect(page.getByText("fresh-audit")).toBeVisible();
   await expect(page.getByText("stale-audit")).toHaveCount(0);
 });
@@ -68,6 +72,8 @@ test("late settings responses cannot replace the current administrator page", as
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
 
   deferredSettings.release();
+  const abandonedSettings = await deferredSettings.completed;
+  expect(abandonedSettings.failure()?.errorText).toBe("net::ERR_ABORTED");
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
 });
 
@@ -84,6 +90,8 @@ test("late connection responses cannot replace the current administrator page", 
   await expect(page.getByRole("heading", { name: "fresh-catalog" })).toBeVisible();
 
   deferredConnections.release();
+  const abandonedConnections = await deferredConnections.completed;
+  expect(abandonedConnections.failure()?.errorText).toBe("net::ERR_ABORTED");
   await expect(page.getByRole("heading", { name: "fresh-catalog" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "stale-catalog" })).toHaveCount(0);
 });
@@ -107,6 +115,8 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
 
   deferredInventory.release();
+  const abandonedInventory = await deferredInventory.completed;
+  expect(abandonedInventory.failure()?.errorText).toBe("net::ERR_ABORTED");
   await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
   await expect(page.getByRole("region", { name: "Governed assets table" })).not.toContainText("stale-orders");
 });
@@ -124,6 +134,8 @@ test("late live policy saves cannot clear a newer local edit", async ({ page }) 
   await expect(page.getByText("Unsaved changes")).toBeVisible();
 
   deferredSave.release();
+  await deferredSave.completed;
+  await expect(page.getByText("Live revision 2", { exact: true })).toBeVisible();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await expect(page.getByText("Live policy saved.")).toHaveCount(0);
 });
@@ -142,6 +154,9 @@ test("late policy evaluations cannot replace a newer unsaved edit", async ({ pag
   await expect(page.getByText("Unsaved changes")).toBeVisible();
 
   deferredEvaluate.release();
+  await deferredEvaluate.completed;
+  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Test policy", exact: true }).getByRole("button", { name: "Test saved policy", exact: true })).toBeEnabled();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await expect(page.getByText("Server-side evaluation completed: denied.")).toHaveCount(0);
 });
