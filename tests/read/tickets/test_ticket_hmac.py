@@ -1,0 +1,179 @@
+import base64
+import hmac
+from hashlib import sha256
+
+import pytest
+
+from dal_obscura.read.tickets.payload import TicketPayload
+from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
+from tests.support.read.tickets import ticket_payload
+
+
+def _scan_payload():
+    return {
+        "authorization_columns": ["id", "region"],
+        "read_payload": "payload",
+        "full_row_filter": None,
+        "masks": {},
+    }
+
+
+def _ticket_payload() -> TicketPayload:
+    return ticket_payload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        target="catalog.db.table",
+        columns=["id"],
+        scan=_scan_payload(),
+        policy_version=1,
+        expires_at=2**31,
+        nonce="abc123",
+    )
+
+
+def test_ticket_verify_rejects_noncanonical_base64_even_with_valid_signature():
+    codec = HmacTicketCodecAdapter("secret")
+    payload = _ticket_payload()
+    ticket = codec.sign_payload(payload)
+    encoded, signature = ticket.split(".", 1)
+
+    with pytest.raises(PermissionError, match="Invalid ticket payload"):
+        codec.verify(f"{encoded[:4]}!{encoded[4:]}.{signature}")
+
+
+def test_ticket_key_rotation_accepts_previous_keys_but_signs_with_current_key():
+    payload = ticket_payload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        target="catalog.db.table",
+        columns=["id"],
+        scan=_scan_payload(),
+        policy_version=1,
+        expires_at=2**31,
+        nonce="rotation",
+    )
+    old = HmacTicketCodecAdapter("old-secret")
+    rotated = HmacTicketCodecAdapter("new-secret", previous_secrets=("old-secret",))
+
+    old_ticket = old.sign_payload(payload)
+    new_ticket = rotated.sign_payload(payload)
+
+    assert rotated.verify(old_ticket).ticket_id == payload.ticket_id
+    assert rotated.verify(new_ticket).ticket_id == payload.ticket_id
+    with pytest.raises(PermissionError):
+        old.verify(new_ticket)
+
+
+def test_ticket_key_rotation_rejects_duplicate_keys():
+    with pytest.raises(ValueError, match="unique"):
+        HmacTicketCodecAdapter("same", previous_secrets=("same",))
+
+
+def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
+    codec = HmacTicketCodecAdapter("secret")
+    payload = ticket_payload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="analytics",
+        target="default.users",
+        columns=["id", "email"],
+        scan={
+            "authorization_columns": ["id", "region"],
+            "read_payload": "sensitive-pickled-scan-task",
+            "full_row_filter": "region = 'us'",
+            "masks": {"email": {"type": "email", "value": None}},
+        },
+        expires_at=2**31,
+        nonce="nonce",
+    )
+
+    ticket = codec.sign_payload(payload)
+    encoded_reference = ticket.split(".", 1)[0]
+    decoded_reference = base64.urlsafe_b64decode(encoded_reference.encode("utf-8"))
+
+    assert b"sensitive-pickled-scan-task" not in decoded_reference
+    assert b"default.users" not in decoded_reference
+    assert b"email" not in decoded_reference
+    assert b"region = 'us'" not in decoded_reference
+
+    verified = codec.verify(ticket)
+    assert verified.ticket_id == payload.ticket_id
+    assert verified.expires_at == payload.expires_at
+    assert verified.nonce == payload.nonce
+    assert not hasattr(verified, "scan")
+    assert not hasattr(verified, "target")
+    assert not hasattr(verified, "columns")
+
+
+def test_ticket_rejects_expiry_at_current_second(monkeypatch):
+    codec = HmacTicketCodecAdapter("secret")
+    payload = ticket_payload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        target="t",
+        columns=[],
+        scan=_scan_payload(),
+        policy_version=1,
+        expires_at=100,
+        nonce="expired",
+    )
+    monkeypatch.setattr("dal_obscura.read.tickets.signing.time.time", lambda: 100)
+
+    with pytest.raises(PermissionError, match="expired"):
+        codec.verify(codec.sign_payload(payload))
+
+
+def test_ticket_rejects_boolean_expiry_even_with_valid_signature():
+    secret = "secret"
+    codec = HmacTicketCodecAdapter(secret)
+    raw = b'{"expires_at":true,"nonce":"nonce","ticket_id":"ticket"}'
+    encoded_payload = base64.urlsafe_b64encode(raw).decode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), raw, sha256).hexdigest()
+
+    with pytest.raises(PermissionError, match="Invalid ticket payload"):
+        codec.verify(f"{encoded_payload}.{signature}")
+
+
+def test_ticket_rejects_tampered_signature():
+    codec = HmacTicketCodecAdapter("secret")
+    payload = ticket_payload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        target="t",
+        columns=["id"],
+        scan=_scan_payload(),
+        policy_version=1,
+        expires_at=2**31,
+        nonce="nonce",
+    )
+    ticket = codec.sign_payload(payload)
+    tampered = ticket[:-1] + ("0" if ticket[-1] != "0" else "1")
+
+    with pytest.raises(PermissionError):
+        codec.verify(tampered)
+
+
+def test_ticket_rejects_invalid_ticket_format():
+    codec = HmacTicketCodecAdapter("secret")
+
+    with pytest.raises(PermissionError):
+        codec.verify("missing-separator")
+
+
+def test_ticket_rejects_non_json_payload_with_valid_signature():
+    secret = "secret"
+    codec = HmacTicketCodecAdapter(secret)
+    raw = b"not-json"
+    encoded_payload = base64.urlsafe_b64encode(raw).decode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), raw, sha256).hexdigest()
+
+    with pytest.raises(PermissionError):
+        codec.verify(f"{encoded_payload}.{signature}")
+
+
+def test_signed_reference_rejects_unknown_fields_even_with_valid_signature():
+    import json
+
+    codec = HmacTicketCodecAdapter("secret")
+    raw = json.dumps(
+        {"ticket_id": "id", "nonce": "nonce", "expires_at": 2**31, "future_field": "ignored-before"}
+    ).encode()
+    signature = hmac.new(b"secret", raw, sha256).hexdigest()
+    token = f"{base64.urlsafe_b64encode(raw).decode()}.{signature}"
+    with pytest.raises(PermissionError, match="Invalid ticket payload"):
+        codec.verify(token)

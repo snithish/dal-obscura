@@ -10,7 +10,7 @@ import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from sqlalchemy import select
 
-from dal_obscura.storage.database.db import create_engine_from_url, session_factory
+from dal_obscura.storage.database.db import session_factory
 from dal_obscura.storage.database.orm import AssetRecord, CatalogRecord, PolicyRuleRecord
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +21,7 @@ def _run_fixture_builder(tmp_path: Path) -> dict[str, Any]:
     completed = subprocess.run(
         [
             sys.executable,
-            "tests/support/build_connector_fixture.py",
+            "tests/support/qualification/build_connector_fixture.py",
             "--output-dir",
             str(tmp_path),
             "--port",
@@ -36,12 +36,16 @@ def _run_fixture_builder(tmp_path: Path) -> dict[str, Any]:
 
 
 def _load_fixture_table(tmp_path: Path, metadata: dict[str, Any]):
-    return load_catalog(
+    catalog = load_catalog(
         cast(str, metadata["catalog"]),
         type="sql",
         uri=f"sqlite:///{tmp_path / 'spark_catalog.db'}",
         warehouse=str(tmp_path / "warehouse"),
-    ).load_table(cast(str, metadata["target"]))
+    )
+    try:
+        return catalog.load_table(cast(str, metadata["target"]))
+    finally:
+        catalog.close()
 
 
 def _load_sorted_projection(
@@ -58,7 +62,7 @@ def _load_sorted_projection(
     )
 
 
-def test_connector_fixture_matches_rows_and_live_policy(tmp_path: Path):
+def test_connector_fixture_matches_rows_and_live_policy(engine_factory, tmp_path: Path):
     metadata = _run_fixture_builder(tmp_path)
     iceberg_table = _load_fixture_table(tmp_path, metadata)
     table = _load_sorted_projection(
@@ -90,7 +94,7 @@ def test_connector_fixture_matches_rows_and_live_policy(tmp_path: Path):
         "high_score_row_count": sum(row["score"] >= 900.0 for row in rows),
     }
 
-    engine = create_engine_from_url(cast(str, metadata["database_url"]))
+    engine = engine_factory(cast(str, metadata["database_url"]))
     try:
         with session_factory(engine)() as session:
             asset = session.scalar(

@@ -5,9 +5,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import pyarrow as pa
-
-from dal_obscura.policy.models import MaskRule
-from dal_obscura.policy.paths import (
+from dal_obscura_plugin_api.paths import (
     FieldPath,
     FieldPathSegment,
     FieldSegment,
@@ -17,7 +15,9 @@ from dal_obscura.policy.paths import (
     parse_field_path,
     resolve_schema_path,
 )
-from dal_obscura.read.duckdb_connection import connect
+
+from dal_obscura.policy.models import MaskRule
+from dal_obscura.read.execution.connection import connect
 
 
 def _quote_identifier(identifier: str) -> str:
@@ -207,7 +207,7 @@ def _default_mask_type(value: object) -> pa.DataType:
 def _duckdb_literal_arrow_type(literal: str) -> pa.DataType:
     con = connect()
     try:
-        return con.sql(f"SELECT {literal} AS value").arrow().read_all().schema.field("value").type
+        return con.sql(f"SELECT {literal} AS value").to_arrow_table().schema.field("value").type
     finally:
         con.close()
 
@@ -218,14 +218,12 @@ class ProjectionPlan:
 
     select_list: tuple[str, ...]
     output_schema: pa.Schema
-    masked_columns: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class _ProjectedField:
     expression: str
     field: pa.Field
-    masked_paths: tuple[str, ...] = ()
 
 
 def compile_projection(
@@ -254,7 +252,6 @@ def compile_projection(
             f"{item.expression} AS {_quote_identifier(item.field.name)}" for item in projected
         ),
         output_schema=pa.schema(_duckdb_output_field(item.field) for item in projected),
-        masked_columns=tuple(path for item in projected for path in item.masked_paths),
     )
 
 
@@ -269,9 +266,7 @@ def _compile_field(
 ) -> _ProjectedField:
     mask = masks.get(path)
     if mask is not None:
-        return _ProjectedField(
-            _mask_expression(expr, mask), _masked_leaf_field(field, mask), (path,)
-        )
+        return _ProjectedField(_mask_expression(expr, mask), _masked_leaf_field(field, mask))
     if not projection and not _has_descendant_mask(path, masks):
         return _ProjectedField(expr, field)
     data_type = field.type
@@ -299,7 +294,6 @@ def _compile_field(
         return _ProjectedField(
             f"CASE WHEN {expr} IS NULL THEN NULL ELSE {packed} END",
             field.with_type(pa.struct(child.field for child in children)),
-            tuple(path for child in children for path in child.masked_paths),
         )
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         if projection and set(projection) != {"$element"}:
@@ -316,7 +310,6 @@ def _compile_field(
         return _ProjectedField(
             f"list_transform({expr}, {child_var} -> {child.expression})",
             field.with_type(pa.list_(child.field)),
-            child.masked_paths,
         )
     if pa.types.is_map(data_type):
         return _compile_map(expr, path, field, projection, masks, item_var=item_var)
@@ -354,5 +347,4 @@ def _compile_map(
     return _ProjectedField(
         f"cast_to_type(NULL, {projected})" if key_mask else projected,
         field.with_type(pa.map_(field.type.key_type, value.field)),
-        ((key_path,) if key_mask else ()) + value.masked_paths,
     )

@@ -17,7 +17,10 @@ from dal_obscura_plugin_api.contracts import (
     TableHandle,
     TableIdentifier,
 )
-from dal_obscura_plugin_api.scan import ScanRequest
+from dal_obscura_plugin_api.execution import active, checked_iterator
+from dal_obscura_plugin_api.options import PluginOptions
+from dal_obscura_plugin_api.schema.projection import ScanRequest
+from dal_obscura_plugin_api.secrets import SecretBackend, SecretBackendFactory
 from dal_obscura_plugin_api.tasks import ScanTask
 
 __all__ = [
@@ -31,11 +34,16 @@ __all__ = [
     "ExecutionContext",
     "PluginDescriptor",
     "PluginKind",
+    "PluginOptions",
     "ScanRequest",
     "ScanTask",
     "SchemaDescriptor",
+    "SecretBackend",
+    "SecretBackendFactory",
     "TableFormatFactory",
     "TableFormatPlugin",
     "TableHandle",
     "TableIdentifier",
+    "active",
+    "checked_iterator",
 ]

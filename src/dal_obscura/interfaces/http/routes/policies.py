@@ -6,10 +6,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-import dal_obscura.control.identity_attributes as _commands_identity_attributes
-from dal_obscura.control import evaluation_service, policy_service, schema_service
+import dal_obscura.control.workspace.attributes as _commands_identity_attributes
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.assets import schema as schema_service
 from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.control.policies import evaluation as evaluation_service
+from dal_obscura.control.policies import service as policy_service
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AttributeProviderResponse,

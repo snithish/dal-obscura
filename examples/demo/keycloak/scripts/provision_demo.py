@@ -11,8 +11,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from dal_obscura_plugin_api.paths import FieldPath
+
 from dal_obscura.identity.names import encode_federated_group, encode_federated_identity
-from dal_obscura.policy.paths import FieldPath
 
 FIXTURE_FILE = Path(__file__).resolve().parents[1] / "fixtures/demo_fixture.json"
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")
@@ -186,16 +187,6 @@ def _schema_path_segments(segments: list[object]) -> list[str]:
         else:
             raise RuntimeError("asset schema field path contains an unsupported segment")
     return result
-
-
-def _asset_revision(asset_id: str) -> int:
-    asset = _request("GET", f"/v1/assets/{asset_id}")
-    if not isinstance(asset, dict):
-        raise RuntimeError("asset lookup returned no revision")
-    asset_payload = cast(dict[str, Any], asset)
-    if not isinstance(asset_payload.get("revision"), int):
-        raise RuntimeError("asset lookup returned no revision")
-    return asset_payload["revision"]
 
 
 def _scoped_demo_owners(raw_owners: object) -> list[str]:

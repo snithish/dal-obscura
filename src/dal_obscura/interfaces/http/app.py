@@ -56,11 +56,11 @@ from dal_obscura.interfaces.http.routes.deps import (
     ControlPlaneDeps,
 )
 from dal_obscura.interfaces.http.routes.schemas import ApiErrorResponse
-from dal_obscura.sources.builtins import (
-    create_builtin_plugin_registry,
+from dal_obscura.plugins.bootstrap import (
+    create_plugin_registry,
 )
-from dal_obscura.sources.plugins.registry import PluginRegistry
-from dal_obscura.sources.secrets import SecretProvider
+from dal_obscura.plugins.registry import PluginRegistry
+from dal_obscura.runtime.secrets import SecretProvider
 
 
 class _RequestBodyTooLarge(HTTPException):
@@ -173,7 +173,7 @@ def create_app(  # noqa: C901
     # but routes must never synthesize a duplicate descriptor set or silently
     # fall back when admission is absent.
     if plugin_registry is None:
-        plugin_registry = create_builtin_plugin_registry()
+        plugin_registry = create_plugin_registry()
 
     app = FastAPI(
         title="dal-obscura control-plane API",
@@ -361,7 +361,7 @@ def create_app(  # noqa: C901
             expose_headers=["x-request-id", "retry-after"],
         )
     install_health_routes(app, session_maker)
-    from dal_obscura.control.discovery_cursors import DiscoveryCursors
+    from dal_obscura.control.catalogs.discovery import DiscoveryCursors
 
     deps = ControlPlaneDeps(
         session_maker=session_maker,

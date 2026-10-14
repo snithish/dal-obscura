@@ -50,21 +50,24 @@ def _catalog_options() -> dict[str, str]:
 
 def _create_iceberg_table(table_fixture: dict[str, Any]) -> None:
     catalog = load_catalog(str(table_fixture["catalog"]), **_catalog_options())
-    target = str(table_fixture["target"])
-    with suppress(NamespaceAlreadyExistsError):
-        catalog.create_namespace(tuple(target.split(".")[:-1]))
-    if catalog.table_exists(target):
-        return
-    iceberg_schema, arrow_schema = _schemas(table_fixture["schema"])
-    rows = pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema)
-    # Both appends are staged; publish the table only after all data succeeds.
-    # An interrupted first seed can be retried without exposing partial rows.
-    with catalog.create_table_transaction(
-        target, schema=iceberg_schema, properties={"format-version": "2"}
-    ) as transaction:
-        midpoint = max(1, rows.num_rows // 2)
-        transaction.append(rows.slice(0, midpoint))
-        transaction.append(rows.slice(midpoint))
+    try:
+        target = str(table_fixture["target"])
+        with suppress(NamespaceAlreadyExistsError):
+            catalog.create_namespace(tuple(target.split(".")[:-1]))
+        if catalog.table_exists(target):
+            return
+        iceberg_schema, arrow_schema = _schemas(table_fixture["schema"])
+        rows = pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema)
+        # Both appends are staged; publish the table only after all data succeeds.
+        # An interrupted first seed can be retried without exposing partial rows.
+        with catalog.create_table_transaction(
+            target, schema=iceberg_schema, properties={"format-version": "2"}
+        ) as transaction:
+            midpoint = max(1, rows.num_rows // 2)
+            transaction.append(rows.slice(0, midpoint))
+            transaction.append(rows.slice(midpoint))
+    finally:
+        catalog.close()
 
 
 def _schemas(fields: list[dict[str, Any]]) -> tuple[Schema, pa.Schema]:

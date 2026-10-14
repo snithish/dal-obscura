@@ -5,10 +5,10 @@ import pytest
 
 from dal_obscura.policy.filters import parse_row_filter
 from dal_obscura.policy.models import MaskRule
-from dal_obscura.read.transform import (
+from dal_obscura.read.execution.transform import (
     DuckDBRowTransformAdapter,
 )
-from tests.support.benchmark_data import (
+from tests.support.performance.benchmark_data import (
     nested_masking_batches,
     record_benchmark_info,
     scalar_masking_batches,

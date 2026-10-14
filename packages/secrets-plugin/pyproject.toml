@@ -1,0 +1,14 @@
+[project]
+name = "dal-obscura-secrets"
+version = "0.3.0"
+description = "Environment and secure mounted-file secret backends"
+requires-python = ">=3.14,<3.15"
+dependencies = ["dal-obscura-plugin-api==0.3.0"]
+
+[project.entry-points."dal_obscura.secret_backends.v3"]
+environment = "dal_obscura_secrets:environment_factory"
+mounted_file = "dal_obscura_secrets:mounted_file_factory"
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

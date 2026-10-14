@@ -18,7 +18,7 @@
     "check": "tsc -b && tsc -p tsconfig.tests.json",
     "check:budgets": "node scripts/check-budgets.mjs",
     "measure:web-vitals": "node scripts/measure-web-vitals.mjs",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.mjs\" \"tests/**/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test:e2e:live": "playwright test --config playwright.live.config.ts",
     "capture:review": "playwright test --config playwright.review.config.ts",

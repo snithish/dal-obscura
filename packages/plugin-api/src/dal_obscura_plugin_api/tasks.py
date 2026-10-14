@@ -1,4 +1,4 @@
-"""Portable bounded passive tasks for plugin API v2."""
+"""Portable bounded passive tasks for plugin API v3."""
 
 from __future__ import annotations
 

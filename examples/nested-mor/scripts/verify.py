@@ -32,7 +32,7 @@ from fixture import (
 from seed import append_later
 
 from dal_obscura.connectors import DalObscuraClient
-from dal_obscura.read.signing import HmacTicketCodecAdapter
+from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
 from dal_obscura.storage.database.db import create_engine_from_url, session_factory
 from dal_obscura.storage.tickets import SqlAlchemyTicketStore
 

@@ -6,8 +6,9 @@ from typing import cast
 
 from fastapi import APIRouter, Depends
 
-from dal_obscura.control import identity_attributes, workspace_service
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.workspace import attributes as identity_attributes
+from dal_obscura.control.workspace import service as workspace_service
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AttributeMappingPreviewRequest,

@@ -17,6 +17,7 @@ from dal_obscura_plugin_api import (
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.execution import active
 from deltalake import DeltaTable
 
 from dal_obscura_delta.snapshot import open_snapshot
@@ -25,10 +26,10 @@ from dal_obscura_delta.storage import DeltaStorage, storage_options
 CATALOG_DESCRIPTOR = PluginDescriptor(
     kind="catalog",
     plugin_id="delta.directory",
-    api_version="2",
+    api_version="3",
     config_version=1,
     distribution="dal-obscura-delta",
-    version="0.2.0",
+    version="0.3.0",
     capabilities=frozenset(
         {"nested_schema", "snapshot_reads", "splittable_scan", "delete_files", "cancellation"}
     ),
@@ -46,10 +47,10 @@ CATALOG_DESCRIPTOR = PluginDescriptor(
 LOCATION_DESCRIPTOR = PluginDescriptor(
     kind="catalog",
     plugin_id="delta.catalog",
-    api_version="2",
+    api_version="3",
     config_version=1,
     distribution="dal-obscura-delta",
-    version="0.2.0",
+    version="0.3.0",
     capabilities=CATALOG_DESCRIPTOR.capabilities,
     output_formats=frozenset({"delta"}),
     handle_versions=frozenset({1}),
@@ -100,10 +101,10 @@ class DeltaDirectoryCatalog:
         self._identifiers = tuple(sorted(tables, key=lambda i: (*i.namespace, i.name)))
         self._config = config
 
+    @active
     def list_namespaces(
         self, context: ExecutionContext, *, namespace: tuple[str, ...] = ()
     ) -> tuple[tuple[str, ...], ...]:
-        context.check_active()
         prefix = tuple(namespace)
         return tuple(
             sorted(
@@ -115,10 +116,10 @@ class DeltaDirectoryCatalog:
             )
         )
 
+    @active
     def list_tables(
         self, context: ExecutionContext, *, continuation: str | None = None, limit: int = 100
     ) -> DiscoveryPage:
-        context.check_active()
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Delta discovery page size must be between 1 and 500")
         offset = 0
@@ -137,8 +138,8 @@ class DeltaDirectoryCatalog:
             self._identifiers[offset:end], str(end) if end < len(self._identifiers) else None
         )
 
+    @active
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
-        context.check_active()
         if identifier not in self._tables:
             raise ValueError("Unknown Delta table")
         path = self._location(identifier, context)
@@ -155,6 +156,7 @@ class DeltaDirectoryCatalog:
             {"location": str(path), "version": version, "table_id": table_id},
         )
 
+    @active
     def _location(self, identifier: TableIdentifier, context: ExecutionContext) -> str:
         return self._storage.location(self._tables[identifier])
 
@@ -173,6 +175,7 @@ class DeltaDirectoryCatalog:
         self.close()
 
 
+@active
 def delta_catalog_factory(
     config: CatalogConfig, context: ExecutionContext
 ) -> DeltaDirectoryCatalog:
@@ -227,6 +230,7 @@ class DeltaLocationCatalog(DeltaDirectoryCatalog):
         self._identifiers = tuple(sorted(tables, key=lambda i: (*i.namespace, i.name)))
         self._config = config
 
+    @active
     def _location(self, identifier: TableIdentifier, context: ExecutionContext) -> str:
         location = self._tables[identifier]
         if location.startswith("uc://"):
@@ -237,6 +241,7 @@ class DeltaLocationCatalog(DeltaDirectoryCatalog):
         return DeltaStorage(location).uri
 
 
+@active
 def delta_location_catalog_factory(
     config: CatalogConfig, context: ExecutionContext
 ) -> DeltaLocationCatalog:

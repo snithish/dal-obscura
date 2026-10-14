@@ -22,14 +22,14 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, LongType, NestedField, StringType, StructType
 
-import tests.support.seed as _commands_seed
-from dal_obscura.control import asset_service, policy_service
+import tests.support.control.seed as _commands_seed
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.assets import service as asset_service
+from dal_obscura.control.policies import service as policy_service
 from dal_obscura.control.runtime import ControlContext
 from dal_obscura.interfaces.flight_contract import encode_plan_command
 from dal_obscura.storage import workspace as _db_workspace
 from dal_obscura.storage.database.db import (
-    create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
@@ -68,103 +68,108 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
     catalog_uri = f"sqlite:///{tmp_path / 'catalog.db'}"
 
     catalog = load_catalog(catalog_name, type="sql", uri=catalog_uri, warehouse=str(warehouse))
+    try:
+        identifier = "default.users"
 
-    identifier = "default.users"
-
-    # Deeply nested schema
-    schema = Schema(
-        NestedField(field_id=1, name="id", field_type=LongType(), required=True),
-        NestedField(field_id=2, name="email", field_type=StringType(), required=False),
-        NestedField(
-            field_id=3,
-            name="metadata",
-            field_type=StructType(
-                NestedField(
-                    field_id=4,
-                    name="preferences",
-                    field_type=ListType(
-                        element_id=5,
-                        element_type=StructType(
-                            NestedField(
-                                field_id=6, name="name", field_type=StringType(), required=False
+        # Deeply nested schema
+        schema = Schema(
+            NestedField(field_id=1, name="id", field_type=LongType(), required=True),
+            NestedField(field_id=2, name="email", field_type=StringType(), required=False),
+            NestedField(
+                field_id=3,
+                name="metadata",
+                field_type=StructType(
+                    NestedField(
+                        field_id=4,
+                        name="preferences",
+                        field_type=ListType(
+                            element_id=5,
+                            element_type=StructType(
+                                NestedField(
+                                    field_id=6, name="name", field_type=StringType(), required=False
+                                ),
+                                NestedField(
+                                    field_id=7,
+                                    name="theme",
+                                    field_type=StringType(),
+                                    required=False,
+                                ),
+                                NestedField(
+                                    field_id=8,
+                                    name="notifications",
+                                    field_type=StringType(),
+                                    required=False,
+                                ),
                             ),
-                            NestedField(
-                                field_id=7, name="theme", field_type=StringType(), required=False
-                            ),
-                            NestedField(
-                                field_id=8,
-                                name="notifications",
-                                field_type=StringType(),
-                                required=False,
-                            ),
+                            element_required=False,
                         ),
-                        element_required=False,
-                    ),
-                    required=False,
-                )
-            ),
-            required=False,
-        ),
-    )
-
-    catalog.create_namespace("default")
-    table = catalog.create_table(
-        identifier=identifier, schema=schema, properties={"format-version": "2"}
-    )
-
-    # Ingest data
-    arrow_schema = pa.schema(
-        [
-            pa.field("id", pa.int64(), nullable=False),
-            pa.field("email", pa.string(), nullable=True),
-            pa.field(
-                "metadata",
-                pa.struct(
-                    [
-                        pa.field(
-                            "preferences",
-                            pa.list_(
-                                pa.struct(
-                                    [
-                                        pa.field("name", pa.string(), nullable=True),
-                                        pa.field("theme", pa.string(), nullable=True),
-                                        pa.field("notifications", pa.string(), nullable=True),
-                                    ]
-                                )
-                            ),
-                            nullable=True,
-                        )
-                    ]
+                        required=False,
+                    )
                 ),
-                nullable=True,
+                required=False,
             ),
-        ]
-    )
-
-    table.append(
-        pa.table(
-            {
-                "id": [1, 2],
-                "email": ["user1@example.com", "user2@example.com"],
-                "metadata": [
-                    {
-                        "preferences": [
-                            {"name": "web", "theme": "dark", "notifications": "enabled"},
-                            {"name": "mobile", "theme": "light", "notifications": "disabled"},
-                        ]
-                    },
-                    {
-                        "preferences": [
-                            {"name": "web", "theme": "light", "notifications": "enabled"},
-                        ]
-                    },
-                ],
-            },
-            schema=arrow_schema,
         )
-    )
 
-    return catalog_uri, warehouse
+        catalog.create_namespace("default")
+        table = catalog.create_table(
+            identifier=identifier, schema=schema, properties={"format-version": "2"}
+        )
+
+        # Ingest data
+        arrow_schema = pa.schema(
+            [
+                pa.field("id", pa.int64(), nullable=False),
+                pa.field("email", pa.string(), nullable=True),
+                pa.field(
+                    "metadata",
+                    pa.struct(
+                        [
+                            pa.field(
+                                "preferences",
+                                pa.list_(
+                                    pa.struct(
+                                        [
+                                            pa.field("name", pa.string(), nullable=True),
+                                            pa.field("theme", pa.string(), nullable=True),
+                                            pa.field("notifications", pa.string(), nullable=True),
+                                        ]
+                                    )
+                                ),
+                                nullable=True,
+                            )
+                        ]
+                    ),
+                    nullable=True,
+                ),
+            ]
+        )
+
+        table.append(
+            pa.table(
+                {
+                    "id": [1, 2],
+                    "email": ["user1@example.com", "user2@example.com"],
+                    "metadata": [
+                        {
+                            "preferences": [
+                                {"name": "web", "theme": "dark", "notifications": "enabled"},
+                                {"name": "mobile", "theme": "light", "notifications": "disabled"},
+                            ]
+                        },
+                        {
+                            "preferences": [
+                                {"name": "web", "theme": "light", "notifications": "enabled"},
+                            ]
+                        },
+                    ],
+                },
+                schema=arrow_schema,
+            )
+        )
+
+        return catalog_uri, warehouse
+    finally:
+        catalog.close()
 
 
 @pytest.fixture
@@ -210,13 +215,14 @@ def oidc_jwks_server() -> Iterator[dict[str, str]]:
 
 @pytest.fixture
 def control_plane_setup(
+    engine_factory,
     tmp_path: Path,
     iceberg_setup: tuple[str, Path],
     oidc_jwks_server: dict[str, str],
 ) -> dict[str, str]:
     catalog_uri, warehouse = iceberg_setup
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
-    engine = create_engine_from_url(database_url)
+    engine = engine_factory(database_url)
     migrate_config_store(engine)
 
     with session_factory(engine)() as session:
@@ -358,90 +364,95 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         "import sys; from dal_obscura.interfaces.cli.read import main; sys.exit(main())",
     ]
 
-    process = subprocess.Popen(
+    with subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
-    )
-
-    if not wait_for_flight_server(process, port):
-        if process.poll() is None:
-            process.terminate()
-        stdout, stderr = process.communicate(timeout=5)
-        raise RuntimeError(f"Server did not become ready:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
-
-    client = None
-    try:
-        if process.poll() is not None:
-            stdout, stderr = process.communicate()
-            raise RuntimeError(f"Server exited early:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
-
-        client = flight.FlightClient(f"grpc+tcp://localhost:{port}")
-
-        # Authenticate with valid JWT built matching our server expectation
-        token = jwt.encode(
-            {
-                "sub": "e2e_user",
-                "attributes": {},
-                "iss": "https://issuer.example",
-                "exp": int(time.time()) + 900,
-            },
-            control_plane_setup["private_key"],
-            algorithm="RS256",
-            headers={"kid": "e2e"},
-        )
-        options = flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
-
-        # Query the data
-        descriptor = flight.FlightDescriptor.for_command(
-            encode_plan_command(
-                catalog="e2e_catalog", target="default.users", columns=["id", "email", "metadata"]
-            )
-        )
-
-        try:
-            info = client.get_flight_info(descriptor, options=options)
-        except Exception as exc:
-            process.terminate()
-            stdout, stderr = process.communicate()
+    ) as process:
+        if not wait_for_flight_server(process, port):
+            if process.poll() is None:
+                process.terminate()
+            stdout, stderr = process.communicate(timeout=5)
             raise RuntimeError(
-                f"Flight request failed:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
-            ) from exc
+                f"Server did not become ready:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            )
 
-        batches = []
-        for endpoint in info.endpoints:
-            reader = client.do_get(endpoint.ticket, options=options)
-            batches.extend(reader.read_all().to_batches())
-
-        table = pa.Table.from_batches(batches) if batches else pa.table({})
-
-        assert table.num_rows == 2
-        assert table.schema.field("id").type == pa.int64()
-        assert table.schema.field("email").type == pa.string()
-        assert pa.types.is_struct(table.schema.field("metadata").type)
-
-        data = table.to_pylist()
-        # Verify the 3-level nesting survived serialization natively over Flight stream
-        assert data[0]["metadata"]["preferences"][0]["name"] == "web"
-        assert data[0]["metadata"]["preferences"][0]["theme"] == "dark"
-
-        token_without_routing_claims = jwt.encode(
-            {"sub": "e2e_user", "iss": "https://issuer.example", "exp": int(time.time()) + 900},
-            control_plane_setup["private_key"],
-            algorithm="RS256",
-            headers={"kid": "e2e"},
-        )
-        unscoped_options = flight.FlightCallOptions(
-            headers=[(b"authorization", f"Bearer {token_without_routing_claims}".encode())]
-        )
-        assert client.get_flight_info(descriptor, options=unscoped_options).endpoints
-
-    finally:
+        client = None
         try:
-            if client is not None:
-                client.close()
-        finally:
-            process.terminate()
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                raise RuntimeError(f"Server exited early:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+
+            client = flight.FlightClient(f"grpc+tcp://localhost:{port}")
+
+            # Authenticate with valid JWT built matching our server expectation
+            token = jwt.encode(
+                {
+                    "sub": "e2e_user",
+                    "attributes": {},
+                    "iss": "https://issuer.example",
+                    "exp": int(time.time()) + 900,
+                },
+                control_plane_setup["private_key"],
+                algorithm="RS256",
+                headers={"kid": "e2e"},
+            )
+            options = flight.FlightCallOptions(
+                headers=[(b"authorization", f"Bearer {token}".encode())]
+            )
+
+            # Query the data
+            descriptor = flight.FlightDescriptor.for_command(
+                encode_plan_command(
+                    catalog="e2e_catalog",
+                    target="default.users",
+                    columns=["id", "email", "metadata"],
+                )
+            )
+
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+                info = client.get_flight_info(descriptor, options=options)
+            except Exception as exc:
+                process.terminate()
+                stdout, stderr = process.communicate()
+                raise RuntimeError(
+                    f"Flight request failed:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+                ) from exc
+
+            batches = []
+            for endpoint in info.endpoints:
+                reader = client.do_get(endpoint.ticket, options=options)
+                batches.extend(reader.read_all().to_batches())
+
+            table = pa.Table.from_batches(batches) if batches else pa.table({})
+
+            assert table.num_rows == 2
+            assert table.schema.field("id").type == pa.int64()
+            assert table.schema.field("email").type == pa.string()
+            assert pa.types.is_struct(table.schema.field("metadata").type)
+
+            data = table.to_pylist()
+            # Verify the 3-level nesting survived serialization natively over Flight stream
+            assert data[0]["metadata"]["preferences"][0]["name"] == "web"
+            assert data[0]["metadata"]["preferences"][0]["theme"] == "dark"
+
+            token_without_routing_claims = jwt.encode(
+                {"sub": "e2e_user", "iss": "https://issuer.example", "exp": int(time.time()) + 900},
+                control_plane_setup["private_key"],
+                algorithm="RS256",
+                headers={"kid": "e2e"},
+            )
+            unscoped_options = flight.FlightCallOptions(
+                headers=[(b"authorization", f"Bearer {token_without_routing_claims}".encode())]
+            )
+            assert client.get_flight_info(descriptor, options=unscoped_options).endpoints
+
+        finally:
+            try:
+                if client is not None:
+                    client.close()
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)

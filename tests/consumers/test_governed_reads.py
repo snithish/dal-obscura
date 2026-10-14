@@ -7,8 +7,8 @@ import pytest
 
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
 from tests.support.arrow import metadata_schema
-from tests.support.consumer_backends import consumer_server
-from tests.support.flight import make_jwt, running_flight_client
+from tests.support.flight.flight import make_jwt, running_flight_client
+from tests.support.qualification.consumer_backends import consumer_server
 
 pytestmark = pytest.mark.integration
 
@@ -61,11 +61,16 @@ def test_python_and_duckdb_receive_identical_masked_nested_rows(governed_server)
     "name", ["x" * 257, "界" * 1024, "x" * 16384], ids=["ascii-257", "unicode-1024", "ascii-16384"]
 )
 def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path, backend, name):
-    from dal_obscura.policy.paths import FieldPath, FieldSegment
-    from dal_obscura.sources.task_codec import SourceTaskCodec
-    from tests.support.consumer_backends import delta_registry, manifest_registry, sql_registry
-    from tests.support.flight import InMemoryPolicyAuthorizer, build_flight_service
-    from tests.support.policy import allow_rule
+    from dal_obscura_plugin_api.paths import FieldPath, FieldSegment
+
+    from dal_obscura.read.tickets.envelope import SourceTaskCodec
+    from tests.support.flight.flight import InMemoryPolicyAuthorizer, build_flight_service
+    from tests.support.policy.policy import allow_rule
+    from tests.support.qualification.consumer_backends import (
+        delta_registry,
+        manifest_registry,
+        sql_registry,
+    )
 
     table = pa.table({name: ["private", None], "region": ["us", "us"]})
     path = FieldPath((FieldSegment(name),)).to_human()

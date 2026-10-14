@@ -3,7 +3,7 @@ import { useMantineColorScheme } from "@mantine/core";
 import type { Preview } from "@storybook/react-vite";
 import { AppProviders } from "../src/design/AppProviders";
 import { installStoryNetworkGuard } from "../src/design/storyNetworkGuard";
-import "../src/styles.css";
+import "../src/app/styles.css";
 import "../src/design/base.css";
 
 function Theme({ choice }: { choice: "light" | "dark" | "auto" }) {

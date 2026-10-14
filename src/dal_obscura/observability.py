@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from math import isfinite
@@ -44,7 +44,7 @@ class ServiceMetrics:
         self._values: dict[str, dict[str, MetricSnapshot]] = {}
 
     @contextmanager
-    def measure(self, operation: str) -> Iterator[None]:
+    def measure(self, operation: str) -> Generator[None]:
         """Record one operation as ``success`` or ``error`` with elapsed time."""
 
         started = perf_counter()

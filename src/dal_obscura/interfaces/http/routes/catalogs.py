@@ -6,9 +6,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from dal_obscura.control import catalog_service
 from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.discovery_cursors import MAX_CURSOR_LENGTH
+from dal_obscura.control.catalogs import service as catalog_service
+from dal_obscura.control.catalogs.discovery import MAX_CURSOR_LENGTH
 from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (

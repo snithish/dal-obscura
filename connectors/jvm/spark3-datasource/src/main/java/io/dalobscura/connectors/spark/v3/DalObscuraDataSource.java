@@ -1,5 +1,11 @@
 package io.dalobscura.connectors.spark.v3;
 
+import io.dalobscura.connectors.spark.v3.scan.DalObscuraTable;
+
+import io.dalobscura.connectors.spark.v3.options.DalObscuraOptionsResolver;
+
+import io.dalobscura.connectors.spark.v3.options.DalObscuraConnectorOptions;
+
 import io.dalobscura.connectors.client.DalObscuraReadClientFactory;
 import io.dalobscura.connectors.client.FlightDalObscuraReadClient;
 import java.util.Map;

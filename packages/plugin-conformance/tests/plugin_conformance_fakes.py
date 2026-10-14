@@ -16,7 +16,7 @@ def _descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         kind="table_format",
         plugin_id="fixture",
-        api_version="2",
+        api_version="3",
         config_version=1,
         distribution="fixture-package",
         version="1.0.0",
@@ -91,7 +91,7 @@ def _catalog_descriptor() -> PluginDescriptor:
     return PluginDescriptor(
         kind="catalog",
         plugin_id="fixture.catalog",
-        api_version="2",
+        api_version="3",
         config_version=1,
         distribution="fixture-catalog-package",
         version="1.0.0",

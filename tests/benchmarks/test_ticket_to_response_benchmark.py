@@ -3,19 +3,18 @@ from typing import Any
 import pyarrow as pa
 import pytest
 
-from dal_obscura.read.transform import (
+from dal_obscura.read.execution.transform import (
     _DUCKDB_ARROW_OUTPUT_BATCH_SIZE,
 )
 from dal_obscura.sources.planning import ScanTask
-from tests.support.flight import (
+from tests.support.flight.flight import (
     StubTableFormat,
     build_flight_service,
     command_descriptor,
     flight_call_options,
     running_flight_client,
 )
-from tests.support.policy import allow_rule
-from tests.support.stream_benchmark import (
+from tests.support.performance.stream_benchmark import (
     JWT_SECRET,
     LARGE_BENCHMARK_FILE_COUNT,
     LARGE_BENCHMARK_MAX_TICKETS,
@@ -25,6 +24,7 @@ from tests.support.stream_benchmark import (
     _complex_batches,
     _run_streaming_probe_in_subprocess,
 )
+from tests.support.policy.policy import allow_rule
 
 pytestmark = pytest.mark.heavy
 

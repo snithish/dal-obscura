@@ -9,9 +9,9 @@ import sys
 from pathlib import Path
 from urllib.request import urlopen
 
-from dal_obscura.sources.builtins import create_builtin_plugin_registry
-from dal_obscura.sources.plugins import load_plugin_lock_file
-from dal_obscura.sources.plugins.inspection import inspect_distributions
+from dal_obscura.plugins import load_plugin_lock_file
+from dal_obscura.plugins.bootstrap import create_plugin_registry
+from dal_obscura.plugins.inspection import inspect_distributions
 
 
 def main() -> None:
@@ -24,7 +24,7 @@ def main() -> None:
     if hashlib.sha256(path.read_bytes()).hexdigest() != sys.argv[3]:
         raise RuntimeError("Worker admission lock differs from selected release")
     lock = load_plugin_lock_file(path)
-    admitted = create_builtin_plugin_registry(allowlist=lock).admitted()
+    admitted = create_plugin_registry(allowlist=lock).admitted()
     if not set(lock).issubset(admitted):
         raise RuntimeError("Worker is missing a selected plugin")
     variable = (

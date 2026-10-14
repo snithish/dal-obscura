@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 
+from dal_obscura_plugin_api.paths import path_covers
+
 from dal_obscura.policy.attribute_conditions import attributes_match
 from dal_obscura.policy.models import (
     MaskRule,
     Policy,
     Principal,
 )
-from dal_obscura.policy.paths import path_covers
 
 
 def resolve_access(

@@ -42,10 +42,6 @@ class InvalidCredentialsError(AuthenticationError):
     """A credential for this provider was present but failed validation."""
 
 
-class AuthenticationUnavailableError(AuthenticationError):
-    """The provider could not validate credentials because a dependency failed."""
-
-
 class IdentityPort(Protocol):
     """Authenticates a caller from normalized request context."""
 

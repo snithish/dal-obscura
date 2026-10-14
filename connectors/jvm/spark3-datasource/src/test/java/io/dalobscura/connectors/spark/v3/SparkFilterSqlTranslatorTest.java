@@ -1,5 +1,9 @@
 package io.dalobscura.connectors.spark.v3;
 
+import io.dalobscura.connectors.spark.v3.filters.SparkFilterTranslation;
+
+import io.dalobscura.connectors.spark.v3.filters.SparkFilterSqlTranslator;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

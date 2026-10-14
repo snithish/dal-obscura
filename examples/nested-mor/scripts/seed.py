@@ -10,6 +10,9 @@ from tempfile import TemporaryDirectory
 import boto3
 import pyarrow as pa
 import pyarrow.parquet as pq
+from dal_obscura_plugin_conformance.iceberg_fixtures import append_parquet
+from dal_obscura_plugin_conformance.native_delta import delete_delta_rows
+from dal_obscura_plugin_conformance.native_iceberg import write_deletes
 from deltalake import WriterProperties, write_deltalake
 from fixture import (
     BUCKET,
@@ -24,9 +27,6 @@ from fixture import (
 )
 from pyiceberg.catalog import load_catalog
 from pyiceberg.manifest import ManifestContent
-
-from tests.support.delta import install_deletion_vector
-from tests.support.iceberg import append_parquet, install_delete_file
 
 
 def iceberg_catalog():
@@ -87,7 +87,7 @@ def seed_delta(client):
             ids = next(parquet.iter_batches(batch_size=3, columns=["id"])).column(0).to_pylist()
         updated_id, deleted_id = ids[1:3]
         digest = hashlib.sha256(original.read_bytes()).hexdigest()
-        install_deletion_vector(target, [1, 2], storage="u")
+        delete_delta_rows(target, [updated_id, deleted_id])
         write_deltalake(
             target,
             pa.Table.from_pylist([row(updated_id, updated=True)], schema=SCHEMA),
@@ -117,59 +117,63 @@ def seed_delta(client):
 
 def seed_iceberg():
     catalog = iceberg_catalog()
-    catalog.create_namespace("retail")
-    table = catalog.create_table(
-        TARGET,
-        schema=SCHEMA,
-        properties={
-            "format-version": "2",
-            "write.parquet.row-group-limit": "16384",
-            "write.target-file-size-bytes": "67108864",
-        },
-    )
-    with table.update_spec() as update:
-        update.add_identity("partition")
-    for partition in range(PARTITIONS):
-        source = pa.Table.from_batches(batches(partition), schema=SCHEMA).cast(
-            table.schema().as_arrow()
+    try:
+        catalog.create_namespace("retail")
+        table = catalog.create_table(
+            TARGET,
+            schema=SCHEMA,
+            properties={
+                "format-version": "2",
+                "write.parquet.row-group-limit": "16384",
+                "write.target-file-size-bytes": "67108864",
+            },
         )
-        append_parquet(table, source, row_group_size=16384)
-        del source
-        print(
-            f"Iceberg partition {partition}: {ROWS_PER_PARTITION:,} physical rows written",
-            flush=True,
+        with table.update_spec() as update:
+            update.add_identity("partition")
+        for partition in range(PARTITIONS):
+            source = pa.Table.from_batches(batches(partition), schema=SCHEMA).cast(
+                table.schema().as_arrow()
+            )
+            append_parquet(table, source, row_group_size=16384)
+            del source
+            print(
+                f"Iceberg partition {partition}: {ROWS_PER_PARTITION:,} physical rows written",
+                flush=True,
+            )
+        base = [
+            (task.file.file_path, task.file.file_size_in_bytes)
+            for task in table.scan().plan_files()
+        ]
+        write_deletes(table, kind="position", ids=[2], partition=("0",))
+        write_deletes(table, kind="equality", ids=[1], partition=("0",))
+        append_parquet(table, pa.Table.from_pylist([row(1, updated=True)], schema=SCHEMA))
+        # Metadata/deletes changed; the original physical data file remains active.
+        assert set(base).issubset(
+            {
+                (entry.data_file.file_path, entry.data_file.file_size_in_bytes)
+                for manifest in table.current_snapshot().manifests(table.io)
+                if manifest.content == ManifestContent.DATA
+                for entry in manifest.fetch_manifest_entry(table.io, discard_deleted=True)
+            }
         )
-    base = [
-        (task.file.file_path, task.file.file_size_in_bytes) for task in table.scan().plan_files()
-    ]
-    install_delete_file(table, kind="position", ids=[2], partition=("0",))
-    install_delete_file(table, kind="equality", ids=[1], partition=("0",))
-    append_parquet(table, pa.Table.from_pylist([row(1, updated=True)], schema=SCHEMA))
-    # Metadata/deletes changed; the original physical data file remains active.
-    assert set(base).issubset(
-        {
-            (entry.data_file.file_path, entry.data_file.file_size_in_bytes)
-            for manifest in table.current_snapshot().manifests(table.io)
-            if manifest.content == ManifestContent.DATA
-            for entry in manifest.fetch_manifest_entry(table.io, discard_deleted=True)
+        for index in range(100):
+            other = catalog.create_table(
+                f"retail.other_{index:03d}", schema=pa.schema([pa.field("id", pa.int64())])
+            )
+            other.append(pa.table({"id": [index]}).cast(other.schema().as_arrow()))
+        assert len(catalog.list_tables("retail")) == 101
+        return {
+            "physical_base_rows": ROWS,
+            "position_deleted_id": 2,
+            "equality_deleted_id": 1,
+            "replacement_id": 1,
+            "deleted_id": 2,
+            "base_files_preserved": True,
+            "snapshot": str(table.metadata.current_snapshot_id),
+            "catalog_tables": 101,
         }
-    )
-    for index in range(100):
-        other = catalog.create_table(
-            f"retail.other_{index:03d}", schema=pa.schema([pa.field("id", pa.int64())])
-        )
-        other.append(pa.table({"id": [index]}).cast(other.schema().as_arrow()))
-    assert len(catalog.list_tables("retail")) == 101
-    return {
-        "physical_base_rows": ROWS,
-        "position_deleted_id": 2,
-        "equality_deleted_id": 1,
-        "replacement_id": 1,
-        "deleted_id": 2,
-        "base_files_preserved": True,
-        "snapshot": str(table.metadata.current_snapshot_id),
-        "catalog_tables": 101,
-    }
+    finally:
+        catalog.close()
 
 
 def batches(partition):

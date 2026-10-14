@@ -8,8 +8,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.assets.access import ensure_asset_capability
 from dal_obscura.control.errors import ValidationFailure
-from dal_obscura.control.policy_service import ensure_asset_capability
 from dal_obscura.storage import audit as _db_audit
 from dal_obscura.storage import workspace as _db_workspace
 

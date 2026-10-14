@@ -30,8 +30,6 @@ examples
 target
 **/target
 tests
-!tests/support/delta.py
-!tests/support/iceberg.py
 *.egg-info
 examples/nested-mor/.build
 examples/nested-mor/results

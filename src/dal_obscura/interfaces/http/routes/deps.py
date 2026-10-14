@@ -13,7 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.discovery_cursors import DiscoveryCursors
+from dal_obscura.control.catalogs.discovery import DiscoveryCursors
 from dal_obscura.control.errors import (
     AuthorizationFailure,
     ConfigurationConflictError,
@@ -34,8 +34,8 @@ from dal_obscura.identity.sessions import (
     LoginTransaction,
     LoginTransactionStore,
 )
-from dal_obscura.sources.plugins.registry import PluginRegistry
-from dal_obscura.sources.secrets import SecretProvider
+from dal_obscura.plugins.registry import PluginRegistry
+from dal_obscura.runtime.secrets import SecretProvider
 
 AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
 ServiceResult = TypeVar("ServiceResult")
@@ -198,12 +198,6 @@ class ControlPlaneDeps:
             if actor is not None:
                 session.commit()
             return actor
-
-    def issue_browser_session(self, actor: ControlPlaneActor) -> str:
-        """Mints a random, durable browser session secret."""
-
-        token, _csrf_token = self.issue_browser_session_credentials(actor)
-        return token
 
     def issue_browser_session_credentials(self, actor: ControlPlaneActor) -> tuple[str, str]:
         """Mints the session and its browser-readable, session-bound CSRF secret."""

@@ -2,20 +2,20 @@ import hashlib
 
 import pyarrow as pa
 import pytest
+from dal_obscura_plugin_conformance.iceberg_fixtures import create_iceberg_table
 
 from dal_obscura.sources.catalogs import (
     CatalogRegistry,
 )
-from tests.support.flight import (
+from tests.support.flight.flight import (
     build_flight_service,
     command_descriptor,
     flight_call_options,
     flight_request,
     running_flight_client,
 )
-from tests.support.iceberg import create_iceberg_table
-from tests.support.iceberg_flight import service_config_from_raw
-from tests.support.policy import allow_rule
+from tests.support.flight.iceberg_flight import service_config_from_raw
+from tests.support.policy.policy import allow_rule
 
 pytestmark = [pytest.mark.heavy, pytest.mark.socket]
 

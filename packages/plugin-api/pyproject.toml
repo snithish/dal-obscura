@@ -1,8 +1,8 @@
 [project]
 name = "dal-obscura-plugin-api"
-version = "0.2.0"
-description = "Versioned contracts for Dal Obscura catalog and table-format plugins"
-requires-python = ">=3.12,<3.13"
+version = "0.3.0"
+description = "Versioned contracts for Dal Obscura catalog, format and secret-backend plugins"
+requires-python = ">=3.14,<3.15"
 dependencies = ["pyarrow>=15.0.0"]
 
 [build-system]

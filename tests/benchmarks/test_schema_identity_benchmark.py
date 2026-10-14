@@ -6,7 +6,7 @@ import tracemalloc
 import pyarrow as pa
 import pytest
 
-from dal_obscura.control.schema_service import schema_fingerprint
+from dal_obscura.control.assets.schema import schema_fingerprint
 
 pytestmark = pytest.mark.heavy
 

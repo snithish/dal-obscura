@@ -37,7 +37,7 @@ class ConformanceResult:
 
     package: str
     plugin_id: str
-    core_version: str = "0.2.0"
+    core_version: str = "0.3.0"
     arrow_version: str = pa.__version__
     artifact_identity: str | None = None
     capability_matrix: dict[str, bool] = field(default_factory=dict)

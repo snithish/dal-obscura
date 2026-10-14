@@ -3,7 +3,7 @@ import pyarrow.flight as flight
 import pytest
 
 from tests.support.arrow import id_region_batch, id_region_schema, metadata_batch, metadata_schema
-from tests.support.flight import (
+from tests.support.flight.flight import (
     InMemoryPolicyAuthorizer,
     StubTableFormat,
     authorization_header,
@@ -14,10 +14,14 @@ from tests.support.flight import (
     make_jwt,
     running_flight_client,
 )
-from tests.support.flight_context import DummyContext
-from tests.support.policy import allow_rule
+from tests.support.policy.policy import allow_rule
 
 pytestmark = pytest.mark.socket
+
+
+class DummyContext:
+    def __init__(self, headers):
+        self.headers = headers
 
 
 @pytest.mark.parametrize("method", ["get_schema", "get_flight_info"])
@@ -237,7 +241,7 @@ def test_get_schema_returns_masked_authorized_schema():
 
 def test_streaming_contract_emits_multiple_batches(monkeypatch):
     monkeypatch.setattr(
-        "dal_obscura.read.transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
+        "dal_obscura.read.execution.transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
         2,
     )
     schema = id_region_schema()
@@ -612,7 +616,7 @@ def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_ba
     from threading import Thread
 
     from dal_obscura.interfaces.flight.streaming import make_stream
-    from dal_obscura.read.transform_contracts import StreamResourceError
+    from dal_obscura.read.execution.contracts import StreamResourceError
 
     closed = []
     schema = pa.schema([pa.field("id", pa.int64())])

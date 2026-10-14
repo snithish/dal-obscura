@@ -4,15 +4,14 @@ from dataclasses import dataclass, field
 from typing import cast
 
 import pyarrow as pa
-from sqlglot import exp, parse
-from sqlglot.errors import ParseError
-
-from dal_obscura.policy.paths import (
+from dal_obscura_plugin_api.paths import (
     FieldPath,
     FieldSegment,
     parse_field_path,
     resolve_schema_path,
 )
+from sqlglot import exp, parse
+from sqlglot.errors import ParseError
 
 
 @dataclass(frozen=True)

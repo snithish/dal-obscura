@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,19 +58,6 @@ def create_engine_from_url(database_url: str) -> Engine:
 def session_factory(engine: Engine) -> sessionmaker[Session]:
     """Builds the session factory shared by control-plane routes and tests."""
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
-
-def session_scope(session_maker: sessionmaker[Session]) -> Iterator[Session]:
-    """Yields one transaction-scoped session."""
-    session = session_maker()
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
 
 
 def migrate_config_store(engine: Engine, revision: str = "head") -> None:

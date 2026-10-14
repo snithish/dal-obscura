@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from dal_obscura_plugin_api.schema.bounds import MAX_SCHEMA_ADMISSION_FIELDS
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -24,8 +25,7 @@ from pydantic import (
     model_serializer,
 )
 
-from dal_obscura.control.catalog_service import MAX_CATALOG_PUBLICATION_SIZE
-from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ADMISSION_FIELDS
+from dal_obscura.control.catalogs.service import MAX_CATALOG_PUBLICATION_SIZE
 
 
 class StrictModel(BaseModel):
@@ -375,7 +375,7 @@ class CatalogDiagnosticResponse(BaseModel):
 class PluginDescriptorResponse(BaseModel):
     """Admitted plugin descriptor exposed to operator tooling."""
 
-    kind: Literal["catalog", "table_format"]
+    kind: Literal["catalog", "table_format", "secret_backend"]
     plugin_id: str
     api_version: str
     config_version: int
@@ -402,7 +402,7 @@ class PluginPairResponse(BaseModel):
 class PluginStateResponse(BaseModel):
     """Allowlisted plugin lifecycle status without factory imports."""
 
-    kind: Literal["catalog", "table_format"]
+    kind: Literal["catalog", "table_format", "secret_backend"]
     plugin_id: str
     status: Literal["enabled", "not_installed", "incompatible"]
     reason: str | None = None
@@ -418,7 +418,7 @@ class PluginLifecycleRequest(StrictModel):
 class PluginLifecycleResponse(BaseModel):
     """Result of one explicit plugin lifecycle transition."""
 
-    kind: Literal["catalog", "table_format"]
+    kind: Literal["catalog", "table_format", "secret_backend"]
     plugin_id: str
     lifecycle: Literal["enabled", "draining", "disabled", "revoked", "removed"]
 

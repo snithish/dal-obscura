@@ -7,10 +7,10 @@ from typing import cast
 import pytest
 
 from dal_obscura.interfaces.cli.read import _start_health_server
-from dal_obscura.interfaces.cli.settings import DataPlaneRuntimeConfig
 from dal_obscura.interfaces.flight.server import _health_payload
 from dal_obscura.interfaces.read_health import create_health_app, live_runtime_readiness
-from dal_obscura.storage.database.db import create_engine_from_url, session_factory
+from dal_obscura.runtime.configuration import DataPlaneRuntimeConfig
+from dal_obscura.storage.database.db import session_factory
 
 
 def test_data_plane_healthz_reports_process_alive(
@@ -84,12 +84,12 @@ def test_data_plane_runtime_readiness_requires_ticket_settings():
 
 
 @pytest.mark.socket
-def test_data_plane_health_server_bind_failure_blocks_startup():
+def test_data_plane_health_server_bind_failure_blocks_startup(engine_factory):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
         occupied.bind(("127.0.0.1", 0))
         occupied.listen()
         port = occupied.getsockname()[1]
-        engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+        engine = engine_factory("sqlite+pysqlite:///:memory:")
 
         with pytest.raises(OSError):
             _start_health_server(

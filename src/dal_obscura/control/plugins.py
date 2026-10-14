@@ -7,7 +7,7 @@ from dal_obscura_plugin_api import PluginKind
 from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.runtime import ControlContext
-from dal_obscura.sources.plugins import PluginLifecycleState
+from dal_obscura.plugins import PluginLifecycleState
 from dal_obscura.storage import audit as _db_audit
 from dal_obscura.storage import workspace as _db_workspace
 
@@ -24,7 +24,7 @@ def set_plugin_lifecycle(
 
     if not actor.platform_admin:
         raise AuthorizationFailure("Platform admin required")
-    if kind not in {"catalog", "table_format"}:
+    if kind not in {"catalog", "table_format", "secret_backend"}:
         raise ValidationFailure("Unsupported plugin kind")
     if context.plugin_registry is None:
         raise ValidationFailure("Plugin registry was not admitted during application startup")

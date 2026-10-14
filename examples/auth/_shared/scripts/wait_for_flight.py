@@ -26,7 +26,7 @@ def main() -> None:
             client = flight_client.create_client(uri, flow)
             client.get_schema(descriptor, options=_options(flow))
             return
-        except (flight.FlightUnauthenticatedError, flight.FlightUnauthorizedError):
+        except flight.FlightUnauthenticatedError, flight.FlightUnauthorizedError:
             return
         except flight.FlightError as exc:
             if _is_auth_failure(exc):

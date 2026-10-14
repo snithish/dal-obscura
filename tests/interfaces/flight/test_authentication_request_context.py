@@ -8,7 +8,7 @@ from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.interfaces.flight.contracts import authentication_request_from_context
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.read.contracts import GetSchemaResult
-from tests.support.flight import command_descriptor
+from tests.support.flight.flight import command_descriptor
 
 
 class DummyContext:

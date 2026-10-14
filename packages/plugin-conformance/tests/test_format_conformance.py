@@ -39,7 +39,7 @@ def test_runner_returns_machine_readable_passing_result():
 
     payload = result.to_dict()
     assert payload["status"] == "passed"
-    assert payload["core_version"] == "0.2.0"
+    assert payload["core_version"] == "0.3.0"
     assert payload["artifact_identity"] == "sha256:fixture"
     assert payload["capability_matrix"] == {"nested_schema": True, "splittable_scan": True}
     assert result.checks["bounded_plan"] == "passed"

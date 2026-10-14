@@ -40,7 +40,7 @@ public final class LocalDalObscuraServer implements AutoCloseable {
                         ? JwksServer.start(bundle.jwksPort(), fixtureJwksPath)
                         : null;
 
-        ProcessBuilder builder = new ProcessBuilder("uv", "run", "dal-obscura");
+        ProcessBuilder builder = new ProcessBuilder("uv", "run", "--no-sync", "dal-obscura");
         builder.directory(FixtureBuilderRunner.workspaceRoot().toFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(logPath.toFile());

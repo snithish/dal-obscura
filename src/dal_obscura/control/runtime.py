@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.sources.plugins import PluginRegistry
-from dal_obscura.sources.secrets import SecretProvider
+from dal_obscura.plugins import PluginRegistry
+from dal_obscura.runtime.secrets import SecretProvider
 
 
 @dataclass(frozen=True)

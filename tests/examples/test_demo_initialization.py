@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.sources.secrets import EnvSecretProvider
+from dal_obscura.runtime.secrets import SecretProviderConfig, load_secret_provider
 from dal_obscura.storage.database.db import session_factory
 from examples.demo.keycloak.scripts import provision_demo, seed_table
 
@@ -29,8 +29,10 @@ def workspace(tmp_path, monkeypatch, db_engine, http_client):
         create_app(
             session_factory(db_engine),
             admin_token="test-admin",
-            secret_provider=EnvSecretProvider(
-                config={"scope_grants": {"catalog:retail_demo": ["LOCAL_ICEBERG_URI"]}}
+            secret_provider=load_secret_provider(
+                SecretProviderConfig(
+                    config={"scope_grants": {"catalog:retail_demo": ["LOCAL_ICEBERG_URI"]}}
+                )
             ),
         )
     )

@@ -13,7 +13,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     PluginLifecycleResponse,
     PluginListResponse,
 )
-from dal_obscura.sources.plugins import PluginLifecycleState
+from dal_obscura.plugins import PluginLifecycleState
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:

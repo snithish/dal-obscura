@@ -1,5 +1,15 @@
 package io.dalobscura.connectors.spark.v3;
 
+import io.dalobscura.connectors.spark.v3.scan.DalObscuraScanBuilder;
+
+import io.dalobscura.connectors.spark.v3.scan.DalObscuraTable;
+
+import io.dalobscura.connectors.spark.v3.scan.DalObscuraInputPartition;
+
+import io.dalobscura.connectors.spark.v3.options.DalObscuraExecutorAuthProvider;
+
+import io.dalobscura.connectors.spark.v3.options.DalObscuraConnectorOptions;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.dalobscura.connectors.client.DalObscuraAuth;

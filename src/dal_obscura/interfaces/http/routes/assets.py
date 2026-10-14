@@ -6,9 +6,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from dal_obscura.control import asset_service, policy_service, schema_service
 from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.assets import access as asset_access
+from dal_obscura.control.assets import schema as schema_service
+from dal_obscura.control.assets import service as asset_service
 from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
+from dal_obscura.control.policies import service as policy_service
 from dal_obscura.control.runtime import ControlContext
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
@@ -236,7 +239,7 @@ def _replace_authorized_asset_grants(
 def _ensure_grant_manager(
     service: ControlContext, asset_id: UUID, actor: ControlPlaneActor
 ) -> None:
-    policy_service.ensure_asset_capability(service.session, asset_id, actor, "grant")
+    asset_access.ensure_asset_capability(service.session, asset_id, actor, "grant")
 
 
 def _reject_self_escalation(
@@ -252,7 +255,7 @@ def _reject_self_escalation(
         if grant["principal"] not in principals:
             continue
         try:
-            policy_service.ensure_asset_capability(
+            asset_access.ensure_asset_capability(
                 service.session, asset_id, actor, grant["capability"]
             )
         except AuthorizationFailure as exc:

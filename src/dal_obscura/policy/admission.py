@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pyarrow as pa
+from dal_obscura_plugin_api.paths import path_covers
 
 from dal_obscura.policy.filters import (
     RowFilter,
@@ -8,7 +9,6 @@ from dal_obscura.policy.filters import (
     validate_row_filter_against_schema,
 )
 from dal_obscura.policy.models import AccessDecision
-from dal_obscura.policy.paths import path_covers
 from dal_obscura.read.request import ExecutionProjection
 
 

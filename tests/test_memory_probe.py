@@ -1,4 +1,4 @@
-from tests.support.memory_probe import run_memory_probe
+from tests.support.performance.memory_probe import run_memory_probe
 
 
 def test_memory_probe_sees_allocations_before_any_output():
@@ -6,7 +6,7 @@ def test_memory_probe_sees_allocations_before_any_output():
         """
 import json
 import time
-from tests.support.memory_probe import begin_memory_probe
+from tests.support.performance.memory_probe import begin_memory_probe
 begin_memory_probe()
 payload = bytearray(32 * 1024 * 1024)
 time.sleep(0.1)

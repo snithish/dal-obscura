@@ -3,10 +3,10 @@ import pytest
 
 from dal_obscura.interfaces.flight.contracts import parse_descriptor
 from dal_obscura.interfaces.flight_contract import encode_plan_command
-from tests.support.flight import (
+from tests.support.flight.flight import (
     command_descriptor,
 )
-from tests.support.row_filters import FLIGHT_UNSAFE_ROW_FILTER_SMOKE_CASES
+from tests.support.policy.row_filters import FLIGHT_UNSAFE_ROW_FILTER_SMOKE_CASES
 
 
 def test_parse_descriptor_rejects_path_descriptor():
@@ -170,7 +170,7 @@ def test_parse_descriptor_rejects_unsafe_row_filter_sql(row_filter):
     ids=["ascii-257", "unicode-1024", "ascii-16384"],
 )
 def test_flight_descriptor_preserves_long_typed_field_names(name):
-    from dal_obscura.policy.paths import FieldPath, FieldSegment
+    from dal_obscura_plugin_api.paths import FieldPath, FieldSegment
 
     column = FieldPath((FieldSegment(name),)).to_human()
     descriptor = flight.FlightDescriptor.for_command(

@@ -4,6 +4,13 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 import pyarrow.flight as flight
+from dal_obscura_plugin_api.paths import (
+    FieldPath,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    MapValueSegment,
+)
 
 from dal_obscura.flight.v1.read_pb2 import FieldPath as FieldPathProto
 from dal_obscura.flight.v1.read_pb2 import FieldPathSegment as FieldPathSegmentProto
@@ -14,13 +21,6 @@ from dal_obscura.interfaces.flight_contract import (
     decode_plan_command,
 )
 from dal_obscura.policy.filters import RowFilter, deserialize_row_filter
-from dal_obscura.policy.paths import (
-    FieldPath,
-    FieldSegment,
-    ListElementSegment,
-    MapKeySegment,
-    MapValueSegment,
-)
 from dal_obscura.read.request import PlanRequest
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"

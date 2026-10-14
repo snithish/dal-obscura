@@ -16,8 +16,8 @@ from dal_obscura.storage.database.orm import (
     PolicyRuleRecord,
 )
 from dal_obscura.storage.snapshots import LiveConfigStore
-from tests.support.live_config import seed_live_config
-from tests.support.postgres import isolated_postgres_sessions
+from tests.support.sources.live_config import seed_live_config
+from tests.support.storage.postgres import isolated_postgres_sessions
 
 
 @pytest.mark.integration

@@ -1,8 +1,8 @@
 [project]
 name = "dal-obscura-iceberg-reader"
-version = "0.2.0"
+version = "0.3.0"
 description = "Bounded Python binding to Apache Iceberg file planning and native Arrow reads"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.14,<3.15"
 license = "Apache-2.0"
 dependencies = ["pyarrow>=15"]
 

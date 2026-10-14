@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-const moduleUrl = process.argv[2] ? pathToFileURL(resolve(process.argv[2])) : new URL('../src/policy_editor.ts', import.meta.url);
+const moduleUrl = process.argv[2] ? pathToFileURL(resolve(process.argv[2])) : new URL('../src/features/policy/policy_editor.ts', import.meta.url);
 const { applyMaskToTargets, removeColumnSelections } = await import(moduleUrl);
 const count = 300;
 const options = Array.from({ length: count }, (_, index) => {

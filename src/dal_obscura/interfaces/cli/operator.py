@@ -16,20 +16,22 @@ import uuid
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from dal_obscura_plugin_api import PluginDescriptor
+from dal_obscura_plugin_api.execution import close_preserving_error
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from pydantic_core import from_json
 
-from dal_obscura.control.catalog_service import (
+from dal_obscura.control.catalogs.service import (
     MAX_CATALOG_PUBLICATION_SIZE,
     validate_catalog_options,
     validate_descriptor_options,
 )
-from dal_obscura.sources.plugins import PluginAdmissionError
+from dal_obscura.plugins import PluginAdmissionError
 
 _IMAGE_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}\Z")
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -370,7 +372,10 @@ class NoRedirect(HTTPRedirectHandler):
     """Never forward deployment credentials to a redirect destination."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ValueError("Control API redirects are not allowed; configure the final HTTPS URL")
+        try:
+            raise ValueError("Control API redirects are not allowed; configure the final HTTPS URL")
+        finally:
+            close_preserving_error(fp)
 
 
 def api_request(
@@ -384,25 +389,29 @@ def api_request(
         data=None if body is None else json.dumps(body, allow_nan=False).encode(),
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    with build_opener(NoRedirect()).open(request, timeout=30) as response:
-        payload = response.read(MAX_CONTROL_RESPONSE_BYTES + 1)
-        if len(payload) > MAX_CONTROL_RESPONSE_BYTES:
-            raise ValueError("Control API response exceeds the 8 MiB limit")
-        try:
-            # The maintained parser also rejects excessive nesting without Python recursion.
-            result = from_json(payload, allow_inf_nan=False, cache_strings=False)
-            pending = [result]
-            while pending:
-                value = pending.pop()
-                if isinstance(value, float) and not math.isfinite(value):
-                    raise ValueError("Non-finite number")
-                if isinstance(value, dict):
-                    pending.extend(value.values())
-                elif isinstance(value, list):
-                    pending.extend(value)
-            return result
-        except ValueError:
-            raise ValueError("Control API returned invalid JSON") from None
+    try:
+        with build_opener(NoRedirect()).open(request, timeout=30) as response:
+            payload = response.read(MAX_CONTROL_RESPONSE_BYTES + 1)
+            if len(payload) > MAX_CONTROL_RESPONSE_BYTES:
+                raise ValueError("Control API response exceeds the 8 MiB limit")
+            try:
+                # The maintained parser also rejects excessive nesting without Python recursion.
+                result = from_json(payload, allow_inf_nan=False, cache_strings=False)
+                pending = [result]
+                while pending:
+                    value = pending.pop()
+                    if isinstance(value, float) and not math.isfinite(value):
+                        raise ValueError("Non-finite number")
+                    if isinstance(value, dict):
+                        pending.extend(value.values())
+                    elif isinstance(value, list):
+                        pending.extend(value)
+                return result
+            except ValueError:
+                raise ValueError("Control API returned invalid JSON") from None
+    except HTTPError as error:
+        close_preserving_error(error)
+        raise
 
 
 def validate_control_url(value: str) -> str:

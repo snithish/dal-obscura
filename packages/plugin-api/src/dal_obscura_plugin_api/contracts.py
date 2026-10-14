@@ -11,11 +11,11 @@ from typing import Literal, Protocol, cast
 
 import pyarrow as pa
 
-from dal_obscura_plugin_api.scan import ScanRequest
+from dal_obscura_plugin_api.schema.projection import ScanRequest
 from dal_obscura_plugin_api.tasks import ScanTask, _freeze_json, _mutable_json
 
-PluginKind = Literal["catalog", "table_format"]
-PLUGIN_API_VERSION = "2"
+PluginKind = Literal["catalog", "table_format", "secret_backend"]
+PLUGIN_API_VERSION = "3"
 PLUGIN_CONFIG_VERSION = 1
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 SUPPORTED_CAPABILITIES = frozenset(
@@ -306,6 +306,8 @@ class ExecutionContext:
     deadline: datetime
     correlation_id: str
     cancel_check: Callable[[], bool] | None = None
+    options: Mapping[str, object] = field(default_factory=dict)
+    check_path: Callable[[str], None] | None = None
 
     def __post_init__(self) -> None:
         if self.deadline.tzinfo is None or self.deadline.utcoffset() is None:
@@ -314,6 +316,10 @@ class ExecutionContext:
             raise ValueError("Execution correlation ID must be non-empty and bounded")
         if any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.correlation_id):
             raise ValueError("Execution correlation ID contains control characters")
+        _validate_options(self.options)
+        object.__setattr__(self, "options", _freeze_json(self.options))
+        if self.check_path is not None and not callable(self.check_path):
+            raise ValueError("Execution path check must be callable")
         if self.cancel_check is not None and not callable(self.cancel_check):
             raise ValueError("Execution cancellation check must be callable")
 

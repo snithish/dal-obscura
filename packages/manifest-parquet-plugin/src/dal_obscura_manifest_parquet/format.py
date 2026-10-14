@@ -17,6 +17,8 @@ from dal_obscura_plugin_api import (
     SchemaDescriptor,
     TableHandle,
 )
+from dal_obscura_plugin_api.execution import active
+from dal_obscura_plugin_api.options import batch_rows
 from dal_obscura_plugin_api.storage import StorageRoot
 
 _MAX_BATCH_ROWS = 65_536
@@ -24,12 +26,15 @@ _MAX_BATCH_ROWS = 65_536
 FORMAT_DESCRIPTOR = PluginDescriptor(
     kind="table_format",
     plugin_id="parquet.dataset",
-    api_version="2",
+    api_version="3",
     config_version=1,
     distribution="dal-obscura-manifest-parquet",
-    version="0.2.0",
+    version="0.3.0",
     capabilities=frozenset({"nested_schema", "splittable_scan"}),
     handle_versions=frozenset({1}),
+    config_schema={
+        "fields": [{"name": "batch_rows", "type": "integer", "required": False, "secret": False}]
+    },
     display_name="Manifest Parquet dataset format",
 )
 
@@ -54,6 +59,7 @@ class ParquetDatasetFormat:
     descriptor = FORMAT_DESCRIPTOR
 
     def __init__(self, handle: TableHandle, context: ExecutionContext) -> None:
+        self._batch_rows = batch_rows(context.options, default=_MAX_BATCH_ROWS)
         context.check_active()
         if handle.format_plugin_id != FORMAT_DESCRIPTOR.plugin_id:
             raise ValueError("Parquet format received an incompatible handle")
@@ -81,16 +87,16 @@ class ParquetDatasetFormat:
         self._files = tuple(cast(str, item) for item in files)
         self._handle = handle
 
+    @active
     def schema(self, context: ExecutionContext) -> SchemaDescriptor:
-        context.check_active()
         return SchemaDescriptor(
             arrow_schema=self._schema,
             snapshot_id=self._handle.snapshot_id,
             stable_ids=False,
         )
 
+    @active
     def plan(self, request: ScanRequest, context: ExecutionContext) -> list[ScanTask]:
-        context.check_active()
         if request.row_filter is not None:
             raise ValueError("Parquet dataset plugin does not support row-filter pushdown")
         columns = request.columns
@@ -131,12 +137,12 @@ class ParquetDatasetFormat:
             for group in groups
         ]
 
+    @active
     def execute(
         self,
         task: ScanTask,
         context: ExecutionContext,
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        context.check_active()
         scan = _decode_task(task.to_json())
         expected_schema = _select_schema(self._schema, scan.columns)
         for group in scan.row_groups:
@@ -152,7 +158,7 @@ class ParquetDatasetFormat:
                     if group.row_group >= parquet_file.num_row_groups:
                         raise ValueError("Parquet task row group is outside the admitted file")
                     for batch in parquet_file.iter_batches(
-                        batch_size=_MAX_BATCH_ROWS,
+                        batch_size=self._batch_rows,
                         row_groups=[group.row_group],
                         columns=list(scan.columns),
                     ):
@@ -170,6 +176,7 @@ class ParquetDatasetFormat:
         return None
 
 
+@active
 def parquet_factory(handle: TableHandle, context: ExecutionContext) -> ParquetDatasetFormat:
     """Open the format using only a catalog-resolved immutable handle."""
 

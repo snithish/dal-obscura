@@ -40,7 +40,8 @@ public final class FixtureBuilderRunner {
                 new ProcessBuilder(
                         "uv",
                         "run",
-                        "tests/support/build_connector_fixture.py",
+                        "--no-sync",
+                        "tests/support/qualification/build_connector_fixture.py",
                         "--output-dir",
                         outputDir.toString(),
                         "--port",

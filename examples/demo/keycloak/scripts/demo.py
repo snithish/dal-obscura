@@ -13,7 +13,7 @@ import shutil
 import socket
 import subprocess
 import sys
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from time import monotonic, sleep
@@ -143,7 +143,7 @@ def initialize_config(
 
 
 @contextmanager
-def operation_lock(root: Path) -> Iterator[None]:
+def operation_lock(root: Path) -> Generator[None]:
     with (root / ".demo.lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -413,7 +413,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             "-t",
                             f"{values['PROJECT_NAME']}-ui:local",
                             "-f",
-                            str(REPO / "ui/Dockerfile"),
+                            str(REPO / "apps/governance-ui/deployment/Dockerfile"),
                             str(REPO),
                         ],
                         values,

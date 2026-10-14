@@ -1,4 +1,12 @@
 {
+    "python.analysis.exclude": [
+        "**/build/**",
+        "**/dist/**",
+        "**/target/**",
+        "**/.build/**",
+        "**/node_modules/**",
+        "**/__pycache__/**"
+    ],
     "python.testing.pytestArgs": [
         "tests",
         "packages"

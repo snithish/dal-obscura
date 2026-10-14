@@ -9,6 +9,9 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import uuid4
 
+from dal_obscura_plugin_api.schema.bounds import validate_native_schema
+from dal_obscura_plugin_api.schema.index import SchemaIndex
+
 from dal_obscura.identity.contracts import AuthenticationRequest, IdentityPort
 from dal_obscura.policy.admission import (
     _authorize_requested_row_filter,
@@ -26,8 +29,6 @@ from dal_obscura.policy.filters import (
 )
 from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
 from dal_obscura.policy.projection import compile_projection
-from dal_obscura.policy.schema_bounds import validate_native_schema
-from dal_obscura.policy.schema_index import SchemaIndex
 from dal_obscura.read.contracts import (
     AuthorizedRead,
     DecodedScan,
@@ -35,18 +36,17 @@ from dal_obscura.read.contracts import (
     GetSchemaResult,
     PlanAccessResult,
 )
+from dal_obscura.read.execution.contracts import RowTransformPort
+from dal_obscura.read.execution.stream import ManagedStream, StreamGuard
 from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.signing_contract import TicketCodecPort
-from dal_obscura.read.stream import ManagedStream, StreamGuard
-from dal_obscura.read.ticket_repository import TicketStorePort
-from dal_obscura.read.tickets import (
+from dal_obscura.read.tickets.contracts import TicketCodecPort, TicketStorePort
+from dal_obscura.read.tickets.envelope import ScanTaskCodec
+from dal_obscura.read.tickets.payload import (
     TicketPayload,
     canonical_context_digest,
     ticket_payload_hash,
 )
-from dal_obscura.read.transform_contracts import RowTransformPort
 from dal_obscura.sources.access import AccessContext, AccessContextPort
-from dal_obscura.sources.task_codec import ScanTaskCodec
 
 
 def _epoch_seconds() -> int:

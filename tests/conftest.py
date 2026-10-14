@@ -19,6 +19,34 @@ if str(REPO_ROOT) not in sys.path:
 
 
 @pytest.fixture
+def catalog_factory():
+    """Own catalogs used by service integration scenarios."""
+    from pyiceberg.catalog import load_catalog
+
+    with ExitStack() as resources:
+
+        def create(name, **options):
+            catalog = load_catalog(name, **options)
+            resources.callback(catalog.close)
+            return catalog
+
+        yield create
+
+
+@pytest.fixture
+def engine_factory():
+    """Own every explicitly created engine, including failed test setup."""
+    with ExitStack() as resources:
+
+        def create(database_url):
+            engine = create_engine_from_url(database_url)
+            resources.callback(engine.dispose)
+            return engine
+
+        yield create
+
+
+@pytest.fixture
 def db_engine():
     """A fresh migrated database per test; never share mutable records."""
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")

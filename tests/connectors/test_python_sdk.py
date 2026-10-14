@@ -8,13 +8,13 @@ from tests.support.arrow import (
     metadata_batch,
     metadata_schema,
 )
-from tests.support.flight import (
+from tests.support.flight.flight import (
     StubTableFormat,
     build_flight_service,
     make_jwt,
     running_flight_client,
 )
-from tests.support.policy import allow_rule
+from tests.support.policy.policy import allow_rule
 
 
 class _StreamingReader:

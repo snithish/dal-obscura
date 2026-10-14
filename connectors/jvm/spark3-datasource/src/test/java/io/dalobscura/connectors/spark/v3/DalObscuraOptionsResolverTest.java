@@ -1,5 +1,9 @@
 package io.dalobscura.connectors.spark.v3;
 
+import io.dalobscura.connectors.spark.v3.options.DalObscuraOptionsResolver;
+
+import io.dalobscura.connectors.spark.v3.options.DalObscuraConnectorOptions;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;

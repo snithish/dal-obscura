@@ -1,0 +1,86 @@
+{
+  "descriptors": [
+    {
+      "kind": "catalog",
+      "plugin_id": "iceberg.catalog",
+      "api_version": "3",
+      "config_version": 1,
+      "capabilities": [
+        "nested_schema",
+        "snapshot_reads",
+        "splittable_scan"
+      ],
+      "output_formats": [
+        "iceberg"
+      ],
+      "handle_versions": [
+        1
+      ],
+      "config_schema": {
+        "defaults": {
+          "type": "sql"
+        },
+        "fields": [
+          {
+            "name": "type",
+            "type": "enum",
+            "required": true,
+            "options": [
+              "sql",
+              "rest",
+              "glue",
+              "hive",
+              "dynamodb",
+              "in-memory",
+              "bigquery"
+            ]
+          },
+          {
+            "name": "uri",
+            "type": "string",
+            "required": false,
+            "secret": false
+          },
+          {
+            "name": "warehouse",
+            "type": "string",
+            "required": false,
+            "secret": false
+          },
+          {
+            "name": "user",
+            "type": "string",
+            "required": false,
+            "secret": false
+          },
+          {
+            "name": "password",
+            "type": "secret_reference",
+            "required": false,
+            "secret": true
+          }
+        ]
+      },
+      "display_name": "Apache Iceberg catalog"
+    },
+    {
+      "kind": "table_format",
+      "plugin_id": "iceberg",
+      "api_version": "3",
+      "config_version": 1,
+      "capabilities": [
+        "cancellation",
+        "delete_files",
+        "nested_schema",
+        "snapshot_reads",
+        "splittable_scan"
+      ],
+      "output_formats": [],
+      "handle_versions": [
+        1
+      ],
+      "config_schema": {},
+      "display_name": "Apache Iceberg"
+    }
+  ]
+}

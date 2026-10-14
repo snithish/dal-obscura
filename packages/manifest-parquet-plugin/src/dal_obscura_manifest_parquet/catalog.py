@@ -17,6 +17,7 @@ from dal_obscura_plugin_api import (
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.execution import active
 from dal_obscura_plugin_api.storage import StorageRoot
 
 _MAX_MANIFEST_BYTES = 1_048_576
@@ -26,10 +27,10 @@ _MAX_FILES_PER_TABLE = 100_000
 CATALOG_DESCRIPTOR = PluginDescriptor(
     kind="catalog",
     plugin_id="manifest",
-    api_version="2",
+    api_version="3",
     config_version=1,
     distribution="dal-obscura-manifest-parquet",
-    version="0.2.0",
+    version="0.3.0",
     capabilities=frozenset({"nested_schema", "splittable_scan"}),
     output_formats=frozenset({"parquet.dataset"}),
     handle_versions=frozenset({1}),
@@ -66,13 +67,13 @@ class ManifestCatalog(CatalogPlugin):
         self._manifest_path = self._storage.member(options.get("manifest_path"))
         self._revision, self._tables = _load_manifest(self._manifest_path, self._storage)
 
+    @active
     def list_namespaces(
         self,
         context: ExecutionContext,
         *,
         namespace: tuple[str, ...] = (),
     ) -> tuple[tuple[str, ...], ...]:
-        context.check_active()
         if namespace:
             return tuple(
                 sorted(
@@ -85,6 +86,7 @@ class ManifestCatalog(CatalogPlugin):
             )
         return tuple(sorted({item.identifier.namespace for item in self._tables}))
 
+    @active
     def list_tables(
         self,
         context: ExecutionContext,
@@ -92,7 +94,6 @@ class ManifestCatalog(CatalogPlugin):
         continuation: str | None = None,
         limit: int,
     ) -> DiscoveryPage:
-        context.check_active()
         if limit <= 0 or limit > _MAX_TABLES:
             raise ValueError("catalog page limit is invalid")
         tables = sorted(
@@ -109,8 +110,8 @@ class ManifestCatalog(CatalogPlugin):
         next_token = _identifier_key(page[-1].identifier) if start + limit < len(tables) else None
         return DiscoveryPage(tuple(item.identifier for item in page), next_token)
 
+    @active
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
-        context.check_active()
         key = _identifier_key(identifier)
         table = next(
             (item for item in self._tables if _identifier_key(item.identifier) == key), None
@@ -137,6 +138,7 @@ class ManifestCatalog(CatalogPlugin):
         return None
 
 
+@active
 def manifest_factory(config: CatalogConfig, context: ExecutionContext) -> ManifestCatalog:
     """Open one manifest catalog from a typed public SDK config."""
 

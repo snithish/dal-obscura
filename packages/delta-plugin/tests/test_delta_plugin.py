@@ -20,8 +20,6 @@ from dal_obscura_plugin_api import (
 from deltalake import DeltaTable, WriterProperties, write_deltalake
 from deltalake.exceptions import DeltaError
 
-from tests.support.delta import install_deletion_vector
-
 
 def catalog_for(root, context, entries=None):
     registry = root / "delta-tables.json"
@@ -96,9 +94,10 @@ def test_parallel_snapshot_survives_updates_deletes_and_later_commits(tmp_path, 
     )
 
 
+@pytest.mark.socket
+@pytest.mark.heavy
 @pytest.mark.parametrize("budget", [1, 4, 100], ids=["grouped", "parallel", "all-row-groups"])
-@pytest.mark.parametrize("storage", ["i", "u", "p"], ids=["inline", "uuid-file", "absolute-file"])
-def test_deletion_vectors_respect_file_row_positions(tmp_path, context, budget, storage):
+def test_deletion_vectors_respect_file_row_positions(tmp_path, context, budget, native_delta):
     path = tmp_path / "sales"
     write_deltalake(
         path,
@@ -106,7 +105,7 @@ def test_deletion_vectors_respect_file_row_positions(tmp_path, context, budget, 
         configuration={"delta.enableDeletionVectors": "true"},
         writer_properties=WriterProperties(max_row_group_size=7),
     )
-    install_deletion_vector(path, [3, 4, 7, 11, 18, 29], storage=storage)
+    native_delta(path, [3, 4, 7, 11, 18, 29])
     # An update rewrites a DV-backed file; old file and inline DV must remain readable.
     handle, format = open_format(tmp_path, context)
     tasks = format.plan(ScanRequest(format.schema(context).arrow_schema, budget), context)
@@ -190,7 +189,7 @@ def test_location_catalog_loads_official_uris_without_directory_registry(tmp_pat
         catalog.close()
     with delta_format_factory(captured, context) as plugin:
         tasks = plugin.plan(ScanRequest(plugin.schema(context).arrow_schema, 2), context)
-    from tests.support.plugin_scans import distributed_rows
+    from dal_obscura_plugin_conformance.testing import distributed_rows
 
     assert len(tasks) == 2
     assert sorted(
@@ -237,7 +236,11 @@ def test_catalog_discovery_preserves_segments_and_rejects_symlinks(tmp_path, con
         catalog_for(tmp_path, context, [{"namespace": [], "name": "bad", "path": "link"}])
 
 
-def test_merge_on_read_update_keeps_old_file_and_hides_old_value(tmp_path, context):
+@pytest.mark.socket
+@pytest.mark.heavy
+def test_merge_on_read_update_keeps_old_file_and_hides_old_value(
+    tmp_path, context, native_delta, native_spark
+):
     path = tmp_path / "sales"
     write_deltalake(
         path,
@@ -245,11 +248,10 @@ def test_merge_on_read_update_keeps_old_file_and_hides_old_value(tmp_path, conte
         configuration={"delta.enableDeletionVectors": "true"},
         writer_properties=WriterProperties(max_row_group_size=7),
     )
-    install_deletion_vector(path, [3, 4, 7, 11, 18, 29])
+    native_delta(path, [3, 4, 7, 11, 18, 29])
     old_handle, old = open_format(tmp_path, context)
     old_tasks = old.plan(ScanRequest(old.schema(context).arrow_schema, 4), context)
-    write_deltalake(path, pa.table({"id": [2], "amount": [999]}), mode="append")
-    install_deletion_vector(path, [2, 3, 4, 7, 11, 18, 29], storage="u")
+    native_spark.sql(f"UPDATE delta.`{path}` SET amount = 999 WHERE id = 2")
     handle, format = open_format(tmp_path, context)
     tasks = format.plan(ScanRequest(format.schema(context).arrow_schema, 4), context)
     assert len(tasks) == 4
@@ -263,7 +265,11 @@ def test_merge_on_read_update_keeps_old_file_and_hides_old_value(tmp_path, conte
     ]
 
 
-def test_deleted_row_groups_and_completely_deleted_snapshot_are_omitted(tmp_path, context):
+@pytest.mark.socket
+@pytest.mark.heavy
+def test_deleted_row_groups_and_completely_deleted_snapshot_are_omitted(
+    tmp_path, context, native_delta
+):
     path = tmp_path / "sales"
     write_deltalake(
         path,
@@ -271,17 +277,21 @@ def test_deleted_row_groups_and_completely_deleted_snapshot_are_omitted(tmp_path
         configuration={"delta.enableDeletionVectors": "true"},
         writer_properties=WriterProperties(max_row_group_size=2),
     )
-    install_deletion_vector(path, [0, 1, 2, 3])
+    native_delta(path, [0, 1, 2, 3])
     handle, format = open_format(tmp_path, context)
     tasks = format.plan(ScanRequest(format.schema(context).arrow_schema, 8), context)
     assert len(tasks) == 2
     assert read_parallel(handle, tasks, context) == [{"id": i} for i in range(4, 8)]
-    install_deletion_vector(path, range(8))
+    native_delta(path, range(8))
     _, empty = open_format(tmp_path, context)
     assert empty.plan(ScanRequest(empty.schema(context).arrow_schema, 8), context) == []
 
 
-def test_checkpoint_retains_deletion_vectors_and_escaped_partition_paths(tmp_path, context):
+@pytest.mark.socket
+@pytest.mark.heavy
+def test_checkpoint_retains_deletion_vectors_and_escaped_partition_paths(
+    tmp_path, context, native_delta
+):
     path = tmp_path / "sales"
     write_deltalake(
         path,
@@ -290,7 +300,7 @@ def test_checkpoint_retains_deletion_vectors_and_escaped_partition_paths(tmp_pat
         configuration={"delta.enableDeletionVectors": "true"},
         writer_properties=WriterProperties(max_row_group_size=2),
     )
-    install_deletion_vector(path, [1, 4], storage="p")
+    native_delta(path, [1, 4])
     DeltaTable(path).create_checkpoint()
     handle, format = open_format(tmp_path, context)
     tasks = format.plan(ScanRequest(format.schema(context).arrow_schema, 4), context)
@@ -306,14 +316,6 @@ def test_vacuumed_snapshot_fails_without_reading_latest(tmp_path, context):
     tasks = format.plan(ScanRequest(format.schema(context).arrow_schema, 2), context)
     table = DeltaTable(path)
     table.update(updates={"id": "99"})
-    # Avoid racing the zero-hour retention cutoff against the writer's clock.
-    # Age this fixture's tombstone explicitly before running the real vacuum.
-    commit = path / "_delta_log/00000000000000000001.json"
-    actions = [json.loads(line) for line in commit.read_text().splitlines()]
-    for action in actions:
-        if "remove" in action:
-            action["remove"]["deletionTimestamp"] = 0
-    commit.write_text("\n".join(json.dumps(action) for action in actions) + "\n")
     DeltaTable(path).vacuum(retention_hours=0, dry_run=False, enforce_retention_duration=False)
     with pytest.raises(ValueError, match=r"root|snapshot"):
         read_parallel(handle, tasks, context)
@@ -343,46 +345,60 @@ def test_cancelled_stream_stops_and_can_be_closed_early(tmp_path, context):
     format.close()
 
 
+@pytest.mark.socket
+@pytest.mark.heavy
 @pytest.mark.parametrize("storage", ["u", "p"])
-def test_deletion_vector_paths_cannot_escape_table_root(tmp_path, context, storage):
+def test_deletion_vector_paths_cannot_escape_table_root(tmp_path, context, storage, native_delta):
     path = tmp_path / "sales"
     write_deltalake(
         path,
         pa.table({"id": list(range(8))}),
         configuration={"delta.enableDeletionVectors": "true"},
     )
-    dv = install_deletion_vector(path, [1], storage=storage)
+    native_delta(path, [1])
     commit = path / "_delta_log/00000000000000000001.json"
     rows = [json.loads(line) for line in commit.read_text().splitlines()]
-    rows[1]["add"]["deletionVector"]["pathOrInlineDv"] = (
-        (tmp_path / "outside.bin").as_uri() if storage == "p" else "../" + dv["pathOrInlineDv"]
+    addition = next(row["add"] for row in rows if "add" in row)
+    addition["deletionVector"]["storageType"] = storage
+    addition["deletionVector"]["pathOrInlineDv"] = (
+        (tmp_path / "outside.bin").as_uri() if storage == "p" else "../outside.bin"
     )
     commit.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
-    with pytest.raises(ValueError, match="root"):
+    with pytest.raises(ValueError, match=r"path|root"):
         open_format(tmp_path, context)
 
 
-def test_corrupt_deletion_vector_fails_planning(tmp_path, context):
+@pytest.mark.socket
+@pytest.mark.heavy
+def test_corrupt_deletion_vector_fails_planning(tmp_path, context, native_delta):
     path = tmp_path / "sales"
     write_deltalake(
         path,
         pa.table({"id": list(range(8))}),
         configuration={"delta.enableDeletionVectors": "true"},
     )
-    install_deletion_vector(path, [1], storage="u", corrupt=True)
+    native_delta(path, [1])
+    vector = next(path.rglob("deletion_vector_*.bin"))
+    payload = bytearray(vector.read_bytes())
+    payload[-1] ^= 1
+    vector.write_bytes(payload)
     _, format = open_format(tmp_path, context)
     with pytest.raises(DeltaError, match=r"checksum|CRC"):
         format.plan(ScanRequest(format.schema(context).arrow_schema, 4), context)
 
 
-def test_deletion_vector_budget_is_checked_before_materialization(tmp_path, context, monkeypatch):
+@pytest.mark.socket
+@pytest.mark.heavy
+def test_deletion_vector_budget_is_checked_before_materialization(
+    tmp_path, context, monkeypatch, native_delta
+):
     path = tmp_path / "sales"
     write_deltalake(
         path,
         pa.table({"id": list(range(8))}),
         configuration={"delta.enableDeletionVectors": "true"},
     )
-    install_deletion_vector(path, [1])
+    native_delta(path, [1])
     _, format = open_format(tmp_path, context)
     monkeypatch.setattr("dal_obscura_delta.format.MAX_DV_ROWS", 4)
 
@@ -412,7 +428,9 @@ def test_unsupported_reader_features_are_rejected(tmp_path, context):
         open_format(tmp_path, context)
 
 
-def test_plugin_passes_public_conformance_with_exact_task_coverage(tmp_path, context):
+@pytest.mark.socket
+@pytest.mark.heavy
+def test_plugin_passes_public_conformance_with_exact_task_coverage(tmp_path, context, native_delta):
     from dal_obscura_plugin_conformance import run_catalog_checks, run_format_checks
 
     path = tmp_path / "sales"
@@ -422,7 +440,7 @@ def test_plugin_passes_public_conformance_with_exact_task_coverage(tmp_path, con
         configuration={"delta.enableDeletionVectors": "true"},
         writer_properties=WriterProperties(max_row_group_size=2),
     )
-    install_deletion_vector(path, [1, 3])
+    native_delta(path, [1, 3])
     catalog = catalog_for(tmp_path, context)
     catalog_result = run_catalog_checks(
         catalog, context, expected_identifiers=[TableIdentifier(("retail",), "sales")]

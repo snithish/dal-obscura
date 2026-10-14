@@ -6,7 +6,7 @@ import pyarrow as pa
 import pytest
 
 from dal_obscura.interfaces.cli.operator import smoke_read
-from tests.support.flight import (
+from tests.support.flight.flight import (
     StubTableFormat,
     build_flight_service,
     make_jwt,

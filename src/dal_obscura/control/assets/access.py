@@ -1,0 +1,60 @@
+"""Administrative asset access and ownership authorization."""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.control.errors import AuthorizationFailure
+from dal_obscura.storage import assets as _db_assets
+
+
+def ensure_asset_reader(
+    store: Session,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> None:
+    """Requires an actor to be a platform admin or an owner of the asset."""
+
+    ensure_asset_capability(store, asset_id, actor, "read")
+
+
+def ensure_asset_capability(
+    store: Session,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+    capability: str,
+) -> None:
+    """Requires an actor to hold an asset capability or be its owner."""
+
+    if actor.platform_admin:
+        return
+    principals = actor.owner_principals()
+    owners = set(_db_assets.list_asset_owners(store, asset_id))
+    if owners.intersection(principals) and capability in {"read", "edit"}:
+        return
+    if any(
+        grant["principal"] in principals and grant["capability"] == capability
+        for grant in _db_assets.list_asset_grants(store, asset_id)
+    ):
+        return
+    raise AuthorizationFailure(
+        "Only platform admins or asset owners with the required capability may access this asset; "
+        f"the authenticated actor lacks asset capability {capability!r}."
+    )
+
+
+def ensure_asset_owner(
+    store: Session,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> None:
+    """Requires explicit asset ownership or platform-admin authority."""
+
+    if actor.platform_admin:
+        return
+    if set(_db_assets.list_asset_owners(store, asset_id)).intersection(actor.owner_principals()):
+        return
+    raise AuthorizationFailure("Only platform admins or asset owners may revoke asset tokens.")

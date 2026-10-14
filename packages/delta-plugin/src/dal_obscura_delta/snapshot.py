@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 import pyarrow.fs as fs
 import pyarrow.parquet as pq
 from dal_obscura_plugin_api import ExecutionContext
+from dal_obscura_plugin_api.execution import active
 from deltalake import DeltaTable
 from deltalake.exceptions import DeltaError
 
@@ -35,6 +36,7 @@ def _check_action_paths(row: dict, root: DeltaStorage) -> None:
             root.member(encoded[:-20], encoded=True, exists=False) if encoded[:-20] else None
 
 
+@active
 def _check_log_file(path: str, root: DeltaStorage, context: ExecutionContext) -> None:
     if path.endswith(".json"):
         for line in root.read(path, limit=MAX_LOG_BYTES).splitlines():
@@ -60,6 +62,7 @@ def _check_log_file(path: str, root: DeltaStorage, context: ExecutionContext) ->
             root.member("_delta_log/" + v2["path"], encoded=True, exists=False)
 
 
+@active
 def _check_logs(root: DeltaStorage, context: ExecutionContext) -> None:
     """Guard kernel IO, including paths embedded in historical checkpoints.
 
@@ -83,10 +86,10 @@ def _check_logs(root: DeltaStorage, context: ExecutionContext) -> None:
         _check_log_file(path, root, context)
 
 
+@active
 def open_snapshot(
     path: DeltaStorage, context: ExecutionContext, version: int | None = None
 ) -> DeltaTable:
-    context.check_active()
     _check_logs(path, context)
     try:
         table = DeltaTable(path.uri, version=version, storage_options=storage_options())

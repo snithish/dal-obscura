@@ -15,7 +15,7 @@ from typing import cast
 
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.sources.plugins.registry import (
+from dal_obscura.plugins.registry import (
     ENTRY_POINT_GROUPS,
     PluginAdmissionError,
     build_plugin_lock,
@@ -26,7 +26,9 @@ from dal_obscura.sources.plugins.registry import (
 def parse_selection(value: str) -> tuple[PluginKind, str]:
     kind, separator, plugin_id = value.partition(":")
     if not separator or kind not in ENTRY_POINT_GROUPS or not plugin_id:
-        raise PluginAdmissionError("plugin selection must be catalog:ID or table_format:ID")
+        raise PluginAdmissionError(
+            "plugin selection must be catalog:ID, table_format:ID or secret_backend:ID"
+        )
     return cast(PluginKind, kind), plugin_id
 
 
@@ -96,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         required=True,
         metavar="KIND:ID",
-        help="repeat for each explicitly admitted catalog or table_format plugin",
+        help="repeat for each explicitly admitted catalog, table_format or secret_backend plugin",
     )
     args = parser.parse_args(argv)
     try:

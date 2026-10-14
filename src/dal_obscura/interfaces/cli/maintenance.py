@@ -75,7 +75,11 @@ def run(
         print("DAL_OBSCURA_DATABASE_URL is required unless --database-url is set", file=sys.stderr)
         return 2
     try:
-        counts = invalidate_access(session_factory(create_engine_from_url(database_url)))
+        engine = create_engine_from_url(database_url)
+        try:
+            counts = invalidate_access(session_factory(engine))
+        finally:
+            engine.dispose()
     except (ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

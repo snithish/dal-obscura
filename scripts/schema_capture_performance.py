@@ -91,7 +91,7 @@ def measure(field_count: int, iterations: int) -> dict[str, object]:
                 results = {}
                 try:
                     with patch(
-                        "dal_obscura.control.schema_service.load_source_schema",
+                        "dal_obscura.control.assets.schema.load_source_schema",
                         return_value=pa.schema([("id", pa.int64())]),
                     ):
                         for operation in ("schema", "evaluation"):

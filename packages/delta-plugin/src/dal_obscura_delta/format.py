@@ -20,6 +20,8 @@ from dal_obscura_plugin_api import (
     SchemaDescriptor,
     TableHandle,
 )
+from dal_obscura_plugin_api.execution import active
+from dal_obscura_plugin_api.options import batch_rows
 from pyarrow.dataset import ParquetFileFormat
 
 from dal_obscura_delta.snapshot import MAX_DV_ROWS, MAX_FILES, open_snapshot
@@ -28,10 +30,10 @@ from dal_obscura_delta.storage import DeltaStorage
 FORMAT_DESCRIPTOR = PluginDescriptor(
     kind="table_format",
     plugin_id="delta",
-    api_version="2",
+    api_version="3",
     config_version=1,
     distribution="dal-obscura-delta",
-    version="0.2.0",
+    version="0.3.0",
     capabilities=frozenset(
         {
             "nested_schema",
@@ -43,6 +45,9 @@ FORMAT_DESCRIPTOR = PluginDescriptor(
         }
     ),
     handle_versions=frozenset({1}),
+    config_schema={
+        "fields": [{"name": "batch_rows", "type": "integer", "required": False, "secret": False}]
+    },
     display_name="Delta Lake snapshot format",
 )
 _KEEP_SCHEMA = pa.schema([pa.field("keep", pa.bool_(), nullable=False)])
@@ -60,6 +65,7 @@ class DeltaFormat:
     descriptor = FORMAT_DESCRIPTOR
 
     def __init__(self, handle: TableHandle, context: ExecutionContext) -> None:
+        self._batch_rows = batch_rows(context.options, default=_BATCH_ROWS)
         if handle.format_plugin_id != "delta" or handle.handle_version != 1:
             raise ValueError("Incompatible Delta handle")
         metadata = handle.metadata
@@ -104,12 +110,12 @@ class DeltaFormat:
             }
         )
 
+    @active
     def schema(self, context: ExecutionContext) -> SchemaDescriptor:
-        context.check_active()
         return SchemaDescriptor(self._schema, self._handle.snapshot_id, stable_ids=False)
 
+    @active
     def plan(self, request: ScanRequest, context: ExecutionContext) -> list[ScanTask]:
-        context.check_active()
         if request.row_filter is not None:
             raise ValueError("Delta does not support SQL filter pushdown")
         if not self._projection(request.columns).equals(request.schema, check_metadata=True):
@@ -151,6 +157,7 @@ class DeltaFormat:
             ScanTask({"columns": list(request.columns), "row_groups": group}) for group in groups
         ]
 
+    @active
     def _deletion_masks(self, context: ExecutionContext) -> dict[str, pa.BooleanArray]:
         if self._table is None:
             raise ValueError("Delta format is closed")
@@ -182,10 +189,10 @@ class DeltaFormat:
             [self._schema.field(name) for name in columns], metadata=self._schema.metadata
         )
 
+    @active
     def execute(
         self, task: ScanTask, context: ExecutionContext
     ) -> tuple[pa.Schema, Iterator[pa.RecordBatch]]:
-        context.check_active()
         payload = task.to_json()
         if (
             set(payload) != {"columns", "row_groups"}
@@ -224,6 +231,7 @@ class DeltaFormat:
             groups.append({"path": path, "row_group": index, "rows": rows, "keep": group["keep"]})
         return schema, self._batches(groups, schema, context)
 
+    @active
     def _batches(
         self, groups: Sequence[_RowGroup], schema: pa.Schema, context: ExecutionContext
     ) -> Iterator[pa.RecordBatch]:
@@ -261,7 +269,7 @@ class DeltaFormat:
             batches = fragment.to_batches(
                 schema=self._schema,
                 columns={name: ds.field(name) for name in schema.names},
-                batch_size=_BATCH_ROWS,
+                batch_size=self._batch_rows,
                 use_threads=False,
                 batch_readahead=0,
                 fragment_readahead=0,
@@ -327,5 +335,6 @@ def _decode_keep(value: object, rows: int) -> pa.BooleanArray | None:
         raise ValueError("Invalid Delta selection mask") from exc
 
 
+@active
 def delta_format_factory(handle: TableHandle, context: ExecutionContext) -> DeltaFormat:
     return DeltaFormat(handle, context)

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -14,7 +15,7 @@ def main(argv: list[str]) -> int:
         report_index = argv.index("--junitxml")
         separator = argv.index("--", report_index + 1)
         report_path = Path(argv[report_index + 1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         print("usage: require_no_skips.py --junitxml REPORT -- COMMAND [ARGS...]", file=sys.stderr)
         return 2
 
@@ -25,7 +26,10 @@ def main(argv: list[str]) -> int:
     if report_path.exists():
         report_path.unlink()
 
-    completed = subprocess.run([*command, f"--junitxml={report_path}"])
+    environment = os.environ.copy()
+    if command[0] == "uv":
+        environment.pop("VIRTUAL_ENV", None)
+    completed = subprocess.run([*command, f"--junitxml={report_path}"], env=environment)
     if completed.returncode != 0:
         return completed.returncode
     if not report_path.is_file():

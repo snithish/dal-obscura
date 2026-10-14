@@ -23,7 +23,6 @@ from dal_obscura.storage.database.db import (
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 ADMIN_TOKEN = "local-example-admin"
 CATALOG_NAME = "example_catalog"
-TENANT_SLUG = "default"
 TABLE_TARGET = "default.users"
 ICEBERG_CATALOG_MODULE = "dal_obscura.sources.catalogs.IcebergCatalog"
 
@@ -127,23 +126,26 @@ def _create_tables(catalog_name: str, tables: list[dict[str, Any]]) -> None:
         uri=f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
         warehouse=str(warehouse),
     )
-    for table in tables:
-        target = str(table["target"])
-        namespace = ".".join(target.split(".")[:-1])
-        with suppress(Exception):
-            if namespace:
-                catalog.create_namespace(namespace)
-        with suppress(Exception):
-            catalog.drop_table(target)
-        iceberg_schema, arrow_schema = _schemas(table["schema"], target)
-        created = catalog.create_table(
-            target, schema=iceberg_schema, properties={"format-version": "2"}
-        )
-        created.append(
-            pa.Table.from_pylist(
-                _cast_rows(table["rows"], table["schema"], target), schema=arrow_schema
+    try:
+        for table in tables:
+            target = str(table["target"])
+            namespace = ".".join(target.split(".")[:-1])
+            with suppress(Exception):
+                if namespace:
+                    catalog.create_namespace(namespace)
+            with suppress(Exception):
+                catalog.drop_table(target)
+            iceberg_schema, arrow_schema = _schemas(table["schema"], target)
+            created = catalog.create_table(
+                target, schema=iceberg_schema, properties={"format-version": "2"}
             )
-        )
+            created.append(
+                pa.Table.from_pylist(
+                    _cast_rows(table["rows"], table["schema"], target), schema=arrow_schema
+                )
+            )
+    finally:
+        catalog.close()
 
 
 def _schemas(fields: list[dict[str, Any]], target: str) -> tuple[Schema, pa.Schema]:
@@ -253,70 +255,73 @@ def _provision_control_plane(
     database_path.unlink(missing_ok=True)
     database_url = f"sqlite+pysqlite:///{database_path}"
     engine = create_engine_from_url(database_url)
-    migrate_config_store(engine)
-    factory = session_factory(engine)
-    client = TestClient(create_app(factory, admin_token=ADMIN_TOKEN))
-    headers = {"authorization": f"Bearer {ADMIN_TOKEN}"}
+    try:
+        migrate_config_store(engine)
+        factory = session_factory(engine)
+        client = TestClient(create_app(factory, admin_token=ADMIN_TOKEN))
+        headers = {"authorization": f"Bearer {ADMIN_TOKEN}"}
 
-    _request(
-        client,
-        "put",
-        "/v1/settings/runtime",
-        headers,
-        {"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
-    )
-    _request(
-        client,
-        "put",
-        f"/v1/catalogs/{catalog_name}",
-        headers,
-        {
-            "module": ICEBERG_CATALOG_MODULE,
-            "options": {
-                "type": "sql",
-                "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
-                "warehouse": str(RUNTIME_DIR / "warehouse"),
-            },
-        },
-    )
-    policies = {policy["target"]: policy["rules"] for policy in _read_policies(fixture, tables)}
-    for table in tables:
-        target = str(table["target"])
-        asset = _request(
+        _request(
             client,
             "put",
-            f"/v1/assets/{catalog_name}/{target}",
+            "/v1/settings/runtime",
             headers,
-            {"backend": "iceberg", "table_identifier": target, "options": {}},
+            {"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
         )
         _request(
             client,
             "put",
-            f"/v1/assets/{asset['id']}/owners",
-            headers,
-            {"owners": ["user:owner@example.com"]},
-        )
-        current_asset = _request(client, "get", f"/v1/assets/{asset['id']}", headers)
-        _request(
-            client,
-            "put",
-            f"/v1/assets/{asset['id']}/policy",
+            f"/v1/catalogs/{catalog_name}",
             headers,
             {
-                "expected_revision": current_asset["policy_revision"],
-                "rules": _compiled_policy_rules(policies[target]),
-                "revoke_existing_tokens": False,
+                "module": ICEBERG_CATALOG_MODULE,
+                "options": {
+                    "type": "sql",
+                    "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
+                    "warehouse": str(RUNTIME_DIR / "warehouse"),
+                },
             },
         )
-    _request(
-        client,
-        "put",
-        "/v1/settings/auth-providers",
-        headers,
-        {"providers": _auth_providers(auth_flow)},
-    )
-    if not tables:
-        raise ValueError("Fixture must define at least one asset")
+        policies = {policy["target"]: policy["rules"] for policy in _read_policies(fixture, tables)}
+        for table in tables:
+            target = str(table["target"])
+            asset = _request(
+                client,
+                "put",
+                f"/v1/assets/{catalog_name}/{target}",
+                headers,
+                {"backend": "iceberg", "table_identifier": target, "options": {}},
+            )
+            _request(
+                client,
+                "put",
+                f"/v1/assets/{asset['id']}/owners",
+                headers,
+                {"owners": ["user:owner@example.com"]},
+            )
+            current_asset = _request(client, "get", f"/v1/assets/{asset['id']}", headers)
+            _request(
+                client,
+                "put",
+                f"/v1/assets/{asset['id']}/policy",
+                headers,
+                {
+                    "expected_revision": current_asset["policy_revision"],
+                    "rules": _compiled_policy_rules(policies[target]),
+                    "revoke_existing_tokens": False,
+                },
+            )
+        _request(
+            client,
+            "put",
+            "/v1/settings/auth-providers",
+            headers,
+            {"providers": _auth_providers(auth_flow)},
+        )
+        if not tables:
+            raise ValueError("Fixture must define at least one asset")
+    finally:
+        engine.dispose()
 
 
 def _compiled_policy_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:

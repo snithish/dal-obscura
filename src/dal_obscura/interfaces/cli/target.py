@@ -103,7 +103,7 @@ def diagnose_target(workspace: Path, args: argparse.Namespace) -> int:
         checks.append(
             {"name": "target configuration", "ok": True, "message": "Valid files and references"}
         )
-    except (OSError, ValueError, KeyError, TypeError):
+    except OSError, ValueError, KeyError, TypeError:
         target = None
         checks.append(
             {
@@ -164,7 +164,7 @@ def _check_online(workspace: Path, target: dict[str, Any], checks: list[dict[str
                 "message": "Engine and Compose configuration available",
             }
         )
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except OSError, ValueError, subprocess.SubprocessError:
         checks.append(
             {
                 "name": "container prerequisites",
@@ -182,7 +182,7 @@ def _check_online(workspace: Path, target: dict[str, Any], checks: list[dict[str
                     "message": "Authenticated plugin inventory available",
                 }
             )
-        except (OSError, ValueError, KeyError):
+        except OSError, ValueError, KeyError:
             checks.append(
                 {
                     "name": "control authentication",

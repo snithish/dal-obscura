@@ -7,18 +7,17 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pyarrow as pa
-from deltalake import DeltaTable
-from fixture import BUCKET, COLUMNS, MASKS, TARGET
-
-from dal_obscura.policy.paths import (
+from dal_obscura_plugin_api.paths import (
     FieldPath,
     FieldSegment,
     ListElementSegment,
     MapKeySegment,
     MapValueSegment,
 )
-from dal_obscura.policy.schema_identity import schema_field_id, schema_scope_digest
-from dal_obscura.policy.schema_index import walk_schema_fields
+from dal_obscura_plugin_api.schema.identity import schema_field_id, schema_scope_digest
+from dal_obscura_plugin_api.schema.index import walk_schema_fields
+from deltalake import DeltaTable
+from fixture import BUCKET, COLUMNS, MASKS, TARGET
 
 
 def request(method, path, body=None):

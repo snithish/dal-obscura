@@ -5,41 +5,42 @@ import socket
 import sys
 import threading
 import time
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, cast
 
 import pyarrow.flight as flight
 import uvicorn
+from dal_obscura_plugin_api.storage import PathRuleEnforcer
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.identity.contracts import IdentityPort
 from dal_obscura.identity.oidc import (
     OidcJwksIdentityProvider,
 )
-from dal_obscura.interfaces.cli.settings import (
-    DataPlaneRuntimeConfig,
-    load_data_plane_runtime_config,
-)
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.interfaces.read_health import create_health_app, live_runtime_readiness
 from dal_obscura.logging_config import LoggingConfig, setup_logging
-from dal_obscura.read.service import ReadService, ReadSettings
-from dal_obscura.read.signing import HmacTicketCodecAdapter
-from dal_obscura.read.transform import (
+from dal_obscura.plugins import load_plugin_lock_file
+from dal_obscura.plugins.bootstrap import (
+    create_plugin_registry,
+)
+from dal_obscura.read.execution.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.sources.builtins import (
-    create_builtin_plugin_registry,
+from dal_obscura.read.service import ReadService, ReadSettings
+from dal_obscura.read.tickets.envelope import SourceTaskCodec
+from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.runtime.configuration import (
+    DataPlaneRuntimeConfig,
+    load_data_plane_runtime_config,
 )
-from dal_obscura.sources.paths import PathRuleEnforcer
-from dal_obscura.sources.plugins import load_plugin_lock_file
-from dal_obscura.sources.published import LiveConfigCatalogRegistry
-from dal_obscura.sources.secrets import (
+from dal_obscura.runtime.secrets import (
     SecretProvider,
     load_secret_provider,
     resolve_secret_refs,
 )
-from dal_obscura.sources.task_codec import SourceTaskCodec
+from dal_obscura.sources.published import LiveConfigCatalogRegistry
 from dal_obscura.storage.database.db import (
     check_config_store_schema,
     create_engine_from_url,
@@ -64,75 +65,77 @@ def main() -> None:
     setup_logging(LoggingConfig(level=runtime_config.log_level, json=runtime_config.json_logs))
     LOGGER.info("Starting dal-obscura data plane")
 
-    engine = create_engine_from_url(runtime_config.database_url)
-    check_config_store_schema(engine)
-    session_maker = session_factory(engine)
-    _start_health_server(session_maker, runtime_config)
-    config_store = LiveConfigStore(session_maker)
-    live_runtime = config_store.get_runtime()
-    secret_provider = load_secret_provider(
-        runtime_config.secret_provider,
-    )
-
-    identity = _identity_from_runtime(live_runtime, secret_provider=secret_provider)
-    plugin_registry = create_builtin_plugin_registry(
-        allowlist=(
-            load_plugin_lock_file(runtime_config.plugin_lock_file)
-            if runtime_config.plugin_lock_file
-            else None
+    with ExitStack() as resources:
+        engine = create_engine_from_url(runtime_config.database_url)
+        resources.callback(engine.dispose)
+        check_config_store_schema(engine)
+        session_maker = session_factory(engine)
+        _start_health_server(session_maker, runtime_config)
+        config_store = LiveConfigStore(session_maker)
+        live_runtime = config_store.get_runtime()
+        plugin_registry = create_plugin_registry(
+            allowlist=(
+                load_plugin_lock_file(runtime_config.plugin_lock_file)
+                if runtime_config.plugin_lock_file
+                else None
+            )
         )
-    )
-    catalog_registry = LiveConfigCatalogRegistry(
-        config_store,
-        secret_provider=secret_provider,
-        plugin_registry=plugin_registry,
-        path_enforcer=PathRuleEnforcer(live_runtime.path_rules),
-        max_cached_providers=runtime_config.max_cached_catalog_providers,
-        provider_wait_seconds=runtime_config.catalog_provider_wait_seconds,
-    )
+        secret_provider = load_secret_provider(
+            runtime_config.secret_provider,
+            registry=plugin_registry,
+        )
 
-    row_transform = DuckDBRowTransformAdapter(
-        max_active_streams=runtime_config.max_active_streams,
-        duckdb_memory_limit=runtime_config.duckdb_memory_limit,
-        max_input_batch_bytes=runtime_config.max_input_batch_bytes,
-        max_output_batch_bytes=runtime_config.max_output_batch_bytes,
-    )
-    ticket_codec = HmacTicketCodecAdapter(
-        runtime_config.ticket_secret, previous_secrets=runtime_config.ticket_previous_secrets
-    )
-    ticket_store = SqlAlchemyTicketStore(session_maker)
-    _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
-    ticket_settings = live_runtime.ticket
-    reads = ReadService(
-        identity=identity,
-        access_context=catalog_registry,
-        row_transform=row_transform,
-        ticket_codec=ticket_codec,
-        ticket_store=ticket_store,
-        task_codec=SourceTaskCodec(plugin_registry),
-        settings=ReadSettings(
-            ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
-            max_tickets=int(ticket_settings.get("max_tickets", 1)),
-            max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
-            max_ticket_payload_bytes=runtime_config.max_ticket_payload_bytes,
-            max_stream_seconds=runtime_config.max_stream_seconds,
-        ),
-    )
+        resources.callback(secret_provider.close)
+        identity = _identity_from_runtime(live_runtime, secret_provider=secret_provider)
+        catalog_registry = LiveConfigCatalogRegistry(
+            config_store,
+            secret_provider=secret_provider,
+            plugin_registry=plugin_registry,
+            path_enforcer=PathRuleEnforcer(live_runtime.path_rules),
+            max_cached_providers=runtime_config.max_cached_catalog_providers,
+            provider_wait_seconds=runtime_config.catalog_provider_wait_seconds,
+        )
 
-    server = DataAccessFlightService(
-        location=runtime_config.location,
-        reads=reads,
-        tls_certificates=_tls_certificates(
-            cert=runtime_config.tls_cert, key=runtime_config.tls_key
-        ),
-        verify_client=runtime_config.tls_verify_client,
-        root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
-        health_check=lambda: _live_runtime_readiness(session_maker, runtime_config),
-    )
-    try:
+        resources.callback(catalog_registry.close)
+        row_transform = DuckDBRowTransformAdapter(
+            max_active_streams=runtime_config.max_active_streams,
+            duckdb_memory_limit=runtime_config.duckdb_memory_limit,
+            max_input_batch_bytes=runtime_config.max_input_batch_bytes,
+            max_output_batch_bytes=runtime_config.max_output_batch_bytes,
+        )
+        ticket_codec = HmacTicketCodecAdapter(
+            runtime_config.ticket_secret, previous_secrets=runtime_config.ticket_previous_secrets
+        )
+        ticket_store = SqlAlchemyTicketStore(session_maker)
+        _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
+        ticket_settings = live_runtime.ticket
+        reads = ReadService(
+            identity=identity,
+            access_context=catalog_registry,
+            row_transform=row_transform,
+            ticket_codec=ticket_codec,
+            ticket_store=ticket_store,
+            task_codec=SourceTaskCodec(plugin_registry),
+            settings=ReadSettings(
+                ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
+                max_tickets=int(ticket_settings.get("max_tickets", 1)),
+                max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
+                max_ticket_payload_bytes=runtime_config.max_ticket_payload_bytes,
+                max_stream_seconds=runtime_config.max_stream_seconds,
+            ),
+        )
+
+        server = DataAccessFlightService(
+            location=runtime_config.location,
+            reads=reads,
+            tls_certificates=_tls_certificates(
+                cert=runtime_config.tls_cert, key=runtime_config.tls_key
+            ),
+            verify_client=runtime_config.tls_verify_client,
+            root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
+            health_check=lambda: _live_runtime_readiness(session_maker, runtime_config),
+        )
         server.serve()
-    finally:
-        catalog_registry.close()
 
 
 _HELP_TEXT = """dal-obscura — governed Arrow Flight data plane

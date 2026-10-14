@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections import OrderedDict
-from collections.abc import Iterable, Iterator
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from hashlib import sha256
@@ -12,40 +12,40 @@ from time import monotonic
 from typing import Any, cast
 
 import pyarrow as pa
-
-from dal_obscura.policy.models import AccessDecision, AssetPolicy, Policy, Principal
-from dal_obscura.policy.paths import (
+from dal_obscura_plugin_api.execution import close_preserving_error
+from dal_obscura_plugin_api.options import PluginOptions
+from dal_obscura_plugin_api.paths import (
     FieldSegment,
     ListElementSegment,
     MapKeySegment,
     parse_field_path,
     resolve_schema_path,
 )
-from dal_obscura.policy.policy_resolution import resolve_access
-from dal_obscura.policy.schema_identity import (
+from dal_obscura_plugin_api.schema.identity import (
     schema_field_id,
     schema_has_stable_ids,
     schema_scope_digest,
 )
-from dal_obscura.policy.schema_index import walk_schema_fields
+from dal_obscura_plugin_api.schema.index import walk_schema_fields
+from dal_obscura_plugin_api.storage import PathRuleEnforcer
+
+from dal_obscura.plugins import PluginRegistry
+from dal_obscura.plugins.bootstrap import create_plugin_registry
+from dal_obscura.policy.models import AccessDecision, AssetPolicy, Policy, Principal
+from dal_obscura.policy.policy_resolution import resolve_access
+from dal_obscura.runtime.secrets import (
+    SecretProvider,
+    resolve_secret_refs,
+)
 from dal_obscura.sources.access import (
     AccessContext,
     AccessContextUnavailable,
 )
+from dal_obscura.sources.adapters import PublicPluginTableFormat
 from dal_obscura.sources.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
-)
-from dal_obscura.sources.paths import PathRuleEnforcer
-from dal_obscura.sources.plugin_runtime import (
-    PublicPluginTableFormat,
-    _close_plugin_preserving_error,
-)
-from dal_obscura.sources.plugins import PluginRegistry
-from dal_obscura.sources.secrets import (
-    SecretProvider,
-    resolve_secret_refs,
 )
 from dal_obscura.storage.snapshots import (
     AdmittedPluginSnapshot,
@@ -112,7 +112,7 @@ class LiveConfigCatalogRegistry:
         store: LiveConfigStore,
         *,
         secret_provider: SecretProvider | None = None,
-        plugin_registry: PluginRegistry | AdmittedPluginSnapshot | None = None,
+        plugin_registry: PluginRegistry | None = None,
         path_enforcer: PathRuleEnforcer | None = None,
         max_cached_providers: int = 32,
         provider_wait_seconds: float = 5.0,
@@ -124,7 +124,9 @@ class LiveConfigCatalogRegistry:
         self._provider_wait_seconds = provider_wait_seconds
         self._store = store
         self._secret_provider = secret_provider
-        self._plugin_registry = plugin_registry
+        self._plugin_registry = (
+            plugin_registry if plugin_registry is not None else create_plugin_registry()
+        )
         self._path_enforcer = path_enforcer
         self._max_cached_providers = max_cached_providers
         self._providers: OrderedDict[str, _ProviderEntry] = OrderedDict()
@@ -150,7 +152,7 @@ class LiveConfigCatalogRegistry:
             raise first_error
 
     @contextmanager
-    def open(self, catalog: str | None, target: str) -> Iterator[AccessContext]:
+    def open(self, catalog: str | None, target: str) -> Generator[AccessContext]:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         with self._condition:
@@ -162,6 +164,13 @@ class LiveConfigCatalogRegistry:
             asset,
             plugin_registry=self._plugin_registry,
             path_enforcer=self._path_enforcer,
+        )
+        config = CatalogConfig(
+            name=config.name,
+            options=self._plugin_registry.options.for_plugin(config.plugin_id, config.options),
+            path_enforcer=config.path_enforcer,
+            plugin_id=config.plugin_id,
+            revision=config.revision,
         )
         if self._secret_provider is not None:
             config = CatalogConfig(
@@ -186,7 +195,9 @@ class LiveConfigCatalogRegistry:
                     "name": config.name,
                     "plugin_id": config.plugin_id,
                     "revision": config.revision,
-                    "options": config.options,
+                    "options": PluginOptions({config.plugin_id: config.options}).to_json()[
+                        config.plugin_id
+                    ],
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -253,9 +264,7 @@ class LiveConfigCatalogRegistry:
         try:
             registry = CatalogRegistry(
                 ServiceConfig(catalogs={catalog: config}),
-                plugin_registry=self._plugin_registry
-                if isinstance(self._plugin_registry, PluginRegistry)
-                else None,
+                plugin_registry=self._plugin_registry,
             )
         except BaseException:
             with self._condition:
@@ -280,7 +289,7 @@ class LiveConfigCatalogRegistry:
             self._condition.notify_all()
         if close:
             assert entry.registry is not None
-            _close_plugin_preserving_error(entry.registry)
+            close_preserving_error(entry.registry)
 
 
 def _effective_policy_version(asset: LiveAsset) -> int:
@@ -334,18 +343,9 @@ def _catalog_config_for_asset(
     catalog_plugin_id = catalog.plugin_id or ""
     if isinstance(raw_plugins, dict) and isinstance(raw_plugins.get("catalog"), str):
         catalog_plugin_id = str(raw_plugins["catalog"])
-    config = _catalog_config_from_live_catalog(
+    return _catalog_config_from_live_catalog(
         catalog, plugin_id=catalog_plugin_id, path_enforcer=path_enforcer
     )
-    target = _mapping(asset.compiled_config.get("target"))
-    backend = str(target.get("backend") or asset.backend).lower()
-    if config.plugin_id == "iceberg.catalog":
-        if backend != "iceberg":
-            raise ValueError("Configured Iceberg catalogs require Iceberg assets")
-        return config
-    if plugin_registry is None:
-        raise ValueError("Configured external catalog plugins require an admitted registry")
-    return config
 
 
 def _validate_plugin_binding(
@@ -362,9 +362,7 @@ def _validate_plugin_binding(
     format_plugin = raw_plugins.get("table_format")
     if not isinstance(catalog_plugin, str) or not isinstance(format_plugin, str):
         raise ValueError("Live plugin binding is unsupported")
-    if catalog_plugin == "iceberg.catalog" and format_plugin != "iceberg":
-        raise ValueError("Live plugin binding is unsupported")
-    if catalog_plugin != "iceberg.catalog" and plugin_registry is None:
+    if plugin_registry is None:
         raise ValueError("Live plugin binding is unsupported without an admitted registry")
     if plugin_registry is not None:
         admitted = plugin_registry.admitted()

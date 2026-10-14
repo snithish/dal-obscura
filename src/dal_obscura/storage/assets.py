@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+from dal_obscura_plugin_api.schema.bounds import (
+    MAX_SCHEMA_ADMISSION_BYTES,
+    MAX_SCHEMA_ADMISSION_FIELDS,
+)
+from dal_obscura_plugin_api.schema.identity import canonical_provider_field_id
 from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Session
 
@@ -13,8 +18,6 @@ from dal_obscura.control.errors import (
     ConfigurationConflictError,
     RevisionPreconditionRequired,
 )
-from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ADMISSION_BYTES, MAX_SCHEMA_ADMISSION_FIELDS
-from dal_obscura.policy.schema_identity import canonical_provider_field_id
 from dal_obscura.storage.database.orm import (
     AssetGrantRecord,
     AssetOwnerRecord,
@@ -130,28 +133,6 @@ def replace_asset_schema_fields(
     asset.revision += 1
     session.flush()
     return normalized
-
-
-def list_assets(
-    session: Session,
-) -> list[dict[str, object]]:
-    catalog_records = list(session.scalars(select(CatalogRecord)))
-    catalog_by_id = {record.id: record for record in catalog_records}
-    assets = []
-    for record in session.scalars(select(AssetRecord).order_by(AssetRecord.target)):
-        catalog = catalog_by_id[record.catalog_id]
-        assets.append(
-            {
-                "id": str(record.id),
-                "catalog_id": str(record.catalog_id),
-                "catalog": catalog.name,
-                "target": record.target,
-                "backend": record.backend,
-                "table_identifier": record.table_identifier,
-                "options": dict(record.options_json),
-            }
-        )
-    return assets
 
 
 def list_workspace_assets(

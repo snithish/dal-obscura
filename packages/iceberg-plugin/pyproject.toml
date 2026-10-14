@@ -1,0 +1,20 @@
+[project]
+name = "dal-obscura-iceberg"
+version = "0.3.0"
+description = "Apache Iceberg catalogs and distributed native file scans"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+  "dal-obscura-plugin-api==0.3.0",
+  "dal-obscura-iceberg-reader==0.3.0",
+  "pyiceberg[sql-sqlite]==0.11.1",
+]
+
+[project.entry-points."dal_obscura.catalogs.v3"]
+"iceberg.catalog" = "dal_obscura_iceberg.catalog:IcebergCatalog"
+
+[project.entry-points."dal_obscura.table_formats.v3"]
+"iceberg" = "dal_obscura_iceberg.format:IcebergFormatPlugin"
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"

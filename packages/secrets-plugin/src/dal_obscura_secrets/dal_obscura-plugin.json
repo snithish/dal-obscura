@@ -1,0 +1,30 @@
+{
+  "descriptors": [
+    {
+      "kind": "secret_backend",
+      "plugin_id": "environment",
+      "api_version": "3",
+      "config_version": 1,
+      "capabilities": [],
+      "output_formats": [],
+      "handle_versions": [
+        1
+      ],
+      "config_schema": {},
+      "display_name": ""
+    },
+    {
+      "kind": "secret_backend",
+      "plugin_id": "mounted_file",
+      "api_version": "3",
+      "config_version": 1,
+      "capabilities": [],
+      "output_formats": [],
+      "handle_versions": [
+        1
+      ],
+      "config_schema": {},
+      "display_name": ""
+    }
+  ]
+}

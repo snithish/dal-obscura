@@ -3,25 +3,26 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from dal_obscura_iceberg.format import IcebergFormatPlugin
 from dal_obscura_plugin_api import ExecutionContext, ScanRequest, TableHandle, TableIdentifier
-from pyiceberg.catalog import load_catalog
-
-from dal_obscura.sources.iceberg_plugin import IcebergFormatPlugin
-from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
-from tests.support.plugin_scans import parallel_rows
+from dal_obscura_plugin_conformance.iceberg_fixtures import (
+    create_iceberg_table,
+    iceberg_sql_catalog_options,
+)
+from dal_obscura_plugin_conformance.testing import parallel_rows
 
 pytestmark = pytest.mark.heavy
 
 
 @pytest.mark.benchmark(group="iceberg-multifile")
-def test_benchmark_iceberg_multifile_scan(benchmark, tmp_path):
+def test_benchmark_iceberg_multifile_scan(catalog_factory, benchmark, tmp_path):
     identifier = create_iceberg_table(
         tmp_path,
         "bench",
         "warehouse",
         append_batches=[list(range(start, start + 1000)) for start in range(0, 16000, 1000)],
     )
-    table = load_catalog(
+    table = catalog_factory(
         "bench",
         **{
             key: str(value)

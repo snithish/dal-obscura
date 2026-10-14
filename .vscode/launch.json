@@ -5,40 +5,176 @@
       "name": "Nested MoR: Planner",
       "type": "debugpy",
       "request": "attach",
-      "connect": { "host": "127.0.0.1", "port": 5678 },
-      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5678
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/src/dal_obscura",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/plugin-api/src/dal_obscura_plugin_api",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_plugin_api"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-plugin/src/dal_obscura_iceberg",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_manifest_parquet"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/delta-plugin/src/dal_obscura_delta",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_delta"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg_rest"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/secrets-plugin/src/dal_obscura_secrets",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_secrets"
+        }
+      ],
       "justMyCode": false
     },
     {
       "name": "Nested MoR: Worker 1",
       "type": "debugpy",
       "request": "attach",
-      "connect": { "host": "127.0.0.1", "port": 5679 },
-      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5679
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/src/dal_obscura",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/plugin-api/src/dal_obscura_plugin_api",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_plugin_api"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-plugin/src/dal_obscura_iceberg",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_manifest_parquet"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/delta-plugin/src/dal_obscura_delta",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_delta"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg_rest"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/secrets-plugin/src/dal_obscura_secrets",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_secrets"
+        }
+      ],
       "justMyCode": false
     },
     {
       "name": "Nested MoR: Worker 2",
       "type": "debugpy",
       "request": "attach",
-      "connect": { "host": "127.0.0.1", "port": 5680 },
-      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5680
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/src/dal_obscura",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/plugin-api/src/dal_obscura_plugin_api",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_plugin_api"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-plugin/src/dal_obscura_iceberg",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_manifest_parquet"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/delta-plugin/src/dal_obscura_delta",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_delta"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg_rest"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/secrets-plugin/src/dal_obscura_secrets",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_secrets"
+        }
+      ],
       "justMyCode": false
     },
     {
       "name": "Nested MoR: Worker 3",
       "type": "debugpy",
       "request": "attach",
-      "connect": { "host": "127.0.0.1", "port": 5681 },
-      "pathMappings": [{ "localRoot": "${workspaceFolder}", "remoteRoot": "/app" }],
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5681
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/src/dal_obscura",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/plugin-api/src/dal_obscura_plugin_api",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_plugin_api"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-plugin/src/dal_obscura_iceberg",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_manifest_parquet"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/delta-plugin/src/dal_obscura_delta",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_delta"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_iceberg_rest"
+        },
+        {
+          "localRoot": "${workspaceFolder}/packages/secrets-plugin/src/dal_obscura_secrets",
+          "remoteRoot": "/app/.venv/lib/python3.14/site-packages/dal_obscura_secrets"
+        }
+      ],
       "justMyCode": false
     },
     {
       "name": "Nested MoR: Verifier",
       "type": "debugpy",
       "request": "attach",
-      "connect": { "host": "127.0.0.1", "port": 5682 },
-      "pathMappings": [{ "localRoot": "${workspaceFolder}/examples/nested-mor/scripts", "remoteRoot": "/example" }],
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5682
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}/examples/nested-mor/scripts",
+          "remoteRoot": "/example"
+        }
+      ],
       "justMyCode": false
     }
   ],

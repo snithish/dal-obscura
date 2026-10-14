@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime
@@ -17,6 +17,7 @@ from dal_obscura_plugin_api import (
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.execution import active
 from pyiceberg.catalog.rest import RestCatalog as PyIcebergRestCatalog
 from requests import Session
 
@@ -47,10 +48,10 @@ _ACTIVE_REQUEST_BUDGET: ContextVar[tuple[ExecutionContext, float, float] | None]
 DESCRIPTOR = PluginDescriptor(
     kind="catalog",
     plugin_id="iceberg.rest",
-    api_version="2",
+    api_version="3",
     config_version=1,
     distribution="dal-obscura-iceberg-rest",
-    version="0.2.0",
+    version="0.3.0",
     display_name="Iceberg REST catalog",
     capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
     output_formats=frozenset({"iceberg"}),
@@ -120,6 +121,7 @@ class RestCatalog(CatalogPlugin):
         self._catalog_lock = Lock()
         self._closed = False
 
+    @active
     def list_namespaces(
         self,
         context: ExecutionContext,
@@ -146,6 +148,7 @@ class RestCatalog(CatalogPlugin):
                     raise ValueError("REST catalog contains too many namespaces")
             return tuple(sorted(result))
 
+    @active
     def list_tables(
         self,
         context: ExecutionContext,
@@ -177,6 +180,7 @@ class RestCatalog(CatalogPlugin):
                 continuation=str(end) if end < len(identifiers) else None,
             )
 
+    @active
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
         with self._request_budget(context):
             table = self._load_catalog(context).load_table((*identifier.namespace, identifier.name))
@@ -224,8 +228,8 @@ class RestCatalog(CatalogPlugin):
             if first_error is not None:
                 raise first_error
 
+    @active
     def _load_catalog(self, context: ExecutionContext) -> PyIcebergRestCatalog:
-        context.check_active()
         if self._closed:
             raise ValueError("REST catalog is closed")
         if self._catalog is None:
@@ -248,8 +252,8 @@ class RestCatalog(CatalogPlugin):
         return self._catalog
 
     @contextmanager
-    def _request_budget(self, context: ExecutionContext) -> Iterator[None]:
-        context.check_active()
+    @active
+    def _request_budget(self, context: ExecutionContext) -> Generator[None]:
         token = _ACTIVE_REQUEST_BUDGET.set((context, self._connect_timeout, self._read_timeout))
         try:
             yield
@@ -382,7 +386,7 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
         if budget is not None:
             try:
                 context.check_active()
-            except (TimeoutError, InterruptedError):
+            except TimeoutError, InterruptedError:
                 close = getattr(response, "close", None)
                 if callable(close):
                     close()
@@ -392,5 +396,6 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
     session.request = request
 
 
+@active
 def rest_catalog_factory(config: CatalogConfig, context: ExecutionContext) -> RestCatalog:
     return RestCatalog(config, context)

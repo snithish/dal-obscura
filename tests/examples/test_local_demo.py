@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import socket
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -146,13 +147,15 @@ def test_iceberg_seed_is_atomic_multifile_and_preserves_edits(tmp_path, monkeypa
         "tables"
     ][0]
     seed._create_iceberg_table(fixture)
-    catalog = load_catalog("retail_demo", **options)
-    table = catalog.load_table(fixture["target"])
-    assert len(list(table.scan().plan_files())) == 2
-    _, schema = seed._schemas(fixture["schema"])
-    table.append(pa.Table.from_pylist([fixture["rows"][0] | {"customer_id": 3001}], schema=schema))
-    seed._create_iceberg_table(fixture)
-    assert catalog.load_table(fixture["target"]).scan().to_arrow().num_rows == 5
+    with closing(load_catalog("retail_demo", **options)) as catalog:
+        table = catalog.load_table(fixture["target"])
+        assert len(list(table.scan().plan_files())) == 2
+        _, schema = seed._schemas(fixture["schema"])
+        table.append(
+            pa.Table.from_pylist([fixture["rows"][0] | {"customer_id": 3001}], schema=schema)
+        )
+        seed._create_iceberg_table(fixture)
+        assert catalog.load_table(fixture["target"]).scan().to_arrow().num_rows == 5
 
 
 def test_failed_iceberg_seed_does_not_publish_partial_table(tmp_path, monkeypatch):
@@ -182,17 +185,12 @@ def test_failed_iceberg_seed_does_not_publish_partial_table(tmp_path, monkeypatc
     monkeypatch.setattr(Transaction, "append", interrupted)
     with pytest.raises(RuntimeError, match="injected interruption"):
         seed._create_iceberg_table(fixture)
-    assert not load_catalog("retail_demo", **options).table_exists(fixture["target"])
+    with closing(load_catalog("retail_demo", **options)) as catalog:
+        assert not catalog.table_exists(fixture["target"])
     monkeypatch.setattr(Transaction, "append", original)
     seed._create_iceberg_table(fixture)
-    assert (
-        load_catalog("retail_demo", **options)
-        .load_table(fixture["target"])
-        .scan()
-        .to_arrow()
-        .num_rows
-        == 4
-    )
+    with closing(load_catalog("retail_demo", **options)) as catalog:
+        assert catalog.load_table(fixture["target"]).scan().to_arrow().num_rows == 4
 
 
 def test_failed_reset_preserves_credentials(tmp_path, monkeypatch):

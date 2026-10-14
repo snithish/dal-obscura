@@ -364,7 +364,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                             "-t",
                             f"{values['PROJECT_NAME']}-ui:local",
                             "-f",
-                            str(REPO / "ui/Dockerfile"),
+                            str(REPO / "apps/governance-ui/deployment/Dockerfile"),
                             str(REPO),
                         ],
                         values,

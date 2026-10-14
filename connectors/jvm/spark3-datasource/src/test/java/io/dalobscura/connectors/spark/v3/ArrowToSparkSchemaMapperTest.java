@@ -1,5 +1,7 @@
 package io.dalobscura.connectors.spark.v3;
 
+import io.dalobscura.connectors.spark.v3.arrow.ArrowToSparkSchemaMapper;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;

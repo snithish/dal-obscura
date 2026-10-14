@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { authenticatedApi } from "../fixtures";
+import { authenticatedApi } from "./fixtures";
 import { fixtureAssetId } from "./asset-api";
 
 export async function wideSelectionApi(page: Page, count = 10_000, masked = false) {

@@ -30,6 +30,11 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
+        <groupId>org.apache.yetus</groupId>
+        <artifactId>audience-annotations</artifactId>
+        <version>0.13.0</version>
+      </dependency>
+      <dependency>
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-sql_${spark.scala.binary.version}</artifactId>
         <version>${spark.version}</version>
@@ -69,7 +74,8 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.16.0</version>
+          <!-- 3.16.0 treats absent main output in test-only modules as cache I/O failures. -->
+          <version>3.15.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -83,6 +89,9 @@
           <configuration>
             <argLine>${arrow.jvmArgs}</argLine>
             <useModulePath>false</useModulePath>
+            <environmentVariables>
+              <SPARK_LOCAL_IP>127.0.0.1</SPARK_LOCAL_IP>
+            </environmentVariables>
           </configuration>
         </plugin>
         <plugin>

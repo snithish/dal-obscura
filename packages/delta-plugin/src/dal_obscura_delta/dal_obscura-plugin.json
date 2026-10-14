@@ -3,7 +3,7 @@
     {
       "kind": "catalog",
       "plugin_id": "delta.directory",
-      "api_version": "2",
+      "api_version": "3",
       "config_version": 1,
       "capabilities": [
         "cancellation",
@@ -37,7 +37,7 @@
     {
       "kind": "catalog",
       "plugin_id": "delta.catalog",
-      "api_version": "2",
+      "api_version": "3",
       "config_version": 1,
       "capabilities": [
         "cancellation",
@@ -58,7 +58,7 @@
     {
       "kind": "table_format",
       "plugin_id": "delta",
-      "api_version": "2",
+      "api_version": "3",
       "config_version": 1,
       "capabilities": [
         "cancellation",
@@ -72,7 +72,16 @@
       "handle_versions": [
         1
       ],
-      "config_schema": {},
+      "config_schema": {
+        "fields": [
+          {
+            "name": "batch_rows",
+            "type": "integer",
+            "required": false,
+            "secret": false
+          }
+        ]
+      },
       "display_name": "Delta Lake snapshot format"
     }
   ]

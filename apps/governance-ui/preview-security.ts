@@ -7,7 +7,7 @@ export function previewSecurity(): Plugin {
   return {
     name: "obscura-preview-security",
     configurePreviewServer(server) {
-      const nginx = readFileSync(new URL("../../ui/nginx.conf", import.meta.url), "utf8");
+      const nginx = readFileSync(new URL("./deployment/nginx.conf", import.meta.url), "utf8");
       const policy = nginx.match(/add_header Content-Security-Policy "([^"]+)"/)?.[1];
       if (!policy) throw new Error("Gateway CSP is missing");
       server.middlewares.use((req, res, next) => {

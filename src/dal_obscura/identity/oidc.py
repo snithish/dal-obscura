@@ -10,9 +10,11 @@ from http.client import HTTPMessage
 from pathlib import Path
 from threading import Lock
 from typing import IO, Any
+from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import jwt
+from dal_obscura_plugin_api.execution import close_preserving_error
 
 from dal_obscura.identity.claims import PrincipalClaimMapper
 from dal_obscura.identity.contracts import (
@@ -273,8 +275,12 @@ def _fetch_json(url: str) -> JsonObject:
     # omitting urllib's default redirect handler.
     opener = build_opener(_NoRedirectHandler())
     request = Request(url, headers={"accept": "application/json"})
-    with opener.open(request, timeout=5) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with opener.open(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        close_preserving_error(error)
+        raise
     if not isinstance(payload, Mapping):
         raise ValueError(f"Expected JSON object from {url!r}")
     return payload

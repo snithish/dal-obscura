@@ -1,14 +1,14 @@
 [project]
 name = "dal-obscura-iceberg-rest"
-version = "0.2.0"
+version = "0.3.0"
 description = "Admitted PyIceberg REST catalog plugin for dal-obscura"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
-  "dal-obscura-plugin-api==0.2.0",
+  "dal-obscura-plugin-api==0.3.0",
   "pyiceberg>=0.11.1",
 ]
 
-[project.entry-points."dal_obscura.catalogs.v2"]
+[project.entry-points."dal_obscura.catalogs.v3"]
 "iceberg.rest" = "dal_obscura_iceberg_rest.catalog:rest_catalog_factory"
 
 [build-system]

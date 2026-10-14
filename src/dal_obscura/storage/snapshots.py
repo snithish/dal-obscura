@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -68,10 +68,6 @@ class LiveConfigStore:
     def get_asset(self, *, catalog: str, target: str) -> LiveAsset:
         with self._session_scope() as session:
             return self._live_asset(session, catalog=catalog, target=target)
-
-    def get_catalogs(self) -> list[LiveCatalog]:
-        with self._session_scope() as session:
-            return self._live_catalogs(session)
 
     def get_asset_and_catalog(self, *, catalog: str, target: str) -> tuple[LiveAsset, LiveCatalog]:
         """Materialize only the governed target in one repeatable database snapshot.
@@ -178,26 +174,6 @@ class LiveConfigStore:
             asset_id=record.id,
         )
 
-    def _live_catalogs(
-        self,
-        session: Session,
-    ) -> list[LiveCatalog]:
-        records = session.scalars(select(CatalogRecord).order_by(CatalogRecord.name))
-        return [
-            LiveCatalog(
-                catalog=record.name,
-                config={
-                    "type": ("iceberg" if record.plugin_id == "iceberg.catalog" else "plugin"),
-                    "plugin_id": record.plugin_id,
-                    "options": dict(record.options_json),
-                    "revision": record.revision,
-                },
-                plugin_id=record.plugin_id,
-                plugin_revision=record.revision,
-            )
-            for record in records
-        ]
-
     def get_runtime(self) -> LiveRuntime:
         with self._session_scope() as session:
             record = session.get(RuntimeSettingsRecord, 1)
@@ -227,7 +203,7 @@ class LiveConfigStore:
             )
 
     @contextmanager
-    def _session_scope(self) -> Iterator[Session]:
+    def _session_scope(self) -> Generator[Session]:
         with self._session_maker() as session:
             dialect = session.get_bind().dialect.name
             if dialect == "postgresql":

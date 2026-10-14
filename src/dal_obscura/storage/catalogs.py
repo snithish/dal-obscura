@@ -63,21 +63,6 @@ def upsert_catalog(
     return catalog_id
 
 
-def list_catalogs(
-    session: Session,
-) -> list[dict[str, object]]:
-    return [
-        {
-            "id": str(record.id),
-            "name": record.name,
-            "plugin_id": record.plugin_id,
-            "options": dict(record.options_json),
-            "revision": record.revision,
-        }
-        for record in session.scalars(select(CatalogRecord).order_by(CatalogRecord.name))
-    ]
-
-
 def list_workspace_catalogs(
     session: Session,
 ) -> list[dict[str, object]]:

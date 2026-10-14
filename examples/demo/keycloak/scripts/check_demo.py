@@ -134,7 +134,7 @@ def _check_table(table: dict) -> None:
     with connect("invalid.local.token") as client:
         try:
             client.read_table(catalog=catalog, target=target, columns=["customer_id"])
-        except (flight.FlightUnauthenticatedError, flight.FlightUnauthorizedError):
+        except flight.FlightUnauthenticatedError, flight.FlightUnauthorizedError:
             pass
         else:
             raise AssertionError("Unauthenticated request unexpectedly succeeded")

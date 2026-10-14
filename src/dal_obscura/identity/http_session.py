@@ -12,6 +12,7 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, build_opener
 from urllib.request import Request as UrlRequest
 
+from dal_obscura_plugin_api.execution import close_preserving_error
 from fastapi import HTTPException
 
 from dal_obscura.control.access import ControlPlaneActor
@@ -147,8 +148,10 @@ def exchange_authorization_code(
             upstream_status = exc.code
             try:
                 error_payload = json.loads(exc.read(4096).decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            except UnicodeDecodeError, json.JSONDecodeError:
                 error_payload = None
+            finally:
+                close_preserving_error(exc)
             if isinstance(error_payload, Mapping):
                 candidate = error_payload.get("error")
                 if (

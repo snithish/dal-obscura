@@ -3,29 +3,25 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from functools import partial
 from threading import RLock
 from typing import TYPE_CHECKING
 
-from dal_obscura_plugin_api import TableFormatFactory
-
 if TYPE_CHECKING:
-    from dal_obscura.sources.plugin_runtime import PublicPluginCatalogAdapter
+    from dal_obscura.sources.adapters import PublicPluginCatalogAdapter
 
+from dal_obscura_plugin_api.storage import PathRuleEnforcer
+
+from dal_obscura.plugins import PluginRegistry
+from dal_obscura.plugins.bootstrap import create_plugin_registry
 from dal_obscura.sources.contracts import (
     CatalogTableListing,
     Source,
 )
-from dal_obscura.sources.paths import PathRuleEnforcer
-from dal_obscura.sources.plugins import PluginRegistry
-
-DEFAULT_MAX_DISCOVERY_NAMESPACES = 1_000
-DEFAULT_MAX_DISCOVERY_TABLES = 10_000
 
 
 @dataclass(frozen=True)
 class CatalogConfig:
-    """One named built-in catalog configured by the control plane."""
+    """One published catalog instance bound to an admitted SDK factory."""
 
     name: str
     options: Mapping[str, object] = field(default_factory=dict)
@@ -56,13 +52,15 @@ class CatalogRegistry:
         *,
         plugin_registry: PluginRegistry | None = None,
     ) -> None:
-        self._plugin_registry = plugin_registry
+        self._plugin_registry = (
+            plugin_registry if plugin_registry is not None else create_plugin_registry()
+        )
         self._closed = False
         self._catalogs: dict[str, PublicPluginCatalogAdapter] = {}
         try:
             for name, catalog_config in config.catalogs.items():
                 self._catalogs[name] = _build_catalog(
-                    catalog_config, plugin_registry=plugin_registry
+                    catalog_config, plugin_registry=self._plugin_registry
                 )
         except BaseException:
             _close_catalogs(self._catalogs.values())
@@ -123,37 +121,18 @@ def _close_catalogs(catalogs: Iterable[object]) -> None:
 def _build_catalog(
     config: CatalogConfig,
     *,
-    plugin_registry: PluginRegistry | None = None,
+    plugin_registry: PluginRegistry,
 ) -> PublicPluginCatalogAdapter:
-    if plugin_registry is None:
-        from dal_obscura.sources.builtins import (
-            create_builtin_plugin_registry,
-        )
-
-        plugin_registry = create_builtin_plugin_registry()
     factory = plugin_registry.load("catalog", config.plugin_id)
-    from dal_obscura.sources.plugin_runtime import PublicPluginCatalogAdapter
+    from dal_obscura.sources.adapters import PublicPluginCatalogAdapter
 
     return PublicPluginCatalogAdapter(
         config.name,
         config.options,
         config.plugin_id,
         factory,
-        lambda plugin_id: _load_format_factory(plugin_registry, plugin_id, config.path_enforcer),
+        lambda plugin_id: plugin_registry.load("table_format", plugin_id),
         config.path_enforcer,
         config.revision,
-    )
-
-
-def _load_format_factory(
-    registry: PluginRegistry, plugin_id: str, path_enforcer: PathRuleEnforcer | None
-) -> TableFormatFactory:
-    from dal_obscura.sources.iceberg_plugin import (
-        IcebergFormatPlugin,
-    )
-
-    factory = registry.load("table_format", plugin_id)
-    # Bind native IO enforcement as a construction dependency, not handle data.
-    return (
-        partial(factory, path_enforcer=path_enforcer) if factory is IcebergFormatPlugin else factory
+        plugin_registry.format_options,
     )

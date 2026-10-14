@@ -1,0 +1,14 @@
+name: Set up Iceberg reader toolchain
+description: Install the exact package-owned Rust pin and its qualification components.
+runs:
+  using: composite
+  steps:
+    - id: pin
+      shell: bash
+      run: |
+        version=$(uv run --no-project --python "$PYTHON_VERSION" python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("packages/iceberg-reader/rust-toolchain.toml").read_text())["toolchain"]["channel"])')
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ steps.pin.outputs.version }}
+        components: rustfmt, clippy

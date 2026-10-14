@@ -10,8 +10,8 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.read.ticket_repository import StoredTicket
-from dal_obscura.read.tickets import TicketPayload, ticket_payload_hash
+from dal_obscura.read.tickets.contracts import StoredTicket
+from dal_obscura.read.tickets.payload import TicketPayload, ticket_payload_hash
 from dal_obscura.storage.database.orm import DataPlaneTicketRecord
 
 

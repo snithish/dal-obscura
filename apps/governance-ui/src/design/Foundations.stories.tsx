@@ -1,6 +1,6 @@
 import { Code, Group, Paper, Stack, Text, Title, useComputedColorScheme } from "@mantine/core";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Icon } from "../components/Icon";
+import { Icon } from "../shared/Icon";
 import { palette } from "./theme";
 
 function Foundations() {
