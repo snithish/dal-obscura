@@ -24,6 +24,17 @@ resources. `interfaces/` translates transport input and output around constructe
 application dependencies; CLI entrypoints delegate resource setup to bootstrap.
 Request handlers cannot choose providers or borrow SQL sessions.
 
+HTTP request and response models belong with their route feature. Only strict
+request handling and error envelopes are shared. Operator commands separate
+argument dispatch from image preparation, control transport, deployment and Flight
+verification. Startup configuration validation belongs to bootstrap, while catalog
+option validation belongs to governance and keeps its security bounds together.
+
+The Flight command codec serializes and parses protobuf bytes independently of
+server request admission. Flight handlers apply validation and limits around that
+codec. Read and control health endpoints report their own readiness conditions;
+bootstrap supplies their dependencies and owns any background server resources.
+
 These rules include function-local and type-only imports. Architecture tests
 resolve package imports and namespace packages rather than checking import text.
 Startup admits locked plugin entry points and fixed identity provider identifiers;

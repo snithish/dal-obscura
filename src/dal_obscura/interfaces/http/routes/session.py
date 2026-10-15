@@ -14,7 +14,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps, bearer_authorization
-from dal_obscura.interfaces.http.routes.schemas import (
+from dal_obscura.interfaces.http.routes.session_schemas import (
     AuthenticationMutationResponse,
     LogoutResponse,
     SessionOptionsResponse,

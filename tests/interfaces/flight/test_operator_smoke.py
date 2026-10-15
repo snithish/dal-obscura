@@ -5,7 +5,7 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
-from dal_obscura.interfaces.cli.operator import smoke_read
+from dal_obscura.interfaces.cli.flight_smoke import smoke_read
 from tests.support.flight.flight import (
     StubTableFormat,
     build_flight_service,

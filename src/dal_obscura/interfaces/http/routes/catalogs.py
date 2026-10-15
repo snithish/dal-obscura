@@ -9,8 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from dal_obscura.application.governance.catalogs.discovery import MAX_CURSOR_LENGTH
 from dal_obscura.application.governance.catalogs.service import CatalogPublicationInput
 from dal_obscura.interfaces.http.request_context import current_request_id
-from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
-from dal_obscura.interfaces.http.routes.schemas import (
+from dal_obscura.interfaces.http.routes.catalog_schemas import (
     CatalogDiagnosticResponse,
     CatalogInventoryResponse,
     CatalogMutationResponse,
@@ -18,6 +17,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     CatalogRequest,
     CatalogTablesResponse,
 )
+from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 

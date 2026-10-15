@@ -12,7 +12,7 @@ from dal_obscura_plugin_api import DiscoveryPage
 
 from dal_obscura.adapters.providers.discovery import discover_public_catalog_tables
 from dal_obscura.adapters.providers.schema import load_source_schema
-from dal_obscura.application.governance.catalogs.service import validate_catalog_options
+from dal_obscura.application.governance.catalogs.validation import validate_catalog_options
 from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.application.governance.values import AssetSchemaDiscovery, CatalogDiscovery
 from dal_obscura.identity.claims import PrincipalClaimMapper

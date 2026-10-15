@@ -5,7 +5,7 @@ backend. Published database records select catalogs, policies, admitted schemas
 and identity mapping. Keep deployment settings separate from governed records.
 The current Flight settings and validation live in
 [`runtime/configuration.py`](../src/dal_obscura/runtime/configuration.py). HTTP
-startup settings live in [`interfaces/cli/control.py`](../src/dal_obscura/interfaces/cli/control.py).
+startup settings live in [`bootstrap/control_config.py`](../src/dal_obscura/bootstrap/control_config.py).
 
 ## Plugin admission and arguments
 

@@ -7,7 +7,7 @@ from uuid import UUID
 
 from dal_obscura.application.governance.assets import schema as schema_service
 from dal_obscura.application.governance.assets.access import ensure_asset_capability
-from dal_obscura.application.governance.catalogs.service import (
+from dal_obscura.application.governance.catalogs.validation import (
     ICEBERG_CATALOG_ID,
     validate_descriptor_options,
 )

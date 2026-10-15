@@ -7,7 +7,9 @@ from typing import TypedDict
 
 import pytest
 
-from dal_obscura.interfaces.cli import operator
+from dal_obscura.interfaces.cli import (
+    control_client,
+)
 
 pytestmark = pytest.mark.socket
 
@@ -54,7 +56,7 @@ def control_endpoint(monkeypatch):
 
 def test_operator_reads_authenticated_inventory_over_real_http(control_endpoint):
     target, state = control_endpoint
-    assert operator.api_request(target, "GET", "/v1/plugins") == {
+    assert control_client.api_request(target, "GET", "/v1/plugins") == {
         "plugins": [],
         "pairs": [],
         "states": [],
@@ -66,11 +68,11 @@ def test_operator_rejects_real_unbounded_http_body(control_endpoint):
     target, state = control_endpoint
     state["payload"] = b'{"plugins":[]}' + b" " * (8 * 1024 * 1024)
     with pytest.raises(ValueError, match="Control API response exceeds"):
-        operator.api_request(target, "GET", "/v1/plugins")
+        control_client.api_request(target, "GET", "/v1/plugins")
 
 
 def test_operator_redirect_never_reaches_credential_destination(control_endpoint):
     target, state = control_endpoint
     with pytest.raises(ValueError, match="redirects are not allowed"):
-        operator.api_request(target, "GET", "/redirect")
+        control_client.api_request(target, "GET", "/redirect")
     assert state["requests"] == [("/redirect", "Bearer sentinel-credential")]

@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from dal_obscura.adapters.sql.database.db import migrate_config_store
 from dal_obscura.bootstrap import control as control_bootstrap
+from dal_obscura.bootstrap import control_config
 from dal_obscura.interfaces.cli import control as control_plane_cli
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProvider
@@ -115,7 +116,7 @@ def test_control_plane_cli_passes_login_rate_limits(engine_factory, monkeypatch,
 
 
 def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
-    config = control_bootstrap._ui_auth_config(
+    config = control_config.ui_auth_config(
         {
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "governance-ui",
@@ -139,9 +140,9 @@ def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
     ["https://[broken/realm", "https://issuer.example:99999/realm"],
 )
 def test_production_url_helpers_fail_closed_on_malformed_urls(value: str) -> None:
-    assert control_bootstrap._is_https_url(value) is False
-    assert control_bootstrap._is_https_origin(value) is False
-    assert control_bootstrap._origin(value) == ""
+    assert control_config._is_https_url(value) is False
+    assert control_config._is_https_origin(value) is False
+    assert control_config._origin(value) == ""
 
 
 @pytest.mark.parametrize("kind", ["environment", "mounted_file"])

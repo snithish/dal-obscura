@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from dal_obscura.interfaces.http.request_context import current_request_id
-from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
-from dal_obscura.interfaces.http.routes.schemas import (
+from dal_obscura.interfaces.http.routes.asset_schemas import (
     AssetAccessResponse,
     AssetDetailResponse,
     AssetGrantResponse,
@@ -25,6 +24,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     AssetSchemaResponse,
     AssetTokenRevocationResponse,
 )
+from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 

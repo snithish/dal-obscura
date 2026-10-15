@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 
 from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
-from dal_obscura.interfaces.http.routes.schemas import (
+from dal_obscura.interfaces.http.routes.policy_schemas import (
     PolicyEvaluationRequest,
     PolicyEvaluationResponse,
     PolicyMutationResponse,

@@ -8,8 +8,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from dal_obscura.interfaces.http.request_context import current_request_id
+from dal_obscura.interfaces.http.routes.audit_schemas import AuditEventPageResponse
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
-from dal_obscura.interfaces.http.routes.schemas import AuditEventPageResponse
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 

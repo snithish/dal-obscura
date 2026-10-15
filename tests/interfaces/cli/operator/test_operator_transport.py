@@ -7,7 +7,9 @@ from urllib.error import HTTPError
 
 import pytest
 
-from dal_obscura.interfaces.cli import operator
+from dal_obscura.interfaces.cli import (
+    control_client,
+)
 
 
 @pytest.fixture
@@ -27,7 +29,9 @@ def control_response(monkeypatch):
         response = Response(payload)
         responses.append(response)
         monkeypatch.setattr(
-            operator, "build_opener", lambda *args: SimpleNamespace(open=lambda *a, **kw: response)
+            control_client,
+            "build_opener",
+            lambda *args: SimpleNamespace(open=lambda *a, **kw: response),
         )
         return response
 
@@ -37,7 +41,9 @@ def control_response(monkeypatch):
 
 
 def request():
-    return operator.api_request({"control_url": "https://control.example"}, "GET", "/v1/plugins")
+    return control_client.api_request(
+        {"control_url": "https://control.example"}, "GET", "/v1/plugins"
+    )
 
 
 def test_control_error_response_is_closed(control_response, monkeypatch):
@@ -47,7 +53,9 @@ def test_control_error_response_is_closed(control_response, monkeypatch):
     def rejected(*args, **kwargs):
         raise error
 
-    monkeypatch.setattr(operator, "build_opener", lambda *args: SimpleNamespace(open=rejected))
+    monkeypatch.setattr(
+        control_client, "build_opener", lambda *args: SimpleNamespace(open=rejected)
+    )
     with pytest.raises(HTTPError) as failure:
         request()
     assert failure.value is error

@@ -11,7 +11,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from dal_obscura.interfaces.cli import operator
+from dal_obscura.interfaces.cli import (
+    control_client,
+    deployment,
+    flight_smoke,
+    operator_io,
+    plugin_ops,
+)
 
 TARGET_FIELDS = (
     ("base_image", "Worker base image with verified sha256 digest"),
@@ -65,17 +71,17 @@ def initialize_target(workspace: Path, args: argparse.Namespace) -> None:
         if getattr(args, name):
             target["smoke"][name] = str(Path(getattr(args, name)).resolve())
     validate_target(workspace, target)
-    operator.write_json(destination, target, replace=False)
+    operator_io.write_json(destination, target, replace=False)
     print(f"Initialized target: {destination.resolve()}")
     print("Next: provision the named credential references, then run dal-obscura doctor")
 
 
 def validate_target(workspace: Path, target: dict[str, Any]) -> None:
     for name in ("base_image", "uv_image"):
-        operator.validate_image_reference(str(target[name]), name)
-    operator.validate_image_repository(str(target["image_repository"]))
-    operator.validate_control_url(str(target["control_url"]))
-    operator.validate_smoke(target["smoke"])
+        plugin_ops.validate_image_reference(str(target[name]), name)
+    plugin_ops.validate_image_repository(str(target["image_repository"]))
+    control_client.validate_control_url(str(target["control_url"]))
+    flight_smoke.validate_smoke(target["smoke"])
     for value in (
         target.get("admin_token_env", "DAL_OBSCURA_DEPLOY_ADMIN_TOKEN"),
         target["smoke"].get("token_env", "DAL_OBSCURA_DEPLOY_FLIGHT_TOKEN"),
@@ -98,7 +104,7 @@ def validate_target(workspace: Path, target: dict[str, Any]) -> None:
 def diagnose_target(workspace: Path, args: argparse.Namespace) -> int:
     checks: list[dict[str, object]] = []
     try:
-        target = operator.target_settings(workspace)
+        target = plugin_ops.target_settings(workspace)
         validate_target(workspace, target)
         checks.append(
             {"name": "target configuration", "ok": True, "message": "Valid files and references"}
@@ -149,12 +155,12 @@ def diagnose_target(workspace: Path, args: argparse.Namespace) -> int:
 
 def _check_online(workspace: Path, target: dict[str, Any], checks: list[dict[str, object]]) -> None:
     try:
-        operator.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture=True)
+        operator_io.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture=True)
         with tempfile.TemporaryDirectory(prefix="dal-target-check-") as temporary:
             overlay = Path(temporary) / "compose.json"
-            operator.write_json(overlay, {"services": {}})
-            operator.run(
-                [*operator.compose_arguments(workspace, target, overlay), "config", "--quiet"],
+            operator_io.write_json(overlay, {"services": {}})
+            operator_io.run(
+                [*deployment.compose_arguments(workspace, target, overlay), "config", "--quiet"],
                 capture=True,
             )
         checks.append(
@@ -174,7 +180,7 @@ def _check_online(workspace: Path, target: dict[str, Any], checks: list[dict[str
         )
     if os.environ.get(target.get("admin_token_env", "DAL_OBSCURA_DEPLOY_ADMIN_TOKEN")):
         try:
-            operator.api_request(target, "GET", "/v1/plugins")
+            control_client.api_request(target, "GET", "/v1/plugins")
             checks.append(
                 {
                     "name": "control authentication",

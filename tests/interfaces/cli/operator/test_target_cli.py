@@ -4,7 +4,11 @@ import json
 
 import pytest
 
-from dal_obscura.interfaces.cli import operator
+from dal_obscura.interfaces.cli import (
+    control_client,
+    operator,
+    operator_io,
+)
 
 
 @pytest.fixture
@@ -44,7 +48,7 @@ def test_target_init_prepares_complete_reference_only_configuration(
     target_arguments, tmp_path, monkeypatch
 ):
     monkeypatch.setattr(
-        operator, "run", lambda *a, **kw: pytest.fail("No external calls during initialization")
+        operator_io, "run", lambda *a, **kw: pytest.fail("No external calls during initialization")
     )
     assert operator.main(target_arguments) == 0
     target = json.loads((tmp_path / "workspace/target.json").read_text())
@@ -120,7 +124,7 @@ def test_offline_doctor_reports_missing_credentials_without_exposing_values(
     assert operator.main(target_arguments) == 0
     capsys.readouterr()
     monkeypatch.setattr(
-        operator, "run", lambda *a, **kw: pytest.fail("Offline diagnostics must not call Docker")
+        operator_io, "run", lambda *a, **kw: pytest.fail("Offline diagnostics must not call Docker")
     )
     monkeypatch.delenv("DAL_OBSCURA_DEPLOY_ADMIN_TOKEN", raising=False)
     monkeypatch.setenv("DAL_OBSCURA_DEPLOY_FLIGHT_TOKEN", "sentinel-secret")
@@ -161,8 +165,8 @@ def test_online_doctor_uses_only_read_only_calls(target_arguments, tmp_path, mon
         assert (method, path, body) == ("GET", "/v1/plugins", None)
         return {"plugins": [], "pairs": [], "states": []}
 
-    monkeypatch.setattr(operator, "run", run)
-    monkeypatch.setattr(operator, "api_request", api)
+    monkeypatch.setattr(operator_io, "run", run)
+    monkeypatch.setattr(control_client, "api_request", api)
     assert operator.main(["--workspace", str(tmp_path / "workspace"), "doctor", "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["ready"] is True
@@ -185,8 +189,8 @@ def test_doctor_sanitizes_container_failure_details(
     def failed(*args, **kwargs):
         raise subprocess.CalledProcessError(1, ["docker"], stderr="sentinel-secret")
 
-    monkeypatch.setattr(operator, "run", failed)
-    monkeypatch.setattr(operator, "api_request", lambda *args: {})
+    monkeypatch.setattr(operator_io, "run", failed)
+    monkeypatch.setattr(control_client, "api_request", lambda *args: {})
     assert operator.main(["--workspace", str(tmp_path / "workspace"), "doctor", "--json"]) == 1
     result = json.loads(capsys.readouterr().out)
     assert "sentinel-secret" not in json.dumps(result)

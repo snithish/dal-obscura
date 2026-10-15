@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.application.governance.catalogs.service import (
+from dal_obscura.application.governance.catalogs.validation import (
     validate_admitted_catalog_options,
     validate_catalog_options,
     validate_descriptor_options,
