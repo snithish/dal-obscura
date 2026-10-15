@@ -143,7 +143,7 @@ def test_catalog_diagnostics_sample_one_page_without_counting_the_inventory(clie
 def test_catalog_cursor_expires_before_provider_io(client_factory, monkeypatch):
     import time
 
-    from dal_obscura.control.catalogs.discovery import CURSOR_TTL_SECONDS
+    from dal_obscura.application.governance.catalogs.discovery import CURSOR_TTL_SECONDS
 
     registry = PagedCatalogRegistry()
     client = client_factory(plugin_registry=registry)
@@ -151,7 +151,8 @@ def test_catalog_cursor_expires_before_provider_io(client_factory, monkeypatch):
     first = client.get("/v1/catalogs/analytics/tables?limit=2", headers=ADMIN_HEADERS)
     now = time.time()
     monkeypatch.setattr(
-        "dal_obscura.control.catalogs.discovery.time.time", lambda: now + CURSOR_TTL_SECONDS + 2
+        "dal_obscura.application.governance.catalogs.discovery.time.time",
+        lambda: now + CURSOR_TTL_SECONDS + 2,
     )
     expired = client.get(
         "/v1/catalogs/analytics/tables",

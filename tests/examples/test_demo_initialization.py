@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from dal_obscura.adapters.sql.database.db import session_factory
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 from dal_obscura.runtime.secrets import SecretProviderConfig, load_secret_provider
 from examples.demo.keycloak.scripts import provision_demo, seed_table
 
@@ -26,7 +26,7 @@ def workspace(tmp_path, monkeypatch, db_engine, http_client):
     monkeypatch.setenv("LOCAL_ICEBERG_URI", options["uri"])
     monkeypatch.setenv("ICEBERG_WAREHOUSE", options["warehouse"])
     client = http_client(
-        create_app(
+        build_control_app(
             session_factory(db_engine),
             admin_token="test-admin",
             secret_provider=load_secret_provider(

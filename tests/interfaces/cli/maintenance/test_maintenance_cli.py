@@ -8,6 +8,7 @@ from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
 from dal_obscura.adapters.sql.database.orm import WorkspaceRecord
+from dal_obscura.adapters.sql.maintenance import invalidate_access
 from dal_obscura.adapters.sql.tickets import (
     SqlAlchemyTicketStore,
 )
@@ -16,7 +17,6 @@ from dal_obscura.identity.sessions import (
     BrowserSessionStore,
     LoginTransactionStore,
 )
-from dal_obscura.interfaces.cli.maintenance import invalidate_access
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 

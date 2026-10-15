@@ -9,7 +9,7 @@ from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
 from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.application.reads.execution import ManagedStream, StreamGuard
+from dal_obscura.application.reads.execution import ExecutionSupervisor, ManagedStream, StreamGuard
 from dal_obscura.application.reads.service import ReadService, ReadSettings
 from dal_obscura.application.reads.sources import AccessContext
 from dal_obscura.kernel.policy.authorization import AuthorizationPort
@@ -28,6 +28,7 @@ def make_read_service(**options: Any) -> ReadService:
         name: options.pop(name) for name in ReadSettings.__dataclass_fields__ if name in options
     }
     return ReadService(
+        execution_supervisor=options.pop("execution_supervisor", ExecutionSupervisor()),
         projection_compiler=options.pop("projection_compiler", DuckDBProjectionCompiler()),
         row_transform=options.pop("row_transform", DuckDBRowTransformAdapter()),
         access_context=options.pop("access_context", _UnusedSource()),
@@ -65,5 +66,5 @@ def expiry_stream(batches, *, ticket_expires_at, identity_expires_at, stream_dea
             stream_deadline_at,
             now,
             lambda: None,
-        ),
+        ).check_disclosure,
     )

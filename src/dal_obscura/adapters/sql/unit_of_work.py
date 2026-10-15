@@ -14,6 +14,13 @@ from dal_obscura.adapters.sql import catalogs as _db_catalogs
 from dal_obscura.adapters.sql import policies as _db_policies
 from dal_obscura.adapters.sql import workspace as _db_workspace
 from dal_obscura.application.governance.values import AssetPage, AuditEventPage, WorkspaceState
+from dal_obscura.identity.sessions import (
+    BrowserSessionStore,
+    LoginRateLimiter,
+    LoginTransactionStore,
+)
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.identity.session import LoginRateLimitDecision, LoginTransaction
 
 
 class _SqlRepository:
@@ -21,7 +28,7 @@ class _SqlRepository:
         self._get_session = get_session
 
 
-class _SqlAssetsRepository(_SqlRepository):
+class SqlAssetsRepository(_SqlRepository):
     def upsert_asset(
         self,
         *,
@@ -284,7 +291,10 @@ class SqlGovernanceUnitOfWork:
             raise RuntimeError("Governance unit of work is already active")
         self._session = self._session_factory()
         self._committed = False
-        self.assets = _SqlAssetsRepository(self._active_session)
+        self.browser_sessions = _SqlBrowserSessionsRepository(self._active_session)
+        self.login_transactions = _SqlLoginTransactionsRepository(self._active_session)
+        self.login_rate_limits = _SqlLoginRateLimitsRepository(self._active_session)
+        self.assets = SqlAssetsRepository(self._active_session)
         self.catalogs = _SqlCatalogsRepository(self._active_session)
         self.policies = _SqlPoliciesRepository(self._active_session)
         self.workspace = _SqlWorkspaceRepository(self._active_session)
@@ -329,3 +339,70 @@ class SqlGovernanceUnitOfWorkFactory:
 
     def __call__(self) -> SqlGovernanceUnitOfWork:
         return SqlGovernanceUnitOfWork(self._session_factory)
+
+
+class _SqlBrowserSessionsRepository(_SqlRepository):
+    def issue(self, actor: ControlPlaneActor, *, ttl_seconds: int) -> str:
+        return BrowserSessionStore(self._get_session()).issue(actor, ttl_seconds=ttl_seconds)
+
+    def issue_with_csrf(self, actor: ControlPlaneActor, *, ttl_seconds: int) -> tuple[str, str]:
+        return BrowserSessionStore(self._get_session()).issue_with_csrf(
+            actor, ttl_seconds=ttl_seconds
+        )
+
+    def resolve(
+        self, token: str, *, csrf_token: str | None = None, idle_ttl_seconds: int | None = None
+    ) -> ControlPlaneActor | None:
+        return BrowserSessionStore(self._get_session()).resolve(
+            token, csrf_token=csrf_token, idle_ttl_seconds=idle_ttl_seconds
+        )
+
+    def revoke(self, token: str) -> bool:
+        return BrowserSessionStore(self._get_session()).revoke(token)
+
+
+class _SqlLoginTransactionsRepository(_SqlRepository):
+    def issue(
+        self,
+        *,
+        state: str,
+        nonce: str,
+        code_verifier: str,
+        redirect_uri: str,
+        ttl_seconds: int = 600,
+    ) -> None:
+        return LoginTransactionStore(self._get_session()).issue(
+            state=state,
+            nonce=nonce,
+            code_verifier=code_verifier,
+            redirect_uri=redirect_uri,
+            ttl_seconds=ttl_seconds,
+        )
+
+    def consume(self, state: str) -> LoginTransaction | None:
+        return LoginTransactionStore(self._get_session()).consume(state)
+
+
+class _SqlLoginRateLimitsRepository(_SqlRepository):
+    def allow(
+        self, client_key: str, *, max_attempts: int, window_seconds: int, block_seconds: int
+    ) -> LoginRateLimitDecision:
+        return LoginRateLimiter(self._get_session()).allow(
+            client_key,
+            max_attempts=max_attempts,
+            window_seconds=window_seconds,
+            block_seconds=block_seconds,
+        )
+
+    def record_failure(
+        self, client_key: str, *, max_attempts: int, window_seconds: int, block_seconds: int
+    ) -> LoginRateLimitDecision:
+        return LoginRateLimiter(self._get_session()).record_failure(
+            client_key,
+            max_attempts=max_attempts,
+            window_seconds=window_seconds,
+            block_seconds=block_seconds,
+        )
+
+    def clear(self, client_key: str) -> None:
+        return LoginRateLimiter(self._get_session()).clear(client_key)

@@ -81,7 +81,7 @@ def test_policy_compiler_rejects_non_null_map_key_masks():
     import pytest
 
     from dal_obscura.application.governance.errors import ValidationFailure
-    from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
+    from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
     with pytest.raises(ValidationFailure, match="Map keys support only the null mask"):
         compile_policy_rule_payloads(
@@ -100,7 +100,7 @@ def test_compiler_rejects_display_aliases_and_requires_canonical_paths():
     import pytest
 
     from dal_obscura.application.governance.errors import ValidationFailure
-    from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
+    from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
     fields: list[dict[str, object]] = [
         {"name": "contacts.email", "path": ["contacts", "$element", "email"], "type": "string"}
@@ -118,7 +118,7 @@ def test_overlapping_masks_cannot_silently_replace_each_other():
     import pytest
 
     from dal_obscura.application.governance.errors import ValidationFailure
-    from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
+    from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
     fields: list[dict[str, object]] = [
         {"name": "profile.email", "path": ["profile", "email"], "type": "string"}
@@ -135,7 +135,7 @@ def test_unused_mask_values_are_rejected_instead_of_affecting_conflict_resolutio
     import pytest
 
     from dal_obscura.application.governance.errors import ValidationFailure
-    from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
+    from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
     for kind in ("hash", "null", "email"):
         with pytest.raises(ValidationFailure, match="does not accept a value"):

@@ -16,7 +16,12 @@ from dal_obscura.application.reads.contracts import (
     GetSchemaResult,
     PlanAccessResult,
 )
-from dal_obscura.application.reads.execution import ManagedStream, StreamGuard
+from dal_obscura.application.reads.execution import (
+    ExecutionSupervisor,
+    SourceInitializationPermissionError,
+    SourceInitializationValueError,
+    StreamGuard,
+)
 from dal_obscura.application.reads.ports import (
     IdentityPort,
     ProjectionCompiler,
@@ -74,6 +79,7 @@ class ReadService:
     identity: IdentityPort
     access_context: AccessContextPort
     row_transform: RowTransformPort
+    execution_supervisor: ExecutionSupervisor
     projection_compiler: ProjectionCompiler
     ticket_codec: TicketCodecPort
     ticket_store: TicketStorePort
@@ -180,7 +186,13 @@ class ReadService:
                 execution_column_count=len(execution_projection.execution_columns),
             )
 
-    def fetch(self, ticket: str, auth_request: AuthenticationRequest) -> FetchStreamResult:
+    def fetch(
+        self,
+        ticket: str,
+        auth_request: AuthenticationRequest,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> FetchStreamResult:
         client_payload = self.ticket_codec.verify(ticket)
         if client_payload.ticket_id is None:
             raise PermissionError("Unauthorized")
@@ -219,30 +231,31 @@ class ReadService:
             raise
 
         stream_deadline = min(payload.expires_at, now + self.settings.max_stream_seconds)
-        _, batches = task.table_format.execute(
-            task.partition, deadline=datetime.fromtimestamp(stream_deadline, UTC)
+
+        def open_source():
+            try:
+                return task.table_format.execute(
+                    task.partition, deadline=datetime.fromtimestamp(stream_deadline, UTC)
+                )
+            except PermissionError as exc:
+                raise SourceInitializationPermissionError("Source initialization denied") from exc
+            except ValueError as exc:
+                raise SourceInitializationValueError("Source initialization failed") from exc
+
+        result_batches = self.execution_supervisor.open(
+            source_factory=open_source,
+            transform_factory=lambda batches: self.row_transform.apply_filters_and_masks_stream(
+                batches, projection, scan.full_row_filter
+            ),
+            guard=StreamGuard(
+                ticket_expires_at=payload.expires_at,
+                identity_expires_at=principal.expires_at,
+                stream_deadline_at=stream_deadline,
+                now=self.now,
+                check_revocation=lambda: self.ticket_store.ensure_active(client_payload.ticket_id),
+                cancel_check=cancel_check,
+            ),
         )
-        scanner = ManagedStream(batches)
-        try:
-            transformed = self.row_transform.apply_filters_and_masks_stream(
-                scanner, projection, scan.full_row_filter
-            )
-            result_batches = ManagedStream(
-                transformed,
-                resources=(scanner,),
-                guard=StreamGuard(
-                    ticket_expires_at=payload.expires_at,
-                    identity_expires_at=principal.expires_at,
-                    stream_deadline_at=stream_deadline,
-                    now=self.now,
-                    check_revocation=lambda: self.ticket_store.ensure_active(
-                        client_payload.ticket_id
-                    ),
-                ),
-            )
-        except BaseException:
-            scanner.close(suppress_errors=True)
-            raise
 
         return FetchStreamResult(
             output_schema=output_schema,

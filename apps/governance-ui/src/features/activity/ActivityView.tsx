@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
-import type { QueryClient } from "@tanstack/react-query";
-import type { AssetAccess, AssetGrant, AuditEvent, AuthProvider, Catalog, PluginDescriptor, PluginPair, PluginState, RuntimeSettings, Session, WorkspaceObservations, WorkspaceSummary } from "../../data/api";
-import type { UiPage } from "../../app/navigation/routes";
+import type { AuditEvent, WorkspaceObservations, WorkspaceSummary } from "../../data/api";
 import { Icon } from "../../shared/Icon";
-import { ConnectionsView } from "../connections/ConnectionsView";
-import { SettingsView } from "../settings/SettingsView";
+import { QueryView } from "../../shared/QueryView";
+import type { ActivityData, AuditFilters } from "./useActivityQueries";
 
-export type AuditFilters = { actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string };
-export type ManagementData = { events?: AuditEvent[]; eventsNextCursor?: string | null; catalogs?: Catalog[]; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; providerRevision?: number; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; access?: AssetAccess; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
+export function ActivityView({ data, loading, error, onReload, onLoadMore, auditLoading, filters, onFiltersChange }: {
+  data: Partial<ActivityData>; loading: boolean; error: string; onReload: () => void;
+  onLoadMore?: () => void; auditLoading?: boolean; filters: AuditFilters;
+  onFiltersChange: (filters: AuditFilters) => void;
+}) {
+  return <QueryView page="activity" loaded={"events" in data || "summary" in data || "observations" in data}
+    loading={loading} error={error} onReload={onReload}>
+    <ActivityContent events={data.events ?? []} nextCursor={data.eventsNextCursor}
+      onLoadMore={onLoadMore} loading={auditLoading ?? false} filters={filters}
+      onFiltersChange={onFiltersChange} summary={data.summary} observations={data.observations} />
+  </QueryView>;
+}
 
 function localDateTimeValue(value?: string): string {
   if (!value) return "";
@@ -18,23 +26,7 @@ function localDateTimeValue(value?: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function hasLoadedManagementData(page: Exclude<UiPage, "assets">, data: ManagementData): boolean {
-  if (page === "activity") return "events" in data || "summary" in data || "observations" in data;
-  if (page === "connections") return "catalogs" in data || "plugins" in data || "pluginStates" in data;
-  return "runtime" in data || "providers" in data || "providerRevision" in data;
-}
-
-export function ManagementView({ page, data, loading, error, onReload, onLoadMore, auditLoading, filters, onFiltersChange, session, queryClient, sessionScope, onDirtyChange }: { page: Exclude<UiPage, "assets">; data: ManagementData; loading: boolean; error: string; onReload: () => void; onLoadMore?: () => void; auditLoading?: boolean; filters: AuditFilters; onFiltersChange: (filters: AuditFilters) => void; session: Session | null; queryClient: QueryClient; sessionScope: string; onDirtyChange?: (dirty: boolean) => void }) {
-  const loaded = hasLoadedManagementData(page, data);
-  if (loading && !loaded) return <section className="coming-soon"><span className="eyebrow">{page.toUpperCase()}</span><h2>Loading {page}</h2><p>Checking the current workspace state and your capabilities.</p></section>;
-  if (error && !loaded) return <section className="coming-soon" role="alert"><span className="eyebrow">{page.toUpperCase()}</span><h2>Management view unavailable</h2><p>{error}</p><Button type="button" variant="default" className="secondary" onClick={onReload} leftSection={<Icon name="refresh-cw" size={16} />}>Retry</Button></section>;
-  const refreshError = error ? <div className="validation-summary management-refresh-error" role="alert"><strong>Workspace refresh failed</strong><p>{error}</p><Button type="button" variant="default" size="sm" className="secondary compact" onClick={onReload} leftSection={<Icon name="refresh-cw" size={15} />}>Retry refresh</Button></div> : null;
-  if (page === "activity") return <>{refreshError}<ActivityView events={data.events ?? []} nextCursor={data.eventsNextCursor} onLoadMore={onLoadMore} loading={auditLoading ?? false} filters={filters} onFiltersChange={onFiltersChange} summary={data.summary} observations={data.observations} /></>;
-  if (page === "connections") return <>{refreshError}<ConnectionsView catalogs={data.catalogs ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} pluginPairs={data.pluginPairs ?? []} canManagePlugins={Boolean(session?.platform_admin)} onReload={onReload} onDirtyChange={onDirtyChange} queryClient={queryClient} sessionScope={sessionScope} /></>;
-  return <>{refreshError}<SettingsView runtime={data.runtime} providers={data.providers ?? []} providerRevision={data.providerRevision} onReload={onReload} queryClient={queryClient} sessionScope={sessionScope} onDirtyChange={onDirtyChange} /></>;
-}
-
-function ActivityView({ events, nextCursor, onLoadMore, loading, filters, onFiltersChange, summary, observations }: { events: AuditEvent[]; nextCursor?: string | null; onLoadMore?: () => void; loading: boolean; filters: AuditFilters; onFiltersChange: (filters: AuditFilters) => void; summary?: WorkspaceSummary; observations?: WorkspaceObservations }) {
+function ActivityContent({ events, nextCursor, onLoadMore, loading, filters, onFiltersChange, summary, observations }: { events: AuditEvent[]; nextCursor?: string | null; onLoadMore?: () => void; loading: boolean; filters: AuditFilters; onFiltersChange: (filters: AuditFilters) => void; summary?: WorkspaceSummary; observations?: WorkspaceObservations }) {
   const [draftFilters, setDraftFilters] = useState<AuditFilters>(filters);
   useEffect(() => setDraftFilters(filters), [filters]);
   function setFilter(key: keyof AuditFilters, value: string) {

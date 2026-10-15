@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from dal_obscura.adapters.sql.database.db import create_engine_from_url, session_factory
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 
 
 def main() -> None:
@@ -23,7 +23,9 @@ def main() -> None:
     path = Path(__file__).resolve().parents[1] / "apps/governance-ui/openapi/control-plane.json"
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     try:
-        schema = create_app(session_factory(engine), admin_token="schema-export-only").openapi()
+        schema = build_control_app(
+            session_factory(engine), admin_token="schema-export-only"
+        ).openapi()
     finally:
         engine.dispose()
     if args.check:

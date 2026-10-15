@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 from fastapi import APIRouter, Depends
 
-from dal_obscura.control.workspace import attributes as identity_attributes
-from dal_obscura.control.workspace import service as workspace_service
 from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
@@ -26,46 +22,48 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     """Builds workspace settings routes."""
 
     api = APIRouter()
+    admin_actor = Depends(deps.require_admin)
 
     @api.get(
         "/v1/settings/runtime",
         response_model=RuntimeSettingsResponse | None,
         dependencies=[Depends(deps.require_admin)],
     )
-    def get_workspace_runtime_settings() -> RuntimeSettingsResponse | None:
-        return cast(
-            RuntimeSettingsResponse | None,
-            deps.with_transaction(
-                lambda service: workspace_service.get_workspace_runtime_settings(service.session)
-            ),
+    def get_workspace_runtime_settings(
+        actor: ControlPlaneActor = admin_actor,
+    ) -> RuntimeSettingsResponse | None:
+        result = deps.workspace_commands.get_workspace_runtime_settings(
+            actor=actor, correlation_id=current_request_id()
         )
+        return RuntimeSettingsResponse.model_validate(result) if result is not None else None
 
     @api.get(
         "/v1/settings/auth-providers",
         response_model=list[AuthProviderResponse],
         dependencies=[Depends(deps.require_admin)],
     )
-    def list_workspace_auth_providers() -> list[AuthProviderResponse]:
-        return cast(
-            list[AuthProviderResponse],
-            deps.with_transaction(
-                lambda service: workspace_service.list_workspace_auth_providers(service.session)
-            ),
-        )
+    def list_workspace_auth_providers(
+        actor: ControlPlaneActor = admin_actor,
+    ) -> list[AuthProviderResponse]:
+        return [
+            AuthProviderResponse.model_validate(item)
+            for item in deps.workspace_commands.list_workspace_auth_providers(
+                actor=actor, correlation_id=current_request_id()
+            )
+        ]
 
     @api.get(
         "/v1/settings/auth-providers/revision",
         response_model=AuthProviderRevisionResponse,
         dependencies=[Depends(deps.require_admin)],
     )
-    def workspace_auth_provider_revision() -> AuthProviderRevisionResponse:
-        return cast(
-            AuthProviderRevisionResponse,
-            deps.with_transaction(
-                lambda service: {
-                    "revision": workspace_service.workspace_auth_provider_revision(service.session)
-                }
-            ),
+    def workspace_auth_provider_revision(
+        actor: ControlPlaneActor = admin_actor,
+    ) -> AuthProviderRevisionResponse:
+        return AuthProviderRevisionResponse(
+            revision=deps.workspace_commands.workspace_auth_provider_revision(
+                actor=actor, correlation_id=current_request_id()
+            )
         )
 
     @api.put(
@@ -77,28 +75,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: RuntimeSettingsRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> RuntimeSettingsResponse:
-        result = deps.with_transaction(
-            lambda service: workspace_service.upsert_workspace_runtime_settings(
-                service.session,
+        return RuntimeSettingsResponse.model_validate(
+            deps.workspace_commands.upsert_workspace_runtime_settings(
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
                 max_ticket_exchanges=request.max_ticket_exchanges,
                 path_rules=request.path_rules,
                 expected_revision=request.expected_revision,
-                actor_principal="system" if actor is None else actor.identity_key(),
+                actor=actor,
                 correlation_id=current_request_id(),
             )
-        )
-        return cast(
-            RuntimeSettingsResponse,
-            result
-            or {
-                "ticket_ttl_seconds": request.ticket_ttl_seconds,
-                "max_tickets": request.max_tickets,
-                "max_ticket_exchanges": request.max_ticket_exchanges,
-                "path_rules": request.path_rules,
-                "revision": 0,
-            },
         )
 
     @api.put(
@@ -110,19 +96,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: AuthProvidersRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> list[AuthProviderResponse]:
-        return cast(
-            list[AuthProviderResponse],
-            deps.with_transaction(
-                lambda service: workspace_service.replace_workspace_auth_providers(
-                    service.session,
-                    request.providers,
-                    expected_revision=request.expected_revision,
-                    actor_principal="system" if actor is None else actor.identity_key(),
-                    correlation_id=current_request_id(),
-                )
+        return [
+            AuthProviderResponse.model_validate(item)
+            for item in deps.workspace_commands.replace_workspace_auth_providers(
+                request.providers,
+                expected_revision=request.expected_revision,
+                actor=actor,
+                correlation_id=current_request_id(),
             )
-            or [],
-        )
+        ]
 
     @api.post(
         "/v1/settings/auth-providers/{ordinal}/attribute-preview",
@@ -130,12 +112,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         dependencies=[Depends(deps.require_admin)],
     )
     def preview_attribute_mapping(
-        ordinal: int, request: AttributeMappingPreviewRequest
+        ordinal: int,
+        request: AttributeMappingPreviewRequest,
+        actor: ControlPlaneActor = admin_actor,
     ) -> dict[str, object]:
-        return deps.with_transaction(
-            lambda service: identity_attributes.preview_attributes(
-                service.session, ordinal, request.claims, request.provider_args
-            )
+        return deps.workspace_commands.preview_attribute_mapping(
+            ordinal,
+            request.claims,
+            request.provider_args,
+            actor=actor,
+            correlation_id=current_request_id(),
         )
 
     return api

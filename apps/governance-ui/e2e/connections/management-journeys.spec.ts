@@ -203,6 +203,9 @@ test("administrator activity filters and paginates the permitted audit records",
 
   await page.getByRole("button", { name: "Load more activity" }).click();
   await expect(page.getByText("asset.tokens.revoke")).toBeVisible();
+  await page.getByRole("button", { name: "Assets", exact: true }).click();
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
+  await expect(page.getByLabel("Action")).toHaveValue("asset.policy.replace");
 });
 
 test.describe("audit date filters in a non-UTC timezone", () => {

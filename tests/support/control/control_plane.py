@@ -9,7 +9,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from dal_obscura.adapters.sql.database.db import session_factory
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 
 ICEBERG_CATALOG_ID = "iceberg.catalog"
 
@@ -32,7 +32,7 @@ def provision_default_live_asset(
     engine = db_session.get_bind()
     if not isinstance(engine, Engine):
         raise TypeError("provision_default_live_asset requires an Engine-bound session")
-    app = create_app(session_factory(engine), admin_token="test-admin")
+    app = build_control_app(session_factory(engine), admin_token="test-admin")
     with TestClient(app) as client:
         headers = {"authorization": "Bearer test-admin"}
 

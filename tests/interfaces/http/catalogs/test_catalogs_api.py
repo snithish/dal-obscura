@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 from dal_obscura.runtime.secrets import load_secret_provider_from_environment
 from tests.support.control.workspace import (
     ADMIN_HEADERS,
@@ -27,7 +27,7 @@ def publication_client(request, client_factory):
         with (
             isolated_postgres_sessions() as factory,
             TestClient(
-                create_app(
+                build_control_app(
                     factory, admin_token=ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
                 )
             ) as client,
@@ -128,12 +128,12 @@ def test_postgres_catalog_release_is_not_visible_until_complete(monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from dal_obscura.control.catalogs import service as catalog_service
+    from dal_obscura.application.governance.catalogs import service as catalog_service
 
     token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
     with (
         isolated_postgres_sessions() as factory,
-        TestClient(create_app(factory, admin_token=token)) as client,
+        TestClient(build_control_app(factory, admin_token=token)) as client,
     ):
         original = {
             "plugin_id": ICEBERG_CATALOG_ID,
@@ -437,7 +437,7 @@ def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_r
 def test_workspace_catalog_enforces_configured_egress_allowlist(http_client, db_engine):
     engine = db_engine
     client = http_client(
-        create_app(
+        build_control_app(
             session_factory(engine),
             admin_token="test-admin",
             catalog_egress_allowlist=("catalog.example",),
@@ -487,7 +487,7 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(
         )
 
     monkeypatch.setattr(
-        "dal_obscura.control.catalogs.service.discover_public_catalog_tables",
+        "dal_obscura.adapters.providers.governance.discover_public_catalog_tables",
         fake_discover_catalog_tables,
     )
 
@@ -555,7 +555,7 @@ def test_workspace_catalog_discovery_resolves_secret_references(
         return DiscoveryPage(())
 
     monkeypatch.setattr(
-        "dal_obscura.control.catalogs.service.discover_public_catalog_tables",
+        "dal_obscura.adapters.providers.governance.discover_public_catalog_tables",
         fake_discover_catalog_tables,
     )
 
@@ -594,7 +594,7 @@ def test_workspace_catalog_discovery_does_not_echo_provider_errors(client_factor
         )
 
     monkeypatch.setattr(
-        "dal_obscura.control.catalogs.service.discover_public_catalog_tables",
+        "dal_obscura.adapters.providers.governance.discover_public_catalog_tables",
         failing_discovery,
     )
 
@@ -627,7 +627,7 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, 
         return DiscoveryPage((TableIdentifier(("default",), "users"),))
 
     monkeypatch.setattr(
-        "dal_obscura.control.catalogs.service.discover_public_catalog_tables",
+        "dal_obscura.adapters.providers.governance.discover_public_catalog_tables",
         fake_discover_catalog_tables,
     )
 
@@ -644,7 +644,7 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(client_factory, 
         raise RuntimeError("failed to connect with password=super-secret")
 
     monkeypatch.setattr(
-        "dal_obscura.control.catalogs.service.discover_public_catalog_tables",
+        "dal_obscura.adapters.providers.governance.discover_public_catalog_tables",
         failing_discover_catalog_tables,
     )
     failed = client.get("/v1/catalogs/analytics/diagnostics", headers=ADMIN_HEADERS)

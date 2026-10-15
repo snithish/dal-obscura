@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from http.client import HTTPMessage, HTTPResponse
 from typing import IO, cast
 from urllib.error import HTTPError
@@ -15,16 +15,12 @@ from urllib.request import Request as UrlRequest
 from dal_obscura_plugin_api.execution import close_preserving_error
 from fastapi import HTTPException
 
-from dal_obscura.identity.oidc import (
-    OidcJwksIdentityProvider,
-)
+from dal_obscura.identity.oidc import OidcJwksIdentityProvider
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.identity.session import OidcActorResolver, OidcNonceActorResolver
 
 _logger = logging.getLogger(__name__)
-
-OidcActorResolver = Callable[[str], object]
-OidcNonceActorResolver = Callable[[str, str], object]
 
 
 def create_oidc_actor_resolver(
@@ -86,34 +82,6 @@ def create_oidc_nonce_actor_resolver(
         return payload
 
     return resolve
-
-
-def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
-    """Serializes a control-plane actor for the session API."""
-
-    return {
-        "principal": actor.principal,
-        "groups": list(actor.groups),
-        "platform_admin": actor.platform_admin,
-        "capabilities": ["workspace:admin"] if actor.platform_admin else [],
-        **({"issuer": actor.issuer} if actor.issuer else {}),
-    }
-
-
-def public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
-    """Returns only browser-safe UI authentication settings."""
-
-    public_keys = (
-        "authority",
-        "client_id",
-        "redirect_uri",
-        "post_logout_redirect_uri",
-        "scope",
-    )
-    public: dict[str, object] = {
-        key: value for key in public_keys if (value := str(config.get(key, "")).strip())
-    }
-    return public
 
 
 def exchange_authorization_code(

@@ -26,12 +26,11 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from pydantic_core import from_json
 
-from dal_obscura.control.catalogs.service import (
+from dal_obscura.application.governance.catalogs.service import (
     MAX_CATALOG_PUBLICATION_SIZE,
     validate_catalog_options,
     validate_descriptor_options,
 )
-from dal_obscura.plugins import PluginAdmissionError
 
 _IMAGE_DIGEST = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}\Z")
 _IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -787,7 +786,6 @@ def main(argv: list[str] | None = None) -> int:
         KeyError,
         EOFError,
         subprocess.SubprocessError,
-        PluginAdmissionError,
     ) as exc:
         # Captured subprocess stderr and HTTP bodies may contain secrets; do not echo them.
         if isinstance(exc, subprocess.SubprocessError):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from dal_obscura.application.reads.sources import LiveRuntime
-from dal_obscura.interfaces.cli.read import (
+from dal_obscura.bootstrap.read import (
     _identity_from_runtime,
     _load_identity_provider,
 )

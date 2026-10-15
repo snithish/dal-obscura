@@ -160,7 +160,7 @@ def test_postgres_admits_long_incompressible_names_and_distinct_leaf_paths():
 
     from fastapi.testclient import TestClient
 
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
     from tests.support.control.workspace import ADMIN_HEADERS, _provision_asset
     from tests.support.storage.postgres import isolated_postgres_sessions
 
@@ -184,7 +184,7 @@ def test_postgres_admits_long_incompressible_names_and_distinct_leaf_paths():
     ]
     with (
         isolated_postgres_sessions() as factory,
-        TestClient(create_app(factory, admin_token="test-admin")) as client,
+        TestClient(build_control_app(factory, admin_token="test-admin")) as client,
     ):
         asset = _provision_asset(client)
         saved = client.put(

@@ -73,6 +73,7 @@ export function useAssetInventory(
     assets,
     search,
     loading: query.isFetching,
+    pending: query.isPending,
     hasMore: query.hasNextPage && !query.isPlaceholderData,
     error: query.error
       ? recoveryMessage(
@@ -95,26 +96,6 @@ export function useAssetInventory(
       lastSuccess.current = null;
       setInput({ scope, value: "", term: "" });
     },
-    markPolicySaved(assetId: string, revision: number, configured: boolean) {
-      client.setQueriesData<InfiniteData<AssetPage>>(
-        { queryKey: ["asset-inventory", scope] },
-        (current) =>
-          current && {
-            ...current,
-            pages: current.pages.map((page) => ({
-              ...page,
-              items: page.items.map((asset) =>
-                asset.id === assetId
-                  ? {
-                      ...asset,
-                      policy_revision: revision,
-                      policy_status: configured ? "configured" : "missing",
-                    }
-                  : asset,
-              ),
-            })),
-          },
-      );
-    },
+
   };
 }

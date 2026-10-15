@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
-from dal_obscura.adapters.sql import assets as _db_assets
 from dal_obscura.application.governance.errors import AuthorizationFailure
+from dal_obscura.application.governance.ports import AssetsRepository
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def ensure_asset_reader(
-    store: Session,
+    store: AssetsRepository,
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> None:
@@ -22,7 +20,7 @@ def ensure_asset_reader(
 
 
 def ensure_asset_capability(
-    store: Session,
+    store: AssetsRepository,
     asset_id: UUID,
     actor: ControlPlaneActor,
     capability: str,
@@ -32,12 +30,12 @@ def ensure_asset_capability(
     if actor.platform_admin:
         return
     principals = actor.owner_principals()
-    owners = set(_db_assets.list_asset_owners(store, asset_id))
+    owners = set(store.list_asset_owners(asset_id))
     if owners.intersection(principals) and capability in {"read", "edit"}:
         return
     if any(
         grant["principal"] in principals and grant["capability"] == capability
-        for grant in _db_assets.list_asset_grants(store, asset_id)
+        for grant in store.list_asset_grants(asset_id)
     ):
         return
     raise AuthorizationFailure(
@@ -47,7 +45,7 @@ def ensure_asset_capability(
 
 
 def ensure_asset_owner(
-    store: Session,
+    store: AssetsRepository,
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> None:
@@ -55,6 +53,6 @@ def ensure_asset_owner(
 
     if actor.platform_admin:
         return
-    if set(_db_assets.list_asset_owners(store, asset_id)).intersection(actor.owner_principals()):
+    if set(store.list_asset_owners(asset_id)).intersection(actor.owner_principals()):
         return
     raise AuthorizationFailure("Only platform admins or asset owners may revoke asset tokens.")

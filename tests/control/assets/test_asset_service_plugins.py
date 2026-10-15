@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
+from dal_obscura.application.governance.assets.service import upsert_workspace_asset
 from dal_obscura.application.governance.errors import ValidationFailure
-from dal_obscura.control.assets.service import upsert_workspace_asset
 
 
 def _registry(*, overlap: bool = True) -> Any:
@@ -49,7 +49,7 @@ def _store() -> Mock:
     store.get_workspace.return_value = SimpleNamespace()
     store.get_workspace_catalog.return_value = {"plugin_id": "fixture.catalog"}
     store.upsert_asset.return_value = uuid4()
-    return store
+    return Mock(workspace=store, catalogs=store, assets=store)
 
 
 def test_asset_binding_validates_pair_capabilities_and_format_options() -> None:
@@ -87,7 +87,7 @@ def test_asset_binding_validates_pair_capabilities_and_format_options() -> None:
         plugin_registry=_registry(),
     )
     assert result["catalog"] == "analytics"
-    store.upsert_asset.assert_called_once()
+    store.assets.upsert_asset.assert_called_once()
 
 
 def test_asset_binding_rejects_non_overlapping_plugin_capabilities() -> None:
@@ -128,19 +128,3 @@ def test_asset_binding_rejects_shared_capabilities_without_declared_output_forma
             {"format_option": "safe"},
             plugin_registry=registry,
         )
-
-
-@pytest.fixture(autouse=True)
-def query_boundary(monkeypatch):
-    from tests.support.storage.storage_queries import install_query_doubles
-
-    install_query_doubles(
-        monkeypatch,
-        [
-            "get_workspace",
-            "get_workspace_catalog",
-            "upsert_asset",
-            "get_workspace_asset",
-            "record_asset_audit_event",
-        ],
-    )

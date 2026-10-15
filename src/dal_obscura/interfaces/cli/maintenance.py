@@ -6,58 +6,8 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import cast
 
-from sqlalchemy import delete, update
-from sqlalchemy.engine import CursorResult
-from sqlalchemy.orm import Session, sessionmaker
-
-from dal_obscura.adapters.sql.database.db import create_engine_from_url, session_factory
-from dal_obscura.adapters.sql.database.orm import (
-    BrowserSessionRecord,
-    DataPlaneTicketRecord,
-    LoginTransactionRecord,
-    utcnow,
-)
-
-
-@dataclass(frozen=True)
-class InvalidationCounts:
-    """Rows invalidated by one restore/emergency operation."""
-
-    sessions: int
-    login_transactions: int
-    tickets: int
-
-
-def invalidate_access(
-    session_maker: sessionmaker[Session],
-) -> InvalidationCounts:
-    """Revokes browser credentials and removes replayable access artifacts."""
-
-    now = utcnow()
-    with session_maker() as session:
-        session_count = (
-            cast(
-                CursorResult,
-                session.execute(
-                    update(BrowserSessionRecord)
-                    .where(BrowserSessionRecord.revoked_at.is_(None))
-                    .values(revoked_at=now)
-                ),
-            ).rowcount
-            or 0
-        )
-        login_count = (
-            cast(CursorResult, session.execute(delete(LoginTransactionRecord))).rowcount or 0
-        )
-        ticket_delete = delete(DataPlaneTicketRecord)
-        ticket_count = cast(CursorResult, session.execute(ticket_delete)).rowcount or 0
-        session.commit()
-    return InvalidationCounts(
-        sessions=int(session_count), login_transactions=int(login_count), tickets=int(ticket_count)
-    )
+from dal_obscura.bootstrap.maintenance import invalidate_database_access
 
 
 def main() -> None:
@@ -75,11 +25,7 @@ def run(
         print("DAL_OBSCURA_DATABASE_URL is required unless --database-url is set", file=sys.stderr)
         return 2
     try:
-        engine = create_engine_from_url(database_url)
-        try:
-            counts = invalidate_access(session_factory(engine))
-        finally:
-            engine.dispose()
+        counts = invalidate_database_access(database_url)
     except (ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

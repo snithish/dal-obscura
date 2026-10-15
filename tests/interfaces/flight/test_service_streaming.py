@@ -20,6 +20,9 @@ pytestmark = pytest.mark.socket
 
 
 class DummyContext:
+    def is_cancelled(self):
+        return False
+
     def __init__(self, headers):
         self.headers = headers
 
@@ -613,9 +616,21 @@ def test_do_get_requires_authorization_header():
 
 @pytest.mark.parametrize("after_first_batch", [False, True])
 def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_batch):
+    from dal_obscura.application.reads.execution import StreamResourceError
+
+    _assert_stream_failure(
+        after_first_batch,
+        StreamResourceError("Governed stream memory budget exhausted"),
+        flight.FlightUnavailableError,
+        "memory budget exhausted",
+    )
+
+
+def _assert_stream_failure(
+    after_first_batch, failure, expected_error, message, *, consume_chunks=False
+):
     from threading import Thread
 
-    from dal_obscura.application.reads.execution import StreamResourceError
     from dal_obscura.interfaces.flight.streaming import make_stream
 
     closed = []
@@ -625,7 +640,7 @@ def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_ba
         try:
             if after_first_batch:
                 yield pa.record_batch([pa.array([1])], schema=schema)
-            raise StreamResourceError("Governed stream memory budget exhausted")
+            raise failure
         finally:
             closed.append(True)
 
@@ -639,9 +654,15 @@ def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_ba
     try:
         with (
             flight.FlightClient(f"grpc://127.0.0.1:{server.port}") as client,
-            pytest.raises(flight.FlightUnavailableError, match="memory budget exhausted"),
+            pytest.raises(expected_error, match=message),
         ):
-            client.do_get(flight.Ticket(b"test")).read_all()
+            reader = client.do_get(flight.Ticket(b"test"))
+            if consume_chunks:
+                # read_all converts ArrowCancelled into SIGINT; chunks expose Flight status.
+                for _ in range(2):
+                    reader.read_chunk()
+            else:
+                reader.read_all()
         assert closed == [True]
     finally:
         server.shutdown()
@@ -674,3 +695,39 @@ def test_provider_capacity_failure_returns_unavailable(operation):
             )
     finally:
         server.shutdown()
+
+
+@pytest.mark.parametrize("after_first_batch", [False, True])
+def test_stream_cancellation_is_cancelled_and_closes_source(after_first_batch):
+    from dal_obscura.application.reads.execution import StreamCancelledError
+
+    _assert_stream_failure(
+        after_first_batch,
+        StreamCancelledError("Stream cancelled"),
+        flight.FlightCancelledError,
+        "cancelled",
+        consume_chunks=True,
+    )
+
+
+@pytest.mark.parametrize("denied", [False, True])
+def test_lazy_source_initialization_keeps_its_transport_error_classification(denied):
+    from dal_obscura.application.reads.execution import (
+        SourceInitializationPermissionError,
+        SourceInitializationValueError,
+    )
+
+    if denied:
+        _assert_stream_failure(
+            False,
+            SourceInitializationPermissionError("source rejected"),
+            flight.FlightUnauthorizedError,
+            "Unauthorized",
+        )
+    else:
+        _assert_stream_failure(
+            False,
+            SourceInitializationValueError("source rejected"),
+            flight.FlightInternalError,
+            "Ticket payload mismatch",
+        )

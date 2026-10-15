@@ -7,7 +7,7 @@ from typing import Any
 from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 
@@ -46,7 +46,7 @@ def test_control_plane_rejects_invalid_content_length_with_structured_error(clie
 
 def test_control_plane_rejects_oversized_chunked_body_without_content_length(db_engine):
     engine = db_engine
-    app = create_app(session_factory(engine), admin_token="test-admin", max_request_bytes=64)
+    app = build_control_app(session_factory(engine), admin_token="test-admin", max_request_bytes=64)
     messages: list[dict[str, Any]] = [
         {"type": "http.request", "body": b"x" * 40, "more_body": True},
         {"type": "http.request", "body": b"y" * 25, "more_body": False},

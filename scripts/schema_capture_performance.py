@@ -24,7 +24,7 @@ from dal_obscura.adapters.sql.database.db import (
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 
 
 def measure(field_count: int, iterations: int) -> dict[str, object]:
@@ -34,7 +34,7 @@ def measure(field_count: int, iterations: int) -> dict[str, object]:
             migrate_config_store(engine)
             factory = session_factory(engine)
             headers = {"authorization": "Bearer performance-token"}
-            with TestClient(create_app(factory, admin_token="performance-token")) as client:
+            with TestClient(build_control_app(factory, admin_token="performance-token")) as client:
                 catalog = client.put(
                     "/v1/catalogs/analytics",
                     headers=headers,
@@ -91,7 +91,7 @@ def measure(field_count: int, iterations: int) -> dict[str, object]:
                 results = {}
                 try:
                     with patch(
-                        "dal_obscura.control.assets.schema.load_source_schema",
+                        "dal_obscura.adapters.providers.governance.load_source_schema",
                         return_value=pa.schema([("id", pa.int64())]),
                     ):
                         for operation in ("schema", "evaluation"):

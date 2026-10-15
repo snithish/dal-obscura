@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import math
 import secrets
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -20,6 +19,7 @@ from dal_obscura.adapters.sql.database.orm import (
     utcnow,
 )
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.identity.session import LoginRateLimitDecision, LoginTransaction
 
 
 class BrowserSessionStore:
@@ -130,14 +130,6 @@ class BrowserSessionStore:
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-@dataclass(frozen=True)
-class LoginRateLimitDecision:
-    """Result of a durable login limiter check."""
-
-    allowed: bool
-    retry_after_seconds: int = 0
 
 
 class LoginRateLimiter:
@@ -278,15 +270,6 @@ def _as_utc(value: datetime) -> datetime:
 
 def _retry_after(blocked_until: datetime, now: datetime) -> int:
     return max(1, math.ceil((_as_utc(blocked_until) - now).total_seconds()))
-
-
-@dataclass(frozen=True)
-class LoginTransaction:
-    """Server-held values needed to complete one OIDC callback."""
-
-    nonce_hash: str
-    code_verifier: str
-    redirect_uri: str
 
 
 class LoginTransactionStore:

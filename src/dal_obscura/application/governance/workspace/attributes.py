@@ -5,20 +5,16 @@ from __future__ import annotations
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
-from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.assets import access as asset_access
 from dal_obscura.application.governance.errors import ValidationFailure
-from dal_obscura.control.assets import access as asset_access
-from dal_obscura.control.workspace import attributes as identity_attributes
-from dal_obscura.identity.claims import PrincipalClaimMapper
+from dal_obscura.application.governance.ports import GovernanceUnitOfWork, PreviewIdentityMapper
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
-def attribute_catalog(store: Session) -> list[dict[str, object]]:
+def attribute_catalog(store: GovernanceUnitOfWork) -> list[dict[str, object]]:
     """Expose mapped attributes, not authentication secrets or user identities."""
     result: list[dict[str, object]] = []
-    for provider in _db_workspace.list_auth_providers(store):
+    for provider in store.workspace.list_auth_providers():
         if not provider["enabled"]:
             continue
         args = cast(dict[str, Any], provider["args"])
@@ -43,31 +39,29 @@ def attribute_catalog(store: Session) -> list[dict[str, object]]:
     return result
 
 
-def provider_mapper(store: Session, ordinal: int) -> tuple[PrincipalClaimMapper, dict[str, object]]:
-    """Resolve only an enabled configured provider; never fetch an IdP for previews."""
-    for provider in _db_workspace.list_auth_providers(store):
-        if provider["ordinal"] == ordinal and provider["enabled"]:
-            args = cast(dict[str, Any], provider["args"])
-            return PrincipalClaimMapper(
-                subject_claim=args.get("subject_claim", "sub"),
-                group_claims=args.get("group_claims", []),
-                attribute_claims=args.get("attribute_claims", {}),
-                attribute_definitions=args.get("attribute_definitions", {}),
-            ), provider
-    raise ValidationFailure("Choose an enabled identity provider")
-
-
 def preview_attributes(
-    store: Session,
+    store: GovernanceUnitOfWork,
     ordinal: int,
     claims: dict[str, object],
     provider_args: dict[str, Any] | None = None,
+    *,
+    identity_mapper: PreviewIdentityMapper,
 ) -> dict[str, object]:
     """Preview saved or unsaved admin mappings without saving or network requests."""
     if provider_args is None:
-        mapper, _ = provider_mapper(store, ordinal)
+        provider = next(
+            (
+                item
+                for item in store.workspace.list_auth_providers()
+                if item["ordinal"] == ordinal and item["enabled"]
+            ),
+            None,
+        )
+        if provider is None:
+            raise ValidationFailure("Choose an enabled identity provider")
+        provider_args = cast(dict[str, Any], provider["args"])
     else:
-        from dal_obscura.control.workspace.auth_providers import (
+        from dal_obscura.application.governance.workspace.auth_providers import (
             OIDC_IDENTITY_MODULE,
             validate_auth_provider_payloads,
         )
@@ -75,19 +69,16 @@ def preview_attributes(
         validate_auth_provider_payloads(
             [{"ordinal": ordinal, "module": OIDC_IDENTITY_MODULE, "args": provider_args}]
         )
-        mapper = PrincipalClaimMapper(
-            attribute_claims=provider_args.get("attribute_claims"),
-            attribute_definitions=provider_args.get("attribute_definitions"),
-        )
+
     try:
-        attributes = mapper.map_attributes(claims)
+        attributes = identity_mapper.map_attributes(provider_args, claims)
     except PermissionError as exc:
         raise ValidationFailure(str(exc)) from exc
     return {"attributes": attributes}
 
 
 def list_attribute_catalog(
-    store: Session, asset_id: UUID, actor: ControlPlaneActor
+    store: GovernanceUnitOfWork, asset_id: UUID, actor: ControlPlaneActor
 ) -> list[dict[str, object]]:
-    asset_access.ensure_asset_reader(store, asset_id, actor)
-    return identity_attributes.attribute_catalog(store)
+    asset_access.ensure_asset_reader(store.assets, asset_id, actor)
+    return attribute_catalog(store)

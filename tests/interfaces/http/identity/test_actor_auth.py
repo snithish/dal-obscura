@@ -12,9 +12,9 @@ from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
 from dal_obscura.adapters.sql.database.orm import AssetRecord, DataPlaneTicketRecord
+from dal_obscura.bootstrap.control import build_control_app
 from dal_obscura.identity import http_session
 from dal_obscura.identity.http_session import create_oidc_actor_resolver
-from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.kernel.identity.authentication import AuthenticationRequest
 from dal_obscura.kernel.identity.names import encode_federated_identity
 from dal_obscura.kernel.identity.principal import Principal
@@ -40,7 +40,7 @@ def _replace_live_policy(
 def _client_with_ui_auth_config(http_client, db_engine) -> TestClient:
     engine = db_engine
     return http_client(
-        create_app(
+        build_control_app(
             session_factory(engine),
             admin_token="test-admin",
             oidc_actor_resolver=_actor_for_token,
@@ -249,11 +249,11 @@ def test_static_bootstrap_token_can_be_disabled_when_oidc_admin_is_available(
     from dal_obscura.adapters.sql.database.db import (
         session_factory,
     )
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
 
     engine = db_engine
     client = http_client(
-        create_app(
+        build_control_app(
             session_factory(engine),
             admin_token="test-admin",
             oidc_actor_resolver=_actor_for_token,
@@ -336,7 +336,9 @@ def test_local_bootstrap_login_rejects_invalid_bearer(client_factory):
 def test_local_bootstrap_login_is_unavailable_when_disabled(http_client, db_engine):
     engine = db_engine
     client = http_client(
-        create_app(session_factory(engine), admin_token="test-admin", bootstrap_enabled=False)
+        build_control_app(
+            session_factory(engine), admin_token="test-admin", bootstrap_enabled=False
+        )
     )
 
     response = client.post("/v1/session/bootstrap", headers=ADMIN_HEADERS)

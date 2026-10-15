@@ -18,7 +18,7 @@ from dal_obscura.adapters.sql.database.db import (
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.bootstrap.control import build_control_app
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 ADMIN_TOKEN = "local-example-admin"
@@ -258,7 +258,7 @@ def _provision_control_plane(
     try:
         migrate_config_store(engine)
         factory = session_factory(engine)
-        client = TestClient(create_app(factory, admin_token=ADMIN_TOKEN))
+        client = TestClient(build_control_app(factory, admin_token=ADMIN_TOKEN))
         headers = {"authorization": f"Bearer {ADMIN_TOKEN}"}
 
         _request(

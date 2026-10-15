@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.application.governance.errors import ValidationFailure
-from dal_obscura.control.catalogs.service import (
+from dal_obscura.application.governance.catalogs.service import (
     validate_admitted_catalog_options,
     validate_catalog_options,
     validate_descriptor_options,
 )
+from dal_obscura.application.governance.errors import ValidationFailure
 
 
 def test_catalog_options_reject_non_finite_numbers() -> None:

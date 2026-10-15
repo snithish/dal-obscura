@@ -10,8 +10,8 @@ from dal_obscura_iceberg_rest.catalog import RestCatalog
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
 
+from dal_obscura.application.governance.catalogs.service import validate_catalog_options
 from dal_obscura.application.governance.errors import ValidationFailure
-from dal_obscura.control.catalogs.service import validate_catalog_options
 
 
 def _context() -> ExecutionContext:

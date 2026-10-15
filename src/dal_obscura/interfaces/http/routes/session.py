@@ -6,16 +6,13 @@ import base64
 import hashlib
 import ipaddress
 import secrets
+from collections.abc import Mapping
 from typing import NoReturn
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
-from dal_obscura.identity.http_session import (
-    actor_response,
-    public_ui_auth_config,
-)
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps, bearer_authorization
 from dal_obscura.interfaces.http.routes.schemas import (
     AuthenticationMutationResponse,
@@ -40,7 +37,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         state = secrets.token_urlsafe(32)
         nonce = secrets.token_urlsafe(32)
         code_verifier = secrets.token_urlsafe(48)
-        deps.issue_login_transaction(
+        deps.sessions.issue_login_transaction(
             state=state,
             nonce=nonce,
             code_verifier=code_verifier,
@@ -90,7 +87,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             _callback_failure(deps, request, status_code=401, detail="OIDC login was not completed")
         if not code or not state or not auth_state or not secrets.compare_digest(state, auth_state):
             _callback_failure(deps, request, status_code=400, detail="Invalid OIDC login state")
-        transaction = deps.consume_login_transaction(state)
+        transaction = deps.sessions.consume_login_transaction(state)
         if transaction is None:
             _callback_failure(
                 deps,
@@ -119,9 +116,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         actor = deps.resolve_nonce_token(id_token, transaction.nonce_hash)
         if actor is None:
             _callback_failure(deps, request, status_code=401, detail="OIDC ID token was rejected")
-        session_token, csrf_token = deps.issue_browser_session_credentials(actor)
+        session_token, csrf_token = deps.sessions.issue_browser_session_credentials(actor)
         client_key, _aggregate_key = _login_rate_keys(deps, request)
-        deps.clear_login_rate_limit(client_key)
+        deps.sessions.clear_login_rate_limit(client_key)
         result = RedirectResponse(_post_login_redirect(config, redirect_uri), status_code=303)
         result.headers["cache-control"] = "no-store"
         result.set_cookie(
@@ -188,7 +185,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         _enforce_login_rate_limit(deps, request)
         if authorization != f"Bearer {deps.admin_token}":
             client_key, aggregate_key = _login_rate_keys(deps, request)
-            decision = deps.record_login_failure(client_key, aggregate_key=aggregate_key)
+            decision = deps.sessions.record_login_failure(client_key, aggregate_key=aggregate_key)
             if not decision.allowed:
                 raise HTTPException(
                     status_code=429,
@@ -197,9 +194,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 )
             raise HTTPException(status_code=401, detail="Invalid bootstrap credential")
         actor = ControlPlaneActor.for_platform_admin("platform:admin")
-        session_token, csrf_token = deps.issue_browser_session_credentials(actor)
+        session_token, csrf_token = deps.sessions.issue_browser_session_credentials(actor)
         client_key, _aggregate_key = _login_rate_keys(deps, request)
-        deps.clear_login_rate_limit(client_key)
+        deps.sessions.clear_login_rate_limit(client_key)
         response.set_cookie(
             key="__Host-dal_obscura_session",
             value=session_token,
@@ -238,7 +235,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         """Revokes local credentials and directs the browser to provider logout."""
         if session_token:
             deps.validate_browser_mutation(request, csrf_cookie)
-            deps.revoke_browser_session(session_token)
+            deps.sessions.revoke_browser_session(session_token)
         response.delete_cookie(key="__Host-dal_obscura_session", path="/", secure=True)
         response.delete_cookie(key="__Host-dal_obscura_csrf", path="/", secure=True)
         response.headers["cache-control"] = "no-store"
@@ -420,7 +417,7 @@ def _is_ip_address(value: str) -> bool:
 
 def _enforce_login_rate_limit(deps: ControlPlaneDeps, request: Request) -> None:
     client_key, aggregate_key = _login_rate_keys(deps, request)
-    decision = deps.check_login_rate_limit(client_key, aggregate_key=aggregate_key)
+    decision = deps.sessions.check_login_rate_limit(client_key, aggregate_key=aggregate_key)
     if decision.allowed:
         return
     raise HTTPException(
@@ -438,7 +435,7 @@ def _callback_failure(
     detail: str,
 ) -> NoReturn:
     client_key, aggregate_key = _login_rate_keys(deps, request)
-    decision = deps.record_login_failure(client_key, aggregate_key=aggregate_key)
+    decision = deps.sessions.record_login_failure(client_key, aggregate_key=aggregate_key)
     if not decision.allowed:
         raise HTTPException(
             status_code=429,
@@ -446,3 +443,31 @@ def _callback_failure(
             headers={"Retry-After": str(decision.retry_after_seconds)},
         )
     raise HTTPException(status_code=status_code, detail=detail)
+
+
+def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
+    """Serializes a control-plane actor for the session API."""
+
+    return {
+        "principal": actor.principal,
+        "groups": list(actor.groups),
+        "platform_admin": actor.platform_admin,
+        "capabilities": ["workspace:admin"] if actor.platform_admin else [],
+        **({"issuer": actor.issuer} if actor.issuer else {}),
+    }
+
+
+def public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
+    """Returns only browser-safe UI authentication settings."""
+
+    public_keys = (
+        "authority",
+        "client_id",
+        "redirect_uri",
+        "post_logout_redirect_uri",
+        "scope",
+    )
+    public: dict[str, object] = {
+        key: value for key in public_keys if (value := str(config.get(key, "")).strip())
+    }
+    return public

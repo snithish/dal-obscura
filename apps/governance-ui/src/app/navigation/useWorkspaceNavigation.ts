@@ -7,11 +7,9 @@ import {
 } from "./routes";
 
 type NavigationOptions = {
-  authenticated: boolean;
-  dirty: boolean;
+  isDirty: () => boolean;
   confirmLeaving: () => Promise<boolean>;
   onLeave: () => void;
-  onAssetSelected: (id: string) => void;
 };
 
 function locationUrl(location: UiLocation): string {
@@ -44,7 +42,7 @@ export function useWorkspaceNavigation(options: NavigationOptions) {
     if (!leaving && next.tab === previous.tab) return;
     pending.current = true;
     const approved =
-      !callbacks.current.dirty || (await callbacks.current.confirmLeaving());
+      !callbacks.current.isDirty() || (await callbacks.current.confirmLeaving());
     pending.current = false;
     if (!approved) {
       if (fromHistory)
@@ -57,14 +55,7 @@ export function useWorkspaceNavigation(options: NavigationOptions) {
     }
     commit(next);
     if (!fromHistory) window.history.pushState(null, "", locationUrl(next));
-    if (
-      leaving &&
-      next.page === "assets" &&
-      next.assetId &&
-      callbacks.current.authenticated
-    ) {
-      callbacks.current.onAssetSelected(next.assetId);
-    }
+
   }
 
   useEffect(() => {

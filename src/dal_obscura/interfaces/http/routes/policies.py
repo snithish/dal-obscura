@@ -4,17 +4,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-import dal_obscura.control.workspace.attributes as _commands_identity_attributes
-from dal_obscura.application.governance.errors import ValidationFailure
-from dal_obscura.control.assets import schema as schema_service
-from dal_obscura.control.policies import evaluation as evaluation_service
-from dal_obscura.control.policies import service as policy_service
 from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
-    AttributeProviderResponse,
     PolicyEvaluationRequest,
     PolicyEvaluationResponse,
     PolicyMutationResponse,
@@ -34,31 +28,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: PolicyRulesRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> PolicyMutationResponse:
-        result = deps.with_transaction(
-            lambda service: policy_service.replace_policy_rules(
-                service.session,
-                asset_id,
-                [rule.model_dump(exclude_unset=True) for rule in request.rules],
-                actor=actor,
-                expected_revision=request.expected_revision,
-                revoke_existing_tokens=request.revoke_existing_tokens,
-                correlation_id=current_request_id(),
-            )
+        result = deps.policies_commands.replace_asset_policy(
+            asset_id,
+            [rule.model_dump(exclude_unset=True) for rule in request.rules],
+            expected_revision=request.expected_revision,
+            revoke_existing_tokens=request.revoke_existing_tokens,
+            actor=actor,
+            correlation_id=current_request_id(),
         )
         return PolicyMutationResponse(asset_id=str(asset_id), **result)
-
-    @api.get(
-        "/v1/assets/{asset_id}/identity-attributes", response_model=list[AttributeProviderResponse]
-    )
-    def list_identity_attributes(
-        asset_id: UUID,
-        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> list[dict[str, object]]:
-        return deps.with_transaction(
-            lambda service: _commands_identity_attributes.list_attribute_catalog(
-                service.session, asset_id, actor
-            )
-        )
 
     @api.post(
         "/v1/assets/{asset_id}/policy-evaluate",
@@ -69,36 +47,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: PolicyEvaluationRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> PolicyEvaluationResponse:
-        captured = deps.with_transaction(
-            lambda service: evaluation_service.capture_asset_evaluation(
-                service.session,
-                asset_id,
-                actor,
-                principal=request.principal,
-                groups=request.groups,
-                claims=request.claims,
-                rows=request.rows,
-                provider_ordinal=request.provider_ordinal,
-                egress_allowlist=service.catalog_egress_allowlist,
-                plugin_registry=service.plugin_registry,
-            )
-        )
-        try:
-            schema = schema_service.load_asset_schema(
-                captured.source,
-                egress_allowlist=deps.catalog_egress_allowlist,
-                plugin_registry=deps.plugin_registry,
-                secret_provider=deps.secret_provider,
-            )
-            payload = evaluation_service.evaluate_asset_policy(
-                captured, schema, compiler=deps.projection_compiler
-            )
-        except ValidationFailure as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        deps.with_transaction(
-            lambda service: evaluation_service.ensure_asset_evaluation_current(
-                service.session, captured, actor
-            )
+        payload = deps.policies_commands.evaluate_asset_policy(
+            asset_id,
+            principal=request.principal,
+            groups=request.groups,
+            claims=request.claims,
+            rows=request.rows,
+            provider_ordinal=request.provider_ordinal,
+            actor=actor,
+            correlation_id=current_request_id(),
         )
         return PolicyEvaluationResponse.model_validate(payload)
 

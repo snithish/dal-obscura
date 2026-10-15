@@ -6,7 +6,6 @@ import sys
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from uuid import UUID
 
 import jwt
 import pyarrow as pa
@@ -36,16 +35,14 @@ if str(REPO_ROOT) not in sys.path:
 
 from dal_obscura_plugin_conformance.iceberg_fixtures import create_iceberg_table  # noqa: E402
 
-import tests.support.control.seed as _commands_seed  # noqa: E402
-from dal_obscura.adapters.sql import workspace as _db_workspace  # noqa: E402
 from dal_obscura.adapters.sql.database.db import (  # noqa: E402
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.control.assets import service as asset_service  # noqa: E402
-from dal_obscura.control.policies import service as policy_service  # noqa: E402
-from dal_obscura.control.runtime import ControlContext  # noqa: E402
+from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory  # noqa: E402
+from dal_obscura.application.governance.assets import service as asset_service  # noqa: E402
+from dal_obscura.application.governance.policies import service as policy_service  # noqa: E402
 from dal_obscura.kernel.identity.actor import ControlPlaneActor  # noqa: E402
 
 JWT_SECRET = "spark-jwt-secret-32-characters-long"
@@ -511,13 +508,11 @@ def _provision_control_plane(
     try:
         migrate_config_store(engine)
 
-        with session_factory(engine)() as session:
-            service = ControlContext(session)
-            _db_workspace.upsert_runtime_settings(
-                service.session, ticket_ttl_seconds=900, max_tickets=16, max_ticket_exchanges=1
+        with SqlGovernanceUnitOfWorkFactory(session_factory(engine))() as work:
+            work.workspace.upsert_runtime_settings(
+                ticket_ttl_seconds=900, max_tickets=16, max_ticket_exchanges=1
             )
-            _commands_seed.create_catalog(
-                service,
+            work.catalogs.upsert_catalog(
                 name=CATALOG_NAME,
                 plugin_id="iceberg.catalog",
                 options={
@@ -526,8 +521,7 @@ def _provision_control_plane(
                     "warehouse": str(output_dir / WAREHOUSE_NAME),
                 },
             )
-            asset = _commands_seed.create_asset(
-                service,
+            asset = work.assets.upsert_asset(
                 catalog=CATALOG_NAME,
                 target=table_id,
                 backend="iceberg",
@@ -535,8 +529,8 @@ def _provision_control_plane(
                 options={},
             )
             policy_service.replace_policy_rules(
-                service.session,
-                UUID(asset["id"]),
+                work,
+                asset,
                 [
                     {
                         "ordinal": 10,
@@ -570,14 +564,13 @@ def _provision_control_plane(
                 revoke_existing_tokens=False,
             )
             asset_service.replace_asset_owners(
-                service.session,
-                UUID(asset["id"]),
+                work,
+                asset,
                 ["user:fixture-owner@example.com"],
                 expected_revision=0,
                 actor=None,
             )
-            _db_workspace.replace_auth_providers(
-                service.session,
+            work.workspace.replace_auth_providers(
                 providers=[
                     {
                         "ordinal": 1,
@@ -592,7 +585,7 @@ def _provision_control_plane(
                     }
                 ],
             )
-            session.commit()
+            work.commit()
 
         return database_url
     finally:

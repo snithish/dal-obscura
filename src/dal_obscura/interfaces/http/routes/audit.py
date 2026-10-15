@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
-from dal_obscura.control import audit_service
+from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import AuditEventPageResponse
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
@@ -30,20 +30,20 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         cursor: str | None = Query(default=None, max_length=512),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> AuditEventPageResponse:
-        return deps.with_transaction(
-            lambda service: audit_service.list_audit_events_page(
-                service.session,
-                actor=actor,
+        return AuditEventPageResponse.model_validate(
+            deps.audit_queries.list_audit_events_page(
                 asset_id=asset_id,
                 actor_filter=actor_filter,
                 action=action,
                 resource_type=resource_type,
                 outcome=outcome,
-                correlation_id=correlation_id,
+                correlation_filter=correlation_id,
                 created_after=created_after,
                 created_before=created_before,
                 limit=limit,
                 cursor=cursor,
+                actor=actor,
+                correlation_id=current_request_id(),
             )
         )
 

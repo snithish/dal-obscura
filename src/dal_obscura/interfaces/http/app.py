@@ -8,19 +8,19 @@ from typing import cast
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi import HTTPException as FastAPIHTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
-from sqlalchemy.orm import Session, sessionmaker
 from starlette.exceptions import HTTPException
 from starlette.types import Message
 
 from dal_obscura import __version__
-from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
-from dal_obscura.identity.http_session import (
-    OidcActorResolver,
-    OidcNonceActorResolver,
-    exchange_authorization_code,
+from dal_obscura.application.governance.errors import (
+    AuthorizationFailure,
+    ConfigurationConflictError,
+    PolicyValidationFailure,
+    ValidationFailure,
 )
 from dal_obscura.interfaces.http.health import install_health_routes
 from dal_obscura.interfaces.http.request_context import (
@@ -53,15 +53,10 @@ from dal_obscura.interfaces.http.routes import (
     workspace as workspace_routes,
 )
 from dal_obscura.interfaces.http.routes.deps import (
-    AuthorizationCodeExchange,
     ControlPlaneDeps,
+    RevisionConflictResponse,
 )
 from dal_obscura.interfaces.http.routes.schemas import ApiErrorResponse
-from dal_obscura.plugins.bootstrap import (
-    create_plugin_registry,
-)
-from dal_obscura.plugins.registry import PluginRegistry
-from dal_obscura.runtime.secrets import SecretProvider
 
 
 class _RequestBodyTooLarge(HTTPException):
@@ -134,48 +129,15 @@ def _field_errors_from_detail(detail: object) -> list[dict[str, str]]:
 
 
 def create_app(  # noqa: C901
-    session_maker: sessionmaker[Session],
+    deps: ControlPlaneDeps,
     *,
-    admin_token: str,
-    oidc_actor_resolver: OidcActorResolver | None = None,
-    oidc_admin_group: str | None = None,
+    readiness: Callable[[], None],
     cors_origins: tuple[str, ...] = (),
-    ui_auth_config: Mapping[str, object] | None = None,
-    session_ttl_seconds: int = 28_800,
-    session_idle_ttl_seconds: int = 1_800,
-    oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
-    authorization_code_exchange: AuthorizationCodeExchange | None = None,
-    catalog_egress_allowlist: tuple[str, ...] = (),
-    bootstrap_enabled: bool | None = None,
     max_request_bytes: int = 1_048_576,
-    login_rate_limit_attempts: int = 20,
-    login_rate_limit_window_seconds: int = 60,
-    login_rate_limit_block_seconds: int = 300,
-    login_rate_limit_aggregate_attempts: int = 200,
-    trusted_proxy_peers: tuple[str, ...] = (),
-    plugin_registry: PluginRegistry | None = None,
-    secret_provider: SecretProvider | None = None,
-    catalog_cursor_secret: bytes | None = None,
 ) -> FastAPI:
-    """Creates the control-plane FastAPI app with all workspace routes installed."""
-
+    """Build HTTP transport around already constructed application dependencies."""
     if max_request_bytes <= 0:
         raise ValueError("max_request_bytes must be positive")
-    if (
-        login_rate_limit_attempts <= 0
-        or login_rate_limit_window_seconds <= 0
-        or login_rate_limit_block_seconds <= 0
-        or login_rate_limit_aggregate_attempts <= 0
-    ):
-        raise ValueError("login rate-limit values must be positive")
-
-    # Every serving process has one admitted registry generation. The
-    # composition root may replace it with an operator-allowlisted registry,
-    # but routes must never synthesize a duplicate descriptor set or silently
-    # fall back when admission is absent.
-    if plugin_registry is None:
-        plugin_registry = create_plugin_registry()
-
     app = FastAPI(
         title="dal-obscura control-plane API",
         summary="Configuration, catalog, asset, policy, and session API for dal-obscura.",
@@ -222,6 +184,33 @@ def create_app(  # noqa: C901
                 "error": error,
             },
         )
+
+    @app.exception_handler(PolicyValidationFailure)
+    @app.exception_handler(ValidationFailure)
+    @app.exception_handler(AuthorizationFailure)
+    @app.exception_handler(ConfigurationConflictError)
+    @app.exception_handler(LookupError)
+    async def governance_error(request: Request, exc: Exception) -> JSONResponse:
+        if isinstance(exc, PolicyValidationFailure):
+            error = FastAPIHTTPException(
+                status_code=422,
+                detail=[
+                    {
+                        "loc": ["body", "rules", exc.rule_index],
+                        "msg": str(exc),
+                        "type": "value_error",
+                    }
+                ],
+            )
+        elif isinstance(exc, ValidationFailure):
+            error = HTTPException(status_code=400, detail=str(exc))
+        elif isinstance(exc, AuthorizationFailure):
+            error = HTTPException(status_code=403, detail=str(exc))
+        elif isinstance(exc, ConfigurationConflictError):
+            error = RevisionConflictResponse(exc)
+        else:
+            error = HTTPException(status_code=404, detail=str(exc))
+        return await structured_http_error(request, error)
 
     @app.exception_handler(RequestValidationError)
     async def structured_request_validation_error(
@@ -361,35 +350,7 @@ def create_app(  # noqa: C901
             ],
             expose_headers=["x-request-id", "retry-after"],
         )
-    install_health_routes(app, session_maker)
-    from dal_obscura.control.catalogs.discovery import DiscoveryCursors
-
-    deps = ControlPlaneDeps(
-        projection_compiler=DuckDBProjectionCompiler(),
-        session_maker=session_maker,
-        admin_token=admin_token,
-        oidc_actor_resolver=oidc_actor_resolver,
-        oidc_admin_group=oidc_admin_group,
-        ui_auth_config=ui_auth_config,
-        session_ttl_seconds=session_ttl_seconds,
-        session_idle_ttl_seconds=session_idle_ttl_seconds,
-        catalog_egress_allowlist=catalog_egress_allowlist,
-        bootstrap_enabled=True if bootstrap_enabled is None else bootstrap_enabled,
-        allowed_origins=cors_origins,
-        oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
-        login_rate_limit_attempts=login_rate_limit_attempts,
-        login_rate_limit_window_seconds=login_rate_limit_window_seconds,
-        login_rate_limit_block_seconds=login_rate_limit_block_seconds,
-        login_rate_limit_aggregate_attempts=login_rate_limit_aggregate_attempts,
-        trusted_proxy_peers=trusted_proxy_peers,
-        authorization_code_exchange=(
-            authorization_code_exchange
-            or (lambda config, code, verifier: exchange_authorization_code(config, code, verifier))
-        ),
-        plugin_registry=plugin_registry,
-        secret_provider=secret_provider,
-        discovery_cursors=DiscoveryCursors(catalog_cursor_secret),
-    )
+    install_health_routes(app, readiness)
 
     for route in (
         session_routes.router,

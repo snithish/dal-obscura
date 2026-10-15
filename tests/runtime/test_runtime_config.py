@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dal_obscura.interfaces.cli.read import _tls_material
+from dal_obscura.interfaces.flight.tls import _tls_material
 from dal_obscura.runtime.configuration import (
     load_data_plane_runtime_config,
 )

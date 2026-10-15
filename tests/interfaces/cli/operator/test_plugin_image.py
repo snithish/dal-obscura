@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from dal_obscura.bootstrap import plugin_image as image_bootstrap
 from dal_obscura.interfaces.cli import plugin_image
 
 
@@ -36,12 +37,12 @@ def test_worker_verification_rejects_admission_drift_before_readiness(tmp_path, 
         ["image-tool", "verify", "data-plane", "c" * 64 if case == "replaced_lock" else digest],
     )
     monkeypatch.setattr(
-        plugin_image,
+        image_bootstrap,
         "create_plugin_registry",
         lambda **kwargs: SimpleNamespace(admitted=dict),
     )
     monkeypatch.setattr(
-        plugin_image, "urlopen", lambda *a, **kw: pytest.fail("Must not query readiness")
+        image_bootstrap, "urlopen", lambda *a, **kw: pytest.fail("Must not query readiness")
     )
     with pytest.raises(
         RuntimeError, match="lock differs" if case == "replaced_lock" else "missing a selected"

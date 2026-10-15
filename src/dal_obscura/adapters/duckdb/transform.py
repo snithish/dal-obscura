@@ -3,26 +3,27 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from contextlib import ExitStack
 from itertools import chain
-from threading import BoundedSemaphore
 
 import duckdb
 import pyarrow as pa
+from dal_obscura_plugin_api.execution import close_preserving_error
 
 from dal_obscura.adapters.duckdb.connection import TRANSFORM_CONFIG, connect
 from dal_obscura.adapters.duckdb.limits import validate_memory_limit
-from dal_obscura.application.reads.execution import StreamResourceError
+from dal_obscura.application.reads.execution import (
+    ExecutionLease,
+    ExecutionSupervisor,
+    ManagedStream,
+    StreamResourceError,
+)
+from dal_obscura.application.reads.ports import RowTransformPort
 from dal_obscura.kernel.plans.projection import CompiledProjection
 from dal_obscura.kernel.policy.filters import RowFilter
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
 _DEFAULT_DUCKDB_MEMORY_LIMIT = "512MB"
-_DEFAULT_MAX_ACTIVE_STREAMS = 16
 _DEFAULT_MAX_INPUT_BATCH_BYTES = 64 * 1024 * 1024
 _DEFAULT_MAX_OUTPUT_BATCH_BYTES = 64 * 1024 * 1024
-
-
-class StreamAdmissionError(StreamResourceError):
-    """Raised when the configured governed-stream capacity is exhausted."""
 
 
 class InputBatchLimitError(ValueError, StreamResourceError):
@@ -43,19 +44,15 @@ class DuckDBRowTransformAdapter:
     def __init__(
         self,
         *,
-        max_active_streams: int = _DEFAULT_MAX_ACTIVE_STREAMS,
         duckdb_memory_limit: str = _DEFAULT_DUCKDB_MEMORY_LIMIT,
         max_input_batch_bytes: int = _DEFAULT_MAX_INPUT_BATCH_BYTES,
         max_output_batch_bytes: int = _DEFAULT_MAX_OUTPUT_BATCH_BYTES,
     ) -> None:
-        if max_active_streams < 1:
-            raise ValueError("max_active_streams must be positive")
         duckdb_memory_limit = validate_memory_limit(duckdb_memory_limit)
         if max_input_batch_bytes < 1:
             raise ValueError("max_input_batch_bytes must be positive")
         if max_output_batch_bytes < 1:
             raise ValueError("max_output_batch_bytes must be positive")
-        self._stream_slots = BoundedSemaphore(max_active_streams)
         self._duckdb_config = {
             **TRANSFORM_CONFIG,
             "memory_limit": duckdb_memory_limit,
@@ -70,11 +67,7 @@ class DuckDBRowTransformAdapter:
         row_filter: RowFilter | None,
     ) -> Iterable[pa.RecordBatch]:
         """Builds a transient DuckDB query and streams transformed record batches."""
-        if not self._stream_slots.acquire(blocking=False):
-            _close_if_possible(batches)
-            raise StreamAdmissionError("Governed stream capacity is exhausted; retry later")
         with ExitStack() as resources:
-            resources.callback(self._stream_slots.release)
             resources.callback(_close_if_possible, batches)
             batch_iter = iter(batches)
             if batch_iter is not batches:
@@ -153,9 +146,7 @@ def _has_offsets(array: pa.Array) -> bool:
 
 
 def _close_if_possible(value: object) -> None:
-    close = getattr(value, "close", None)
-    if callable(close):
-        close()
+    close_preserving_error(value)
 
 
 def _require_batch_size(batch: pa.RecordBatch, maximum: int) -> None:
@@ -185,3 +176,46 @@ def _build_query(projection: CompiledProjection, row_filter: RowFilter | None) -
     if row_filter:
         query += f" WHERE {row_filter.sql}"
     return query
+
+
+class SupervisedRowTransformAdapter:
+    """Admit bounded synthetic transforms through the shared execution owner."""
+
+    def __init__(self, transform: RowTransformPort, *, supervisor: ExecutionSupervisor) -> None:
+        self._transform = transform
+        self._supervisor = supervisor
+
+    def apply_filters_and_masks_stream(
+        self,
+        batches: Iterable[pa.RecordBatch],
+        projection: CompiledProjection,
+        row_filter: RowFilter | None,
+    ) -> ExecutionLease:
+        def source() -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+            try:
+                iterator = iter(batches)
+            except BaseException:
+                close_preserving_error(batches)
+                raise
+            try:
+                first = next(iterator)
+            except StopIteration:
+                return projection.output_schema, ManagedStream((), resources=(iterator, batches))
+            except BaseException:
+                try:
+                    close_preserving_error(iterator)
+                finally:
+                    if iterator is not batches:
+                        close_preserving_error(batches)
+                raise
+            return first.schema, ManagedStream(
+                chain((first,), iterator), resources=(iterator, batches)
+            )
+
+        return self._supervisor.open(
+            source,
+            lambda inputs: self._transform.apply_filters_and_masks_stream(
+                inputs, projection, row_filter
+            ),
+            None,
+        )

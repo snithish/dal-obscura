@@ -12,9 +12,9 @@ from fastapi.testclient import TestClient
 from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
+from dal_obscura.bootstrap import control as api_module
+from dal_obscura.bootstrap.control import build_control_app
 from dal_obscura.identity.http_session import exchange_authorization_code
-from dal_obscura.interfaces.http import app as api_module
-from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.interfaces.http.routes import session as session_routes
 from dal_obscura.interfaces.http.routes.session import (
     _oidc_endpoint,
@@ -26,7 +26,7 @@ from dal_obscura.interfaces.http.routes.session import (
 def _client(http_client, db_engine, nonce_resolver, **app_options) -> TestClient:
     engine = db_engine
     return http_client(
-        create_app(
+        build_control_app(
             session_factory(engine),
             admin_token="test-admin",
             oidc_nonce_actor_resolver=nonce_resolver,
@@ -185,7 +185,8 @@ def test_provider_logout_rejects_unsafe_return_uri(target: str) -> None:
 def test_bootstrap_only_logout_does_not_offer_provider_redirect(http_client, db_engine) -> None:
     engine = db_engine
     client = http_client(
-        create_app(session_factory(engine), admin_token="test-admin"), base_url="https://testserver"
+        build_control_app(session_factory(engine), admin_token="test-admin"),
+        base_url="https://testserver",
     )
     login = client.post("/v1/session/bootstrap", headers={"authorization": "Bearer test-admin"})
     response = client.post(
@@ -225,7 +226,7 @@ def test_oidc_callback_rejects_state_replay_and_nonce_failure(
 def test_oidc_login_is_bounded_per_client_and_returns_retry_after(http_client, db_engine) -> None:
     engine = db_engine
     client = http_client(
-        create_app(
+        build_control_app(
             session_factory(engine),
             admin_token="test-admin",
             ui_auth_config={
@@ -289,7 +290,7 @@ def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets(
     http_client, db_engine
 ) -> None:
     engine = db_engine
-    app = create_app(
+    app = build_control_app(
         session_factory(engine),
         admin_token="test-admin",
         ui_auth_config={
@@ -324,7 +325,7 @@ def test_invalid_trusted_proxy_configuration_fails_closed(db_engine, peer: str) 
     engine = db_engine
 
     with pytest.raises(ValueError, match="trusted proxy peer"):
-        create_app(
+        build_control_app(
             session_factory(engine),
             admin_token="test-admin",
             trusted_proxy_peers=(peer,),
@@ -367,7 +368,7 @@ def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(
         lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
     )
     engine = db_engine
-    app = create_app(
+    app = build_control_app(
         session_factory(engine),
         admin_token="test-admin",
         oidc_nonce_actor_resolver=lambda token, nonce_hash: {

@@ -1,19 +1,8 @@
-import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
-import type { AuditEvent, Session, WorkspaceObservations, WorkspaceSummary } from "../../data/api";
-import type { ManagementData } from "./ActivityView";
-import { ManagementView } from "./ActivityView";
-
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-const session: Session = {
-  principal: "user:admin@example.com",
-  groups: ["data-platform"],
-  platform_admin: true,
-  capabilities: ["workspace:admin"],
-  issuer: "https://idp.example",
-};
+import type { AuditEvent, WorkspaceObservations, WorkspaceSummary } from "../../data/api";
+import type { ActivityData } from "./useActivityQueries";
+import { ActivityView } from "./ActivityView";
 
 const summary: WorkspaceSummary = {
   catalog_count: 1,
@@ -43,23 +32,19 @@ const events: AuditEvent[] = [{
   created_at: "2026-09-21T08:00:00Z",
 }];
 
-const data: ManagementData = { summary, observations, events, eventsNextCursor: null };
+const data: ActivityData = { summary, observations, events, eventsNextCursor: null };
 
 const meta = {
   title: "Workflows/Activity and audit",
-  component: ManagementView,
+  component: ActivityView,
   tags: ["autodocs"],
   args: {
-    page: "activity" as const,
     data,
     loading: false,
     error: "",
     onReload: () => undefined,
     filters: {},
     onFiltersChange: () => undefined,
-    session,
-    queryClient,
-    sessionScope: "storybook|admin",
   },
   parameters: {
     docs: {
@@ -68,7 +53,7 @@ const meta = {
       },
     },
   },
-} satisfies Meta<typeof ManagementView>;
+} satisfies Meta<typeof ActivityView>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
@@ -82,7 +67,7 @@ export const ConnectedActivity: Story = {
 };
 
 export const LoadingState: Story = {
-  args: { loading: true, data: {}, page: "activity" },
+  args: { loading: true, data: {} },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Loading activity" })).toBeVisible();
     await expect(canvas.getByText("Checking the current workspace state and your capabilities.")).toBeVisible();
@@ -90,7 +75,7 @@ export const LoadingState: Story = {
 };
 
 export const ErrorWithRetry: Story = {
-  args: { error: "The control plane is temporarily unavailable.", data: {}, page: "activity", onReload: fn() },
+  args: { error: "The control plane is temporarily unavailable.", data: {}, onReload: fn() },
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole("alert")).toHaveTextContent("temporarily unavailable");
     await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
@@ -99,7 +84,7 @@ export const ErrorWithRetry: Story = {
 };
 
 export const RefreshFailureRetainsState: Story = {
-  args: { error: "The control plane is temporarily unavailable.", data, page: "activity", onReload: fn() },
+  args: { error: "The control plane is temporarily unavailable.", data, onReload: fn() },
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole("heading", { name: "Workspace status" })).toBeVisible();
     await expect(canvas.getByText("asset.policy.replace")).toBeVisible();
@@ -110,7 +95,7 @@ export const RefreshFailureRetainsState: Story = {
 };
 
 export const UnknownActivity: Story = {
-  args: { data: { events: [], eventsNextCursor: null }, session: null },
+  args: { data: { events: [], eventsNextCursor: null } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("Status unavailable")).toBeVisible();
     await expect(canvas.getByText("No activity yet")).toBeVisible();

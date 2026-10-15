@@ -23,25 +23,17 @@ from dal_obscura_plugin_api.schema.identity import (
 )
 from dal_obscura_plugin_api.schema.index import field_children
 from pyiceberg.schema import Schema
-from sqlalchemy.orm import Session
 
-from dal_obscura.adapters.providers.schema import load_source_schema
-from dal_obscura.adapters.sql import assets as _db_assets
-from dal_obscura.application.governance.errors import ConfigurationConflictError, ValidationFailure
-from dal_obscura.control.assets.access import ensure_asset_capability
-from dal_obscura.control.catalogs.service import (
-    CatalogDiscovery,
-    capture_catalog_discovery,
-    ensure_catalog_discovery_current,
-    validate_catalog_options,
+from dal_obscura.application.governance.assets.access import ensure_asset_capability
+from dal_obscura.application.governance.catalogs.service import (
+    capture_catalog_configuration,
+    ensure_catalog_configuration_current,
 )
+from dal_obscura.application.governance.errors import ConfigurationConflictError, ValidationFailure
+from dal_obscura.application.governance.ports import GovernancePluginRegistry, GovernanceUnitOfWork
+from dal_obscura.application.governance.values import AssetSchemaDiscovery
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.kernel.policy.mask_types import SUPPORTED_MASK_TYPES
-from dal_obscura.plugins import PluginRegistry
-from dal_obscura.runtime.secrets import (
-    SecretProvider,
-    resolve_secret_refs,
-)
 
 MAX_SCHEMA_RESPONSE_BYTES = 8 * 1024 * 1024
 _RESPONSE_ENCODER = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"), allow_nan=False)
@@ -61,30 +53,20 @@ class _SchemaResponseBudget:
                 )
 
 
-@dataclass(frozen=True)
-class AssetSchemaDiscovery:
-    """An authorized immutable binding; no database session crosses provider IO."""
-
-    asset_id: UUID
-    revision: int
-    name: str
-    backend: str
-    table_identifier: str
-    catalog: CatalogDiscovery
-
-
 def capture_asset_schema(
-    store: Session,
+    store: GovernanceUnitOfWork,
     asset_id: UUID,
     actor: ControlPlaneActor,
     *,
     egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: PluginRegistry | None = None,
+    plugin_registry: GovernancePluginRegistry | None = None,
 ) -> AssetSchemaDiscovery:
-    ensure_asset_capability(store, asset_id, actor, "read")
-    asset = _db_assets.get_asset_binding(store, asset_id)
-    catalog = capture_catalog_discovery(
-        store,
+    ensure_asset_capability(store.assets, asset_id, actor, "read")
+    asset = store.assets.get_asset_binding(asset_id)
+    if store.workspace.get_workspace() is None:
+        raise LookupError("No workspace has been configured")
+    catalog = capture_catalog_configuration(
+        store.catalogs.get_workspace_catalog(str(asset["catalog"])),
         str(asset["catalog"]),
         egress_allowlist=egress_allowlist,
         plugin_registry=plugin_registry,
@@ -100,33 +82,23 @@ def capture_asset_schema(
 
 
 def ensure_asset_schema_current(
-    store: Session, captured: AssetSchemaDiscovery, actor: ControlPlaneActor
+    store: GovernanceUnitOfWork, captured: AssetSchemaDiscovery, actor: ControlPlaneActor
 ) -> dict[str, object]:
     """Recheck authorization and binding after provider IO, before exposing metadata."""
-    ensure_asset_capability(store, captured.asset_id, actor, "read")
-    asset = _db_assets.get_asset_binding(store, captured.asset_id)
+    ensure_asset_capability(store.assets, captured.asset_id, actor, "read")
+    asset = store.assets.get_asset_binding(captured.asset_id)
     revision = int(cast(int | str, asset["revision"]))
     if revision != captured.revision:
         raise ConfigurationConflictError(
             "Asset changed during schema discovery; refresh schema", current_revision=revision
         )
-    ensure_catalog_discovery_current(store, captured.catalog)
+    ensure_catalog_configuration_current(
+        store.catalogs.get_workspace_catalog(captured.catalog.config.instance_id), captured.catalog
+    )
     return asset
 
 
-def get_asset_schema(
-    captured: AssetSchemaDiscovery,
-    *,
-    egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: PluginRegistry | None = None,
-    secret_provider: SecretProvider | None = None,
-) -> dict[str, object]:
-    arrow_schema = load_asset_schema(
-        captured,
-        egress_allowlist=egress_allowlist,
-        plugin_registry=plugin_registry,
-        secret_provider=secret_provider,
-    )
+def get_asset_schema(captured: AssetSchemaDiscovery, arrow_schema: pa.Schema) -> dict[str, object]:
     try:
         scope_digest = schema_scope_digest(arrow_schema)
     except ValueError as exc:
@@ -148,54 +120,6 @@ def get_asset_schema(
         for field in arrow_schema
     ]
     return result
-
-
-def load_asset_schema(
-    captured: AssetSchemaDiscovery,
-    *,
-    egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: PluginRegistry | None = None,
-    secret_provider: SecretProvider | None = None,
-) -> pa.Schema:
-    """Loads one captured authoritative source schema without a database session."""
-    config = captured.catalog.config
-    asset: dict[str, object] = {
-        "name": captured.name,
-        "backend": captured.backend,
-        "table_identifier": captured.table_identifier,
-    }
-    catalog: dict[str, object] = {
-        "name": config.instance_id,
-        "plugin_id": config.plugin_id,
-        "revision": config.revision,
-    }
-    options = cast(
-        dict[str, object],
-        resolve_secret_refs(
-            (
-                plugin_registry.options.for_plugin(config.plugin_id, config.options)
-                if plugin_registry is not None
-                else config.options
-            ),
-            provider=secret_provider,
-            expected_scope=f"catalog:{config.instance_id}",
-        ),
-    )
-    try:
-        return load_source_schema(
-            asset=asset,
-            catalog=catalog,
-            options=options,
-            plugin_registry=plugin_registry,
-            validate_metadata=lambda metadata: validate_catalog_options(
-                metadata, egress_allowlist=egress_allowlist
-            ),
-        )
-    except ValidationFailure:
-        raise
-    except Exception as exc:
-        # Provider errors can contain credentials and internal paths.
-        raise ValidationFailure("Schema discovery failed") from exc
 
 
 def schema_fingerprint(schema: object) -> str:

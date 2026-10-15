@@ -10,9 +10,10 @@ from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
 from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
     InputBatchLimitError,
-    StreamAdmissionError,
     StreamMemoryLimitError,
+    SupervisedRowTransformAdapter,
 )
+from dal_obscura.application.reads.execution import ExecutionSupervisor, StreamAdmissionError
 from dal_obscura.kernel.policy.filters import parse_row_filter
 from dal_obscura.kernel.policy.models import MaskRule
 from tests.support.performance.memory_probe import run_memory_probe
@@ -118,7 +119,9 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
 
 
 def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
-    adapter = DuckDBRowTransformAdapter(max_active_streams=1)
+    adapter = SupervisedRowTransformAdapter(
+        DuckDBRowTransformAdapter(), supervisor=ExecutionSupervisor(max_active_streams=1)
+    )
     batch = pa.record_batch([pa.array([1, 2, 3])], names=["id"])
     first = adapter.apply_filters_and_masks_stream(
         [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
@@ -140,7 +143,9 @@ def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
 
 
 def test_stream_admission_precedes_source_reads_and_creation_is_lazy():
-    adapter = DuckDBRowTransformAdapter(max_active_streams=1)
+    adapter = SupervisedRowTransformAdapter(
+        DuckDBRowTransformAdapter(), supervisor=ExecutionSupervisor(max_active_streams=1)
+    )
     batch = pa.record_batch([pa.array([1])], names=["id"])
     consumed = []
 
@@ -191,7 +196,10 @@ def test_input_failure_closes_source_and_releases_admission():
         finally:
             closed.append(True)
 
-    adapter = DuckDBRowTransformAdapter(max_active_streams=1, max_input_batch_bytes=8)
+    adapter = SupervisedRowTransformAdapter(
+        DuckDBRowTransformAdapter(max_input_batch_bytes=8),
+        supervisor=ExecutionSupervisor(max_active_streams=1),
+    )
     with pytest.raises(InputBatchLimitError):
         list(
             adapter.apply_filters_and_masks_stream(
@@ -221,7 +229,10 @@ def test_duckdb_memory_limit_must_be_a_positive_finite_size(limit):
 
 
 def test_real_duckdb_oom_releases_slot_and_does_not_expose_query():
-    adapter = DuckDBRowTransformAdapter(max_active_streams=1, duckdb_memory_limit="1KB")
+    adapter = SupervisedRowTransformAdapter(
+        DuckDBRowTransformAdapter(duckdb_memory_limit="1KB"),
+        supervisor=ExecutionSupervisor(max_active_streams=1),
+    )
     batch = pa.record_batch([pa.array(range(10000))], names=["id"])
     for _ in range(2):
         with pytest.raises(StreamMemoryLimitError, match="memory budget exhausted") as error:
@@ -264,7 +275,7 @@ def test_later_input_limit_failure_keeps_its_type_and_closes_source():
 @pytest.mark.parametrize("limit", [0, -1])
 def test_duckdb_transform_rejects_non_positive_admission_limits(limit):
     with pytest.raises(ValueError, match="max_active_streams"):
-        DuckDBRowTransformAdapter(max_active_streams=limit)
+        ExecutionSupervisor(max_active_streams=limit)
 
 
 def test_duckdb_transform_rejects_an_oversized_input_batch_before_query_execution():
@@ -311,9 +322,7 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess(payload_bytes):
 
         from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
         from dal_obscura.kernel.policy.filters import parse_row_filter
-        from dal_obscura.adapters.duckdb.transform import (
-                        DuckDBRowTransformAdapter,
-        )
+        from dal_obscura.adapters.duckdb.transform import DuckDBRowTransformAdapter
 
         total_batches = int(sys.argv[1])
         rows_per_batch = int(sys.argv[2])

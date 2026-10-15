@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Literal, cast
+from typing import Literal, cast
 from uuid import UUID
 
-from sqlalchemy.orm import Session
-
-from dal_obscura.adapters.sql import assets as _db_assets
-from dal_obscura.adapters.sql import audit as _db_audit
-from dal_obscura.adapters.sql import policies as _db_policies
-from dal_obscura.control.assets.access import ensure_asset_capability, ensure_asset_owner
-from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
-from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.application.governance.ports import (
+    GovernanceUnitOfWork,
+)
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.policy.attribute_conditions import attributes_match
 from dal_obscura.kernel.policy.models import (
@@ -25,95 +20,16 @@ from dal_obscura.kernel.policy.models import (
 from dal_obscura.kernel.policy.policy_resolution import resolve_access
 
 
-def list_policy_rules(
-    store: Session,
-    asset_id: UUID,
-    *,
-    actor: ControlPlaneActor | None = None,
-) -> list[dict[str, object]]:
-    """Lists ordered policy rules for one asset."""
-
-    if actor is not None:
-        ensure_asset_capability(store, asset_id, actor, "read")
-    return _db_policies.list_policy_rules(store, asset_id)
-
-
-def replace_policy_rules(
-    store: Session,
-    asset_id: UUID,
-    rules: list[dict[str, Any]],
-    *,
-    actor: ControlPlaneActor,
-    expected_revision: int | None = None,
-    revoke_existing_tokens: bool = False,
-    correlation_id: str | None = None,
-) -> dict[str, int]:
-    """Validates and replaces policy rules for one asset."""
-
-    _db_assets.lock_asset_for_update(store, asset_id)
-    ensure_asset_capability(store, asset_id, actor, "edit")
-    schema_fields = _db_assets.list_asset_schema_fields(store, asset_id)
-    compiled_rules = compile_policy_rule_payloads(rules, schema_fields)
-    if expected_revision is None:
-        current_revision = _db_assets.get_workspace_asset(store, asset_id)["policy_revision"]
-        if not isinstance(current_revision, int):
-            raise RuntimeError("Asset policy revision is unavailable")
-        expected_revision = current_revision
-    if revoke_existing_tokens:
-        ensure_asset_owner(store, asset_id, actor)
-    revision = _db_policies.replace_policy_rules(
-        store,
-        asset_id=asset_id,
-        rules=compiled_rules,
-        expected_revision=expected_revision,
-    )
-    revoked_count = (
-        _db_policies.revoke_asset_tickets(store, asset_id=asset_id) if revoke_existing_tokens else 0
-    )
-    _db_audit.record_asset_audit_event(
-        store,
-        asset_id=asset_id,
-        actor_principal=actor.identity_key(),
-        action="asset.policy.replace",
-        details={"policy_revision": revision, "revoked_token_count": revoked_count},
-        correlation_id=correlation_id,
-    )
-    return {"policy_revision": revision, "revoked_token_count": revoked_count}
-
-
-def revoke_asset_tickets(
-    store: Session,
-    asset_id: UUID,
-    *,
-    actor: ControlPlaneActor,
-    correlation_id: str | None = None,
-) -> dict[str, int]:
-    """Revokes all unexpired asset tokens; only owners and platform admins may do so."""
-
-    _db_assets.lock_asset_for_update(store, asset_id)
-    ensure_asset_owner(store, asset_id, actor)
-    revoked_count = _db_policies.revoke_asset_tickets(store, asset_id=asset_id)
-    _db_audit.record_asset_audit_event(
-        store,
-        asset_id=asset_id,
-        actor_principal=actor.identity_key(),
-        action="asset.tokens.revoke",
-        details={"revoked_token_count": revoked_count},
-        correlation_id=correlation_id,
-    )
-    return {"revoked_token_count": revoked_count}
-
-
-def capture_asset_policy(store: Session, asset_id: UUID) -> AssetPolicy:
+def capture_asset_policy(store: GovernanceUnitOfWork, asset_id: UUID) -> AssetPolicy:
     """Read an immutable policy after the caller has authorized its asset binding."""
-    asset = _db_assets.get_asset_binding(store, asset_id)
+    asset = store.assets.get_asset_binding(asset_id)
     return AssetPolicy(
         version=int(cast(int | str, asset["policy_revision"])),
         catalog=str(asset["catalog"]),
         target=str(asset["name"]),
         rules=[
             _compiled_rule_from_response(rule)
-            for rule in _db_policies.list_policy_rules(store, asset_id)
+            for rule in store.policies.list_policy_rules(asset_id)
         ],
     )
 

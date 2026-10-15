@@ -25,7 +25,7 @@ from pydantic import (
     model_serializer,
 )
 
-from dal_obscura.control.catalogs.service import MAX_CATALOG_PUBLICATION_SIZE
+from dal_obscura.application.governance.catalogs.service import MAX_CATALOG_PUBLICATION_SIZE
 
 
 class StrictModel(BaseModel):

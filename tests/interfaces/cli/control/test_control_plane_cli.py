@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
 from dal_obscura.adapters.sql.database.db import migrate_config_store
+from dal_obscura.bootstrap import control as control_bootstrap
 from dal_obscura.interfaces.cli import control as control_plane_cli
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProvider
@@ -27,7 +28,7 @@ def test_control_plane_cli_starts_configured_app(engine_factory, monkeypatch, tm
     }
 
     monkeypatch.setattr(
-        control_plane_cli.uvicorn,
+        control_bootstrap.uvicorn,
         "run",
         lambda app, **kwargs: calls.update({"app": app, **kwargs}),
     )
@@ -59,15 +60,15 @@ def test_control_plane_owns_startup_backend_resources(
 
     provider = SecretProvider(Backend(), {})
     monkeypatch.setattr(
-        control_plane_cli, "load_secret_provider_from_environment", lambda *args, **kwargs: provider
+        control_bootstrap, "load_secret_provider_from_environment", lambda *args, **kwargs: provider
     )
     if startup_fails:
 
         def fail_startup(*args, **kwargs):
             raise RuntimeError("startup failed")
 
-        monkeypatch.setattr(control_plane_cli, "create_app", fail_startup)
-    monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda *args, **kwargs: None)
+        monkeypatch.setattr(control_bootstrap, "build_control_app", fail_startup)
+    monkeypatch.setattr(control_bootstrap.uvicorn, "run", lambda *args, **kwargs: None)
     try:
         assert control_plane_cli.run(
             {
@@ -95,11 +96,11 @@ def test_control_plane_cli_passes_login_rate_limits(engine_factory, monkeypatch,
     }
 
     monkeypatch.setattr(
-        control_plane_cli,
-        "create_app",
+        control_bootstrap,
+        "build_control_app",
         lambda *args, **kwargs: captured.update(kwargs) or FastAPI(),
     )
-    monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda app, **kwargs: None)
+    monkeypatch.setattr(control_bootstrap.uvicorn, "run", lambda app, **kwargs: None)
 
     assert control_plane_cli.run(environment) == 0
     assert captured["login_rate_limit_attempts"] == 5
@@ -114,7 +115,7 @@ def test_control_plane_cli_passes_login_rate_limits(engine_factory, monkeypatch,
 
 
 def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
-    config = control_plane_cli._ui_auth_config(
+    config = control_bootstrap._ui_auth_config(
         {
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "governance-ui",
@@ -138,9 +139,9 @@ def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
     ["https://[broken/realm", "https://issuer.example:99999/realm"],
 )
 def test_production_url_helpers_fail_closed_on_malformed_urls(value: str) -> None:
-    assert control_plane_cli._is_https_url(value) is False
-    assert control_plane_cli._is_https_origin(value) is False
-    assert control_plane_cli._origin(value) == ""
+    assert control_bootstrap._is_https_url(value) is False
+    assert control_bootstrap._is_https_origin(value) is False
+    assert control_bootstrap._origin(value) == ""
 
 
 @pytest.mark.parametrize("kind", ["environment", "mounted_file"])
@@ -168,11 +169,11 @@ def test_control_plane_cli_passes_configured_secret_provider(
     }
 
     monkeypatch.setattr(
-        control_plane_cli,
-        "create_app",
+        control_bootstrap,
+        "build_control_app",
         lambda *args, **kwargs: captured.update(kwargs) or FastAPI(),
     )
-    monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda app, **kwargs: None)
+    monkeypatch.setattr(control_bootstrap.uvicorn, "run", lambda app, **kwargs: None)
 
     assert control_plane_cli.run(environment) == 0
     provider = cast(SecretProvider, captured["secret_provider"])
@@ -216,7 +217,7 @@ def test_control_plane_cli_requires_current_schema(tmp_path, capsys) -> None:
 def test_control_plane_cli_redacts_database_startup_errors(monkeypatch, tmp_path, capsys) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     monkeypatch.setattr(
-        control_plane_cli,
+        control_bootstrap,
         "check_config_store_schema",
         lambda _engine: (_ for _ in ()).throw(
             SQLAlchemyError("postgresql://user:secret@db.internal/control_plane")

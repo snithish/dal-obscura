@@ -1,11 +1,25 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Protocol, Self
 from uuid import UUID
 
-from dal_obscura.application.governance.values import AssetPage, AuditEventPage, WorkspaceState
+import pyarrow as pa
+from dal_obscura_plugin_api import DiscoveryPage, PluginDescriptor
+from dal_obscura_plugin_api.contracts import PluginKind
+
+from dal_obscura.application.governance.values import (
+    AssetPage,
+    AssetSchemaDiscovery,
+    AuditEventPage,
+    CatalogDiscovery,
+    WorkspaceState,
+)
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.identity.session import LoginRateLimitDecision, LoginTransaction
 
 
 class AssetsRepository(Protocol):
@@ -134,6 +148,12 @@ class AuditRepository(Protocol):
 
 class GovernanceUnitOfWork(Protocol):
     @property
+    def login_rate_limits(self) -> LoginRateLimitsRepository: ...
+    @property
+    def login_transactions(self) -> LoginTransactionsRepository: ...
+    @property
+    def browser_sessions(self) -> BrowserSessionsRepository: ...
+    @property
     def assets(self) -> AssetsRepository: ...
     @property
     def catalogs(self) -> CatalogsRepository: ...
@@ -155,3 +175,66 @@ class GovernanceUnitOfWork(Protocol):
 
 class GovernanceUnitOfWorkFactory(Protocol):
     def __call__(self) -> GovernanceUnitOfWork: ...
+
+
+class GovernancePluginRegistry(Protocol):
+    def admitted(self) -> Mapping[tuple[PluginKind, str], PluginDescriptor]: ...
+
+
+class AssetSchemaLoader(Protocol):
+    def load_asset_schema(self, captured: AssetSchemaDiscovery) -> pa.Schema: ...
+
+
+class PreviewIdentityMapper(Protocol):
+    def map_attributes(
+        self, provider_args: dict[str, Any], claims: dict[str, object]
+    ) -> dict[str, str]: ...
+    def map_claims(self, provider: dict[str, object], claims: dict[str, object]) -> Principal: ...
+
+
+class CatalogBrowser(Protocol):
+    def discover(
+        self,
+        captured: CatalogDiscovery,
+        *,
+        session_key: str,
+        continuation: str | None = None,
+        limit: int = 100,
+    ) -> DiscoveryPage: ...
+
+
+class GovernancePluginControl(GovernancePluginRegistry, Protocol):
+    def status_report(self) -> tuple[dict[str, object], ...]: ...
+    def set_lifecycle(self, kind: PluginKind, plugin_id: str, target: str) -> str: ...
+
+
+class BrowserSessionsRepository(Protocol):
+    def issue(self, actor: ControlPlaneActor, *, ttl_seconds: int) -> str: ...
+    def issue_with_csrf(self, actor: ControlPlaneActor, *, ttl_seconds: int) -> tuple[str, str]: ...
+    def resolve(
+        self, token: str, *, csrf_token: str | None = None, idle_ttl_seconds: int | None = None
+    ) -> ControlPlaneActor | None: ...
+    def revoke(self, token: str) -> bool: ...
+
+
+class LoginTransactionsRepository(Protocol):
+    def issue(
+        self,
+        *,
+        state: str,
+        nonce: str,
+        code_verifier: str,
+        redirect_uri: str,
+        ttl_seconds: int = 600,
+    ) -> None: ...
+    def consume(self, state: str) -> LoginTransaction | None: ...
+
+
+class LoginRateLimitsRepository(Protocol):
+    def allow(
+        self, client_key: str, *, max_attempts: int, window_seconds: int, block_seconds: int
+    ) -> LoginRateLimitDecision: ...
+    def record_failure(
+        self, client_key: str, *, max_attempts: int, window_seconds: int, block_seconds: int
+    ) -> LoginRateLimitDecision: ...
+    def clear(self, client_key: str) -> None: ...

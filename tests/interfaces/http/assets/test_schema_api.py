@@ -8,7 +8,8 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType, StructType
 
 from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
-from dal_obscura.control.assets import schema as schema_service
+from dal_obscura.adapters.duckdb.transform import DuckDBRowTransformAdapter
+from dal_obscura.adapters.providers import governance as schema_service
 from dal_obscura.interfaces.http.routes.schemas import PolicyEvaluationResponse
 from tests.support.control.workspace import (
     ADMIN_HEADERS,
@@ -355,13 +356,13 @@ def test_postgres_schema_discovery_rejects_configuration_changed_during_provider
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
     from tests.support.storage.postgres import isolated_postgres_sessions
 
     token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
     with (
         isolated_postgres_sessions() as factory,
-        TestClient(create_app(factory, admin_token=token)) as client,
+        TestClient(build_control_app(factory, admin_token=token)) as client,
     ):
         asset = _provision_reviewable_asset(client)
         before = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
@@ -420,14 +421,14 @@ def test_postgres_schema_discovery_rechecks_read_capability_after_provider_io(mo
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
     from tests.support.storage.postgres import isolated_postgres_sessions
 
     token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
     with (
         isolated_postgres_sessions() as factory,
         TestClient(
-            create_app(
+            build_control_app(
                 factory,
                 admin_token=token,
                 oidc_actor_resolver=lambda token: {"principal": "user1", "groups": []},
@@ -470,8 +471,6 @@ def test_policy_evaluation_releases_transactions_before_provider_and_duckdb(
 ):
     from sqlalchemy import event
 
-    from dal_obscura.control.policies import evaluation as evaluation_service
-
     client = client_factory()
     asset = _provision_reviewable_asset(client)
     active, observed = set(), []
@@ -486,7 +485,7 @@ def test_policy_evaluation_releases_transactions_before_provider_and_duckdb(
         observed.append(("provider", len(active)))
         return pa.schema([pa.field("id", pa.int64())])
 
-    adapter = evaluation_service.DuckDBRowTransformAdapter
+    adapter = DuckDBRowTransformAdapter
     transform = adapter.apply_filters_and_masks_stream
 
     def execute(*args, **kwargs):
@@ -539,13 +538,13 @@ def test_postgres_policy_evaluation_rejects_policy_changed_during_provider_io(mo
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
     from tests.support.storage.postgres import isolated_postgres_sessions
 
     token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
     with (
         isolated_postgres_sessions() as factory,
-        TestClient(create_app(factory, admin_token=token)) as client,
+        TestClient(build_control_app(factory, admin_token=token)) as client,
     ):
         asset = _provision_reviewable_asset(client)
         before = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
@@ -596,14 +595,14 @@ def test_postgres_policy_evaluation_rejects_mapping_changed_during_provider_io(m
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
     from tests.support.control.workspace import DEFAULT_AUTH_MODULE
     from tests.support.storage.postgres import isolated_postgres_sessions
 
     token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
     with (
         isolated_postgres_sessions() as factory,
-        TestClient(create_app(factory, admin_token=token)) as client,
+        TestClient(build_control_app(factory, admin_token=token)) as client,
     ):
         asset = _provision_reviewable_asset(client)
         provider = {
@@ -666,15 +665,14 @@ def test_postgres_policy_evaluation_rechecks_read_capability_after_duckdb(monkey
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
 
-    from dal_obscura.control.policies import evaluation as evaluation_service
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
     from tests.support.storage.postgres import isolated_postgres_sessions
 
     token = ADMIN_HEADERS["authorization"].removeprefix("Bearer ")
     with (
         isolated_postgres_sessions() as factory,
         TestClient(
-            create_app(
+            build_control_app(
                 factory,
                 admin_token=token,
                 oidc_actor_resolver=lambda token: {"principal": "user1", "groups": []},
@@ -689,7 +687,7 @@ def test_postgres_policy_evaluation_rechecks_read_capability_after_duckdb(monkey
             "load_source_schema",
             lambda **kwargs: pa.schema([pa.field("id", pa.int64())]),
         )
-        adapter = evaluation_service.DuckDBRowTransformAdapter
+        adapter = DuckDBRowTransformAdapter
         transform = adapter.apply_filters_and_masks_stream
 
         def execute(*args, **kwargs):
@@ -723,7 +721,9 @@ def test_postgres_policy_evaluation_rechecks_read_capability_after_duckdb(monkey
 def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory):
     from uuid import UUID
 
-    from dal_obscura.control.policies import evaluation as evaluation_service
+    from dal_obscura.adapters.providers.governance import SyntheticPreviewIdentityMapper
+    from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory
+    from dal_obscura.application.governance.policies import evaluation as evaluation_service
     from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
     client = client_factory()
@@ -731,7 +731,7 @@ def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory
     rows: list[dict[str, object]] = [{"id": 7}]
     groups = ["initial-group"]
     claims: dict[str, object] = {"department": "Finance"}
-    with client.app.state.test_session_factory() as store:
+    with SqlGovernanceUnitOfWorkFactory(client.app.state.test_session_factory)() as store:
         captured = evaluation_service.capture_asset_evaluation(
             store,
             UUID(str(asset["id"])),
@@ -740,13 +740,17 @@ def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory
             groups=groups,
             claims=claims,
             rows=rows,
+            identity_mapper=SyntheticPreviewIdentityMapper(),
         )
         store.commit()
     rows[0]["id"] = 999
     groups.append("later-group")
     claims["department"] = "Other"
     result = evaluation_service.evaluate_asset_policy(
-        captured, pa.schema([pa.field("id", pa.int64())]), compiler=DuckDBProjectionCompiler()
+        captured,
+        pa.schema([pa.field("id", pa.int64())]),
+        compiler=DuckDBProjectionCompiler(),
+        transform=DuckDBRowTransformAdapter(),
     )
     payload = PolicyEvaluationResponse.model_validate(result)
     assert payload.rows == [{"id": 7}]

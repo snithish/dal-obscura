@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Literal
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
-from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.schemas import ApiError
@@ -22,7 +21,7 @@ class ReadinessResponse(BaseModel):
     error: ApiError | None = None
 
 
-def install_health_routes(app: FastAPI, session_maker: sessionmaker[Session]) -> None:
+def install_health_routes(app: FastAPI, readiness: Callable[[], None]) -> None:
     """Installs `/healthz` and `/readyz` routes on the control-plane app."""
 
     @app.get("/healthz")
@@ -37,8 +36,7 @@ def install_health_routes(app: FastAPI, session_maker: sessionmaker[Session]) ->
     )
     def readyz() -> dict[str, Any] | JSONResponse:
         try:
-            with session_maker() as session:
-                session.execute(text("SELECT 1"))
+            readiness()
         except Exception:
             request_id = current_request_id()
             return JSONResponse(

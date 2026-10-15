@@ -1,268 +1,67 @@
-"""Workspace catalog service functions."""
+"""Bounded catalog configuration capture and validation."""
 
 from __future__ import annotations
 
 import ipaddress
 import math
-from collections.abc import Generator, Iterator, Mapping
-from contextlib import contextmanager
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from math import isfinite
-from threading import BoundedSemaphore, Lock
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from urllib.parse import parse_qsl, urlsplit
 from uuid import UUID
 
 from dal_obscura_plugin_api import CatalogConfig, DiscoveryPage, PluginDescriptor
-from sqlalchemy.orm import Session
 
-from dal_obscura.adapters.providers.discovery import (
-    ICEBERG_CATALOG_ID,
-    discover_public_catalog_tables,
+from dal_obscura.application.governance.catalogs.discovery import DiscoveryCursors
+from dal_obscura.application.governance.errors import (
+    AuthorizationFailure,
+    ConfigurationConflictError,
+    ValidationFailure,
 )
-from dal_obscura.adapters.sql import audit as _db_audit
-from dal_obscura.adapters.sql import catalogs as _db_catalogs
-from dal_obscura.adapters.sql import workspace as _db_workspace
-from dal_obscura.application.governance.errors import ConfigurationConflictError, ValidationFailure
-from dal_obscura.control.workspace.service import required_workspace
-from dal_obscura.plugins import PluginRegistry
-from dal_obscura.runtime.secrets import (
-    SecretProvider,
-    resolve_secret_refs,
+from dal_obscura.application.governance.ports import (
+    CatalogBrowser,
+    GovernancePluginRegistry,
+    GovernanceUnitOfWork,
+    GovernanceUnitOfWorkFactory,
 )
+from dal_obscura.application.governance.values import CatalogDiscovery
+from dal_obscura.application.governance.workspace.service import required_workspace
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
+ICEBERG_CATALOG_ID = "iceberg.catalog"
 _MAX_OPTION_DEPTH = 16
 _MAX_OPTION_NODES = 1_024
 _MAX_OPTION_KEYS = 128
 _MAX_OPTION_ITEMS = 256
 _MAX_OPTION_STRING = 4_096
-DEFAULT_MAX_ACTIVE_DISCOVERIES_PER_SESSION = 2
-MAX_CATALOG_PUBLICATION_SIZE = 100
 
-
-class _SessionDiscoverySlot:
-    def __init__(self) -> None:
-        self.semaphore = BoundedSemaphore(DEFAULT_MAX_ACTIVE_DISCOVERIES_PER_SESSION)
-        self.active = 0
-
-
-_SESSION_DISCOVERY_SLOTS: dict[str, _SessionDiscoverySlot] = {}
-_SESSION_DISCOVERY_LOCK = Lock()
-
-
-@contextmanager
-def _admit_session_discovery(session_key: str | None) -> Generator[None]:
-    """Admit at most two concurrent discoveries for one authenticated session."""
-
-    if not session_key:
-        yield
-        return
-    with _SESSION_DISCOVERY_LOCK:
-        slot = _SESSION_DISCOVERY_SLOTS.setdefault(session_key, _SessionDiscoverySlot())
-        if not slot.semaphore.acquire(blocking=False):
-            raise ValidationFailure("Catalog discovery session capacity is exhausted; retry later")
-        slot.active += 1
-    try:
-        yield
-    finally:
-        with _SESSION_DISCOVERY_LOCK:
-            slot.semaphore.release()
-            slot.active -= 1
-            if slot.active == 0:
-                _SESSION_DISCOVERY_SLOTS.pop(session_key, None)
-
-
-def list_workspace_catalogs(
-    store: Session,
-) -> list[dict[str, object]]:
-    """Lists catalogs configured in the default workspace."""
-
-    context = _db_workspace.get_workspace(store)
-    if context is None:
-        return []
-    return _db_catalogs.list_workspace_catalogs(store)
-
-
-@dataclass(frozen=True)
-class CatalogDiscovery:
-    catalog_id: UUID
-    config: CatalogConfig
-
-
-def capture_catalog_discovery(
-    store: Session,
-    name: str,
-    *,
-    egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: PluginRegistry | None = None,
-) -> CatalogDiscovery:
-    """Capture immutable configuration; the route releases this transaction before IO."""
-
-    required_workspace(store)
-    catalog = _db_catalogs.get_workspace_catalog(store, name)
-    options = cast(dict[str, Any], catalog["options"])
-    plugin_id = str(catalog["plugin_id"])
-    validate_admitted_catalog_options(plugin_id, options, plugin_registry)
-    validate_catalog_options(options, egress_allowlist=egress_allowlist)
-    try:
-        config = CatalogConfig(
-            plugin_id=plugin_id,
-            instance_id=name,
-            revision=_catalog_revision(catalog),
-            options=options,
-        )
-    except ValueError as exc:
-        raise ValidationFailure("Catalog configuration is invalid") from exc
-    return CatalogDiscovery(UUID(str(catalog["id"])), config)
-
-
-def discover_workspace_catalog_tables(
-    captured: CatalogDiscovery,
-    *,
-    session_key: str,
-    plugin_registry: PluginRegistry | None,
-    secret_provider: SecretProvider | None,
-    continuation: str | None = None,
-    limit: int = 100,
-) -> DiscoveryPage:
-    """Read one provider page without retaining a database session."""
-
-    config = captured.config
-    configured = (
-        plugin_registry.options.for_plugin(config.plugin_id, config.options)
-        if plugin_registry is not None
-        else config.options
-    )
-    options = _resolve_catalog_secrets(
-        dict(configured), scope=f"catalog:{config.instance_id}", provider=secret_provider
-    )
-    try:
-        with _admit_session_discovery(session_key):
-            return discover_public_catalog_tables(
-                config.instance_id,
-                config.plugin_id,
-                options,
-                revision=config.revision,
-                plugin_registry=plugin_registry,
-                continuation=continuation,
-                limit=limit,
-            )
-    except ValidationFailure:
-        raise
-    except Exception as exc:
-        raise ValidationFailure("Catalog discovery failed") from exc
-
-
-def ensure_catalog_discovery_current(store: Session, captured: CatalogDiscovery) -> None:
-    current = _db_catalogs.get_workspace_catalog(store, captured.config.instance_id)
-    revision = _catalog_revision(current)
-    if UUID(str(current["id"])) != captured.catalog_id or revision != captured.config.revision:
-        raise ConfigurationConflictError(
-            "Catalog changed during discovery; restart discovery", current_revision=revision
-        )
-
-
-def catalog_discovery_tables(
-    store: Session,
-    captured: CatalogDiscovery,
-    page: DiscoveryPage,
-) -> list[dict[str, object]]:
-    """Decorate a bounded page using a fresh catalog revision and indexed asset lookup."""
-
-    from dal_obscura_plugin_api.identifiers import identifier_name
-
-    ensure_catalog_discovery_current(store, captured)
-    names = [identifier_name(identifier) for identifier in page.entries]
-    governed = _db_catalogs.governed_table_identifiers(
-        store, catalog_id=captured.catalog_id, identifiers=names
-    )
-    return [
-        {
-            "backend": captured.config.plugin_id,
-            "name": name,
-            "table_identifier": name,
-            "target": name,
-            "governed": name in governed,
-        }
-        for name in names
-    ]
-
-
-def diagnose_workspace_catalog(
-    captured: CatalogDiscovery,
-    *,
-    session_key: str,
-    plugin_registry: PluginRegistry | None,
-    secret_provider: SecretProvider | None,
-) -> dict[str, object]:
-    """Sample one page; a continuation means the total count is unknown."""
-
-    from dal_obscura_plugin_api.identifiers import identifier_name
-
-    checked_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    result: dict[str, object] = {"catalog": captured.config.instance_id, "checked_at": checked_at}
-    try:
-        page = discover_workspace_catalog_tables(
-            captured,
-            session_key=session_key,
-            plugin_registry=plugin_registry,
-            secret_provider=secret_provider,
-            limit=10,
-        )
-    except ValidationFailure:
-        return {**result, "status": "unavailable", "message": "Catalog discovery failed"}
-    return {
-        **result,
-        "status": "ready",
-        "message": "Catalog discovery succeeded",
-        "table_count": len(page.entries) if page.continuation is None else None,
-        "sample_tables": [identifier_name(identifier) for identifier in page.entries],
-    }
-
-
-def upsert_workspace_catalog(
-    store: Session,
-    name: str,
-    plugin_id: str,
-    options: dict[str, Any],
-    egress_allowlist: tuple[str, ...] = (),
-    *,
-    expected_revision: int | None = None,
-    actor_principal: str = "system",
-    plugin_registry: PluginRegistry | None = None,
-    correlation_id: str | None = None,
-) -> dict[str, str]:
-    """Creates or updates a workspace catalog definition."""
-
-    if plugin_id != ICEBERG_CATALOG_ID:
-        if plugin_registry is None:
-            raise ValidationFailure("Catalog plugin is not admitted")
-        admitted = plugin_registry.admitted()
-        if ("catalog", plugin_id) not in admitted:
-            raise ValidationFailure("Catalog plugin is not admitted")
-        validate_descriptor_options(admitted[("catalog", plugin_id)], options)
-    validate_catalog_options(options, egress_allowlist=egress_allowlist)
-    _db_workspace.ensure_workspace(store)
-    catalog_id = _db_catalogs.upsert_catalog(
-        store, name=name, plugin_id=plugin_id, options=options, expected_revision=expected_revision
-    )
-    _db_audit.record_workspace_audit_event(
-        store,
-        actor_principal=actor_principal,
-        action="workspace.catalog.update",
-        resource_type="catalog",
-        resource_id=str(catalog_id),
-        details={"name": name, "plugin_id": plugin_id, "option_keys": sorted(options)},
-        correlation_id=correlation_id,
-    )
-    return {"id": str(catalog_id), "name": name}
+_SECRET_OPTION_KEYS = {
+    "access_token",
+    "api_key",
+    "client_secret",
+    "credential",
+    "credentials",
+    "password",
+    "passwd",
+    "private_key",
+    "secret",
+    "token",
+}
+_DYNAMIC_LOADER_OPTION_KEYS = {
+    "py-catalog-impl",
+    "py-io-impl",
+    "catalog-impl",
+    "io-impl",
+    "class-path",
+    "implementation-class",
+}
 
 
 def validate_admitted_catalog_options(
     plugin_id: str,
     options: dict[str, Any],
-    plugin_registry: PluginRegistry | Any | None,
+    plugin_registry: GovernancePluginRegistry | None,
 ) -> None:
     """Validate persisted external catalog options before provider use.
 
@@ -294,23 +93,6 @@ def _catalog_revision(catalog: dict[str, object]) -> int:
         except ValueError:
             return 0
     return 0
-
-
-def _resolve_catalog_secrets(
-    options: dict[str, Any],
-    *,
-    scope: str | None = None,
-    provider: SecretProvider | None = None,
-) -> dict[str, Any]:
-    try:
-        resolved = resolve_secret_refs(
-            options,
-            provider=provider,
-            expected_scope=scope,
-        )
-    except ValueError as exc:
-        raise ValidationFailure("Catalog secret could not be resolved") from exc
-    return cast(dict[str, Any], resolved)
 
 
 def validate_catalog_options(
@@ -522,20 +304,6 @@ def _validate_option_shape(  # noqa: C901
     raise ValidationFailure("Catalog options must contain JSON-compatible values")
 
 
-_SECRET_OPTION_KEYS = {
-    "access_token",
-    "api_key",
-    "client_secret",
-    "credential",
-    "credentials",
-    "password",
-    "passwd",
-    "private_key",
-    "secret",
-    "token",
-}
-
-
 def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
     """Requires sensitive catalog options to use an explicit secret reference."""
 
@@ -563,16 +331,6 @@ def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
             _reject_inline_secrets(nested, f"{prefix}[{index}]")
 
 
-_DYNAMIC_LOADER_OPTION_KEYS = {
-    "py-catalog-impl",
-    "py-io-impl",
-    "catalog-impl",
-    "io-impl",
-    "class-path",
-    "implementation-class",
-}
-
-
 def _reject_dynamic_loader_options(value: object, prefix: str = "options") -> None:
     """Rejects provider settings that select arbitrary installed Python classes."""
 
@@ -587,3 +345,308 @@ def _reject_dynamic_loader_options(value: object, prefix: str = "options") -> No
     elif isinstance(value, list):
         for index, nested in enumerate(value):
             _reject_dynamic_loader_options(nested, f"{prefix}[{index}]")
+
+
+def capture_catalog_configuration(
+    catalog: dict[str, object],
+    name: str,
+    *,
+    egress_allowlist: tuple[str, ...] = (),
+    plugin_registry: GovernancePluginRegistry | None = None,
+) -> CatalogDiscovery:
+    options = cast(dict[str, Any], catalog["options"])
+    plugin_id = str(catalog["plugin_id"])
+    validate_admitted_catalog_options(plugin_id, options, plugin_registry)
+    validate_catalog_options(options, egress_allowlist=egress_allowlist)
+    try:
+        config = CatalogConfig(
+            plugin_id=plugin_id,
+            instance_id=name,
+            revision=_catalog_revision(catalog),
+            options=options,
+        )
+    except ValueError as exc:
+        raise ValidationFailure("Catalog configuration is invalid") from exc
+    return CatalogDiscovery(UUID(str(catalog["id"])), config)
+
+
+def ensure_catalog_configuration_current(
+    current: dict[str, object], captured: CatalogDiscovery
+) -> None:
+    revision = _catalog_revision(current)
+    if UUID(str(current["id"])) != captured.catalog_id or revision != captured.config.revision:
+        raise ConfigurationConflictError(
+            "Catalog changed during discovery; restart discovery", current_revision=revision
+        )
+
+
+MAX_CATALOG_PUBLICATION_SIZE = 100
+
+
+def list_workspace_catalogs(
+    store: GovernanceUnitOfWork,
+) -> list[dict[str, object]]:
+    """Lists catalogs configured in the default workspace."""
+
+    context = store.workspace.get_workspace()
+    if context is None:
+        return []
+    return store.catalogs.list_workspace_catalogs()
+
+
+def capture_catalog_discovery(
+    store: GovernanceUnitOfWork,
+    name: str,
+    *,
+    egress_allowlist: tuple[str, ...] = (),
+    plugin_registry: GovernancePluginRegistry | None = None,
+) -> CatalogDiscovery:
+    """Capture immutable configuration; the route releases this transaction before IO."""
+
+    required_workspace(store)
+    catalog = store.catalogs.get_workspace_catalog(name)
+    return capture_catalog_configuration(
+        catalog, name, egress_allowlist=egress_allowlist, plugin_registry=plugin_registry
+    )
+
+
+def ensure_catalog_discovery_current(
+    store: GovernanceUnitOfWork, captured: CatalogDiscovery
+) -> None:
+    current = store.catalogs.get_workspace_catalog(captured.config.instance_id)
+    ensure_catalog_configuration_current(current, captured)
+
+
+def catalog_discovery_tables(
+    store: GovernanceUnitOfWork,
+    captured: CatalogDiscovery,
+    page: DiscoveryPage,
+) -> list[dict[str, object]]:
+    """Decorate a bounded page using a fresh catalog revision and indexed asset lookup."""
+
+    from dal_obscura_plugin_api.identifiers import identifier_name
+
+    ensure_catalog_discovery_current(store, captured)
+    names = [identifier_name(identifier) for identifier in page.entries]
+    governed = store.catalogs.governed_table_identifiers(
+        catalog_id=captured.catalog_id, identifiers=names
+    )
+    return [
+        {
+            "backend": captured.config.plugin_id,
+            "name": name,
+            "table_identifier": name,
+            "target": name,
+            "governed": name in governed,
+        }
+        for name in names
+    ]
+
+
+def diagnose_workspace_catalog(
+    captured: CatalogDiscovery,
+    *,
+    session_key: str,
+    browser: CatalogBrowser,
+) -> dict[str, object]:
+    """Sample one page; a continuation means the total count is unknown."""
+
+    from dal_obscura_plugin_api.identifiers import identifier_name
+
+    checked_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    result: dict[str, object] = {"catalog": captured.config.instance_id, "checked_at": checked_at}
+    try:
+        page = browser.discover(
+            captured,
+            session_key=session_key,
+            limit=10,
+        )
+    except ValidationFailure:
+        return {**result, "status": "unavailable", "message": "Catalog discovery failed"}
+    return {
+        **result,
+        "status": "ready",
+        "message": "Catalog discovery succeeded",
+        "table_count": len(page.entries) if page.continuation is None else None,
+        "sample_tables": [identifier_name(identifier) for identifier in page.entries],
+    }
+
+
+def upsert_workspace_catalog(
+    store: GovernanceUnitOfWork,
+    name: str,
+    plugin_id: str,
+    options: dict[str, Any],
+    egress_allowlist: tuple[str, ...] = (),
+    *,
+    expected_revision: int | None = None,
+    actor_principal: str = "system",
+    plugin_registry: GovernancePluginRegistry | None = None,
+    correlation_id: str | None = None,
+) -> dict[str, str]:
+    """Creates or updates a workspace catalog definition."""
+
+    if plugin_id != ICEBERG_CATALOG_ID:
+        if plugin_registry is None:
+            raise ValidationFailure("Catalog plugin is not admitted")
+        admitted = plugin_registry.admitted()
+        if ("catalog", plugin_id) not in admitted:
+            raise ValidationFailure("Catalog plugin is not admitted")
+        validate_descriptor_options(admitted[("catalog", plugin_id)], options)
+    validate_catalog_options(options, egress_allowlist=egress_allowlist)
+    store.workspace.ensure_workspace()
+    catalog_id = store.catalogs.upsert_catalog(
+        name=name, plugin_id=plugin_id, options=options, expected_revision=expected_revision
+    )
+    store.audit.record_workspace_audit_event(
+        actor_principal=actor_principal,
+        action="workspace.catalog.update",
+        resource_type="catalog",
+        resource_id=str(catalog_id),
+        details={"name": name, "plugin_id": plugin_id, "option_keys": sorted(options)},
+        correlation_id=correlation_id,
+    )
+    return {"id": str(catalog_id), "name": name}
+
+
+class CatalogPublicationInput(TypedDict):
+    plugin_id: str
+    options: dict[str, Any]
+    expected_revision: int | None
+
+
+class CatalogsCommands:
+    def __init__(
+        self,
+        work_factory: GovernanceUnitOfWorkFactory,
+        *,
+        browser: CatalogBrowser,
+        plugin_registry: GovernancePluginRegistry | None,
+        discovery_cursors: DiscoveryCursors,
+        egress_allowlist: tuple[str, ...] = (),
+    ) -> None:
+        self._work_factory = work_factory
+        self._browser = browser
+        self._plugin_registry = plugin_registry
+        self._discovery_cursors = discovery_cursors
+        self._egress_allowlist = egress_allowlist
+
+    def list_workspace_catalogs(
+        self, *, actor: ControlPlaneActor, correlation_id: str | None
+    ) -> list[dict[str, object]]:
+        _require_admin(actor)
+        with self._work_factory() as work:
+            return list_workspace_catalogs(work)
+
+    def upsert_workspace_catalog(
+        self,
+        name: str,
+        plugin_id: str,
+        options: dict[str, Any],
+        *,
+        expected_revision: int | None = None,
+        actor: ControlPlaneActor,
+        correlation_id: str | None,
+    ) -> dict[str, str]:
+        _require_admin(actor)
+        with self._work_factory() as work:
+            result = upsert_workspace_catalog(
+                work,
+                name=name,
+                plugin_id=plugin_id,
+                options=options,
+                egress_allowlist=self._egress_allowlist,
+                expected_revision=expected_revision,
+                actor_principal=actor.identity_key(),
+                plugin_registry=self._plugin_registry,
+                correlation_id=correlation_id,
+            )
+            work.commit()
+            return result
+
+    def publish_workspace_catalogs(
+        self,
+        catalogs: dict[str, CatalogPublicationInput],
+        *,
+        actor: ControlPlaneActor,
+        correlation_id: str | None,
+    ) -> list[dict[str, str]]:
+        _require_admin(actor)
+        # Every catalog and audit record commits together, in deterministic lock order.
+        with self._work_factory() as work:
+            results = [
+                upsert_workspace_catalog(
+                    work,
+                    name=name,
+                    plugin_id=catalogs[name]["plugin_id"],
+                    options=catalogs[name]["options"],
+                    egress_allowlist=self._egress_allowlist,
+                    expected_revision=catalogs[name]["expected_revision"],
+                    actor_principal=actor.identity_key(),
+                    plugin_registry=self._plugin_registry,
+                    correlation_id=correlation_id,
+                )
+                for name in sorted(catalogs)
+            ]
+            work.commit()
+            return results
+
+    def discover_workspace_catalog_tables(
+        self,
+        name: str,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+        actor: ControlPlaneActor,
+        correlation_id: str | None,
+    ) -> dict[str, object]:
+        _require_admin(actor)
+        with self._work_factory() as work:
+            captured = capture_catalog_discovery(
+                work,
+                name,
+                egress_allowlist=self._egress_allowlist,
+                plugin_registry=self._plugin_registry,
+            )
+        identity = actor.identity_key()
+        scope = (str(captured.catalog_id), captured.config.revision, identity, limit)
+        continuation = self._discovery_cursors.resolve(cursor, scope=scope) if cursor else None
+        page = self._browser.discover(
+            captured, session_key=identity, continuation=continuation, limit=limit
+        )
+        next_cursor = (
+            self._discovery_cursors.issue(page.continuation, scope=scope)
+            if page.continuation is not None
+            else None
+        )
+        with self._work_factory() as work:
+            tables = catalog_discovery_tables(work, captured, page)
+        return {
+            "catalog": name,
+            "revision": captured.config.revision,
+            "tables": tables,
+            "next_cursor": next_cursor,
+        }
+
+    def diagnose_workspace_catalog(
+        self, name: str, *, actor: ControlPlaneActor, correlation_id: str | None
+    ) -> dict[str, object]:
+        _require_admin(actor)
+        with self._work_factory() as work:
+            captured = capture_catalog_discovery(
+                work,
+                name,
+                egress_allowlist=self._egress_allowlist,
+                plugin_registry=self._plugin_registry,
+            )
+        result = diagnose_workspace_catalog(
+            captured, session_key=actor.identity_key(), browser=self._browser
+        )
+        with self._work_factory() as work:
+            ensure_catalog_discovery_current(work, captured)
+        return result
+
+
+def _require_admin(actor: ControlPlaneActor) -> None:
+    if not actor.platform_admin:
+        raise AuthorizationFailure("Platform admin required")

@@ -4,8 +4,14 @@ from collections.abc import Iterable, Iterator
 
 import pyarrow as pa
 import pyarrow.flight as flight
+from dal_obscura_plugin_api.execution import close_preserving_error
 
-from dal_obscura.application.reads.execution import StreamResourceError
+from dal_obscura.application.reads.execution import (
+    SourceInitializationPermissionError,
+    SourceInitializationValueError,
+    StreamCancelledError,
+    StreamResourceError,
+)
 
 
 def make_stream(schema: pa.Schema, batches: Iterable[pa.RecordBatch]) -> flight.GeneratorStream:
@@ -16,9 +22,13 @@ def make_stream(schema: pa.Schema, batches: Iterable[pa.RecordBatch]) -> flight.
 def _resource_guard(batches: Iterable[pa.RecordBatch]) -> Iterator[pa.RecordBatch]:
     try:
         yield from batches
+    except StreamCancelledError as exc:
+        raise flight.FlightCancelledError(str(exc)) from exc
+    except SourceInitializationPermissionError as exc:
+        raise flight.FlightUnauthorizedError("Unauthorized") from exc
+    except SourceInitializationValueError as exc:
+        raise flight.FlightInternalError("Ticket payload mismatch") from exc
     except StreamResourceError as exc:
         raise flight.FlightUnavailableError(str(exc)) from exc
     finally:
-        close = getattr(batches, "close", None)
-        if callable(close):
-            close()
+        close_preserving_error(batches)

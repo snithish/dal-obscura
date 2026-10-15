@@ -1,5 +1,5 @@
 {
-  "status": "blocked",
+  "status": "complete",
   "execution_authorization": "User authorized implementation and, on 2026-10-15, committing progress and pushing the current branch before continuing implementation. Merge and deployment remain unauthorized.",
   "tasks": [
     {
@@ -56,10 +56,9 @@
       "depends_on": [
         "T04"
       ],
-      "status": "blocked",
+      "status": "complete",
       "specification": "README.md#t05",
-      "completion_evidence": null,
-      "blocking_reason": "Clarify T05 all-SQL-writes acceptance scope versus T06/T07 legacy command/transaction migration and T08 session migration. Independent T05 work passes Q1; see progress.md."
+      "completion_evidence": "progress.md#t05-establish-governance-persistence-ports: Q1 1218 passed; transaction lifecycle, audit metadata and repository audits passed. User explicitly approved applying the gate to new repository paths; legacy writers migrated under T06\u2013T08."
     },
     {
       "id": "T06",
@@ -67,9 +66,9 @@
       "depends_on": [
         "T05"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t06",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t06-migrate-assets-and-policies: 299 focused and 1220 Q1 tests passed; 28 PostgreSQL checks passed without exclusions; audit rollback falsification, inventory/import audits, lint/types/OpenAPI passed."
     },
     {
       "id": "T07",
@@ -77,9 +76,9 @@
       "depends_on": [
         "T06"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t07",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t07-migrate-remaining-governance: 470 focused and 1220 Q1 tests passed; 53 PostgreSQL checks passed without exclusions; all 30 command signatures/imports audited, old control tree/transaction wrapper removed, OpenAPI and static checks passed."
     },
     {
       "id": "T08",
@@ -87,9 +86,9 @@
       "depends_on": [
         "T07"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t08",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t08-centralize-startup-and-sessions: 392 focused, 1221 Q1, 10 ownership/socket and one real CLI startup tests passed; store/session AST proofs, HTTP boundaries, OpenAPI and static gates passed. Live SSO remains required at T14."
     },
     {
       "id": "T09",
@@ -97,9 +96,9 @@
       "depends_on": [
         "T08"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t09",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t09-supervise-execution-lifecycle: 1235 Q1, 233 focused, 52 ownership/memory and 25 native Flight/CLI tests passed; deterministic input/disclosure counts, boundary review, OpenAPI/static checks and index refresh passed."
     },
     {
       "id": "T10",
@@ -107,9 +106,9 @@
       "depends_on": [
         "T09"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t10",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t10-own-ui-session-lifecycle: full Q2 passed (73 unit, 59 stories, 109 browser tests, types, API types and build); generation-fenced deferred load/save across identities and failed logout retry passed."
     },
     {
       "id": "T11",
@@ -117,9 +116,9 @@
       "depends_on": [
         "T10"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t11",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t11-own-asset-and-policy-workflows: full Q2 passed (73 unit, 59 stories, 111 browser, types/API/build). Exact late-save/edit, duplicate, navigation-preview, persona, revision and failed-logout cases passed; draft-fence falsification rejected and restored."
     },
     {
       "id": "T12",
@@ -127,9 +126,9 @@
       "depends_on": [
         "T11"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t12",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t12-own-management-queries: Q2 passed (75 unit, 59 story, 111 browser, types/API/build); parser rejects legacy edges, pagination/admin visibility/filter retention passed; reproduced draft/history race fixed and 10/10 repeats passed; unchanged bundle budgets passed."
     },
     {
       "id": "T13",
@@ -137,9 +136,9 @@
       "depends_on": [
         "T12"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t13",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t13-enforce-boundaries-and-remove-obsolete-paths: 23 Python AST boundary tests, all 126 mapped entries, 1258 Q1, 138 fresh-wheel contract checks and full Q2 passed; exact migrations, protocol/OpenAPI/CLI compatibility and no stale paths verified."
     },
     {
       "id": "T14",
@@ -147,9 +146,9 @@
       "depends_on": [
         "T13"
       ],
-      "status": "pending",
+      "status": "complete",
       "specification": "README.md#t14",
-      "completion_evidence": null
+      "completion_evidence": "progress.md#t14-qualify-and-deliver: exact release wheel passed 1368 no-skips Python tests, 52 JVM tests, live Keycloak Flight/browser checks, full Q2, all 15 comparable capacity runs and 4000-field schema measurements. Final byte/map/static audits passed; unmeasured comparisons and clock precondition documented. No further commit/push/deployment."
     }
   ]
 }

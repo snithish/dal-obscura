@@ -4,7 +4,7 @@ import pytest
 from dal_obscura_plugin_api import DiscoveryPage, PluginDescriptor, TableIdentifier
 
 import dal_obscura.adapters.providers.discovery as discovery
-import dal_obscura.control.catalogs.service as catalog_service
+import dal_obscura.adapters.providers.governance as catalog_service
 from dal_obscura.adapters.providers.discovery import (
     discover_public_catalog_tables,
 )

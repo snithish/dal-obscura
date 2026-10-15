@@ -79,11 +79,11 @@ def http_client():
 @pytest.fixture
 def client_factory(db_engine, http_client):
     """Compose real HTTP routes with explicit app overrides."""
-    from dal_obscura.interfaces.http.app import create_app
+    from dal_obscura.bootstrap.control import build_control_app
 
     def create(*, base_url="http://testserver", **app_options):
         factory = session_factory(db_engine)
-        app = create_app(factory, admin_token="test-admin", **app_options)
+        app = build_control_app(factory, admin_token="test-admin", **app_options)
         app.state.test_session_factory = factory
         return http_client(app, base_url=base_url)
 

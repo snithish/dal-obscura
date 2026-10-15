@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dal_obscura.control.assets import schema as schema_service
+from dal_obscura.adapters.providers import governance as schema_service
 from tests.support.control.workspace import (
     ADMIN_HEADERS,
     DEFAULT_AUTH_MODULE,

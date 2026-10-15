@@ -12,25 +12,24 @@ from uuid import UUID
 
 import pyarrow as pa
 from dal_obscura_plugin_api.schema.index import SchemaIndex
-from sqlalchemy.orm import Session
 
-from dal_obscura.adapters.duckdb.transform import (
-    DuckDBRowTransformAdapter,
-)
-from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.assets import schema as schema_service
 from dal_obscura.application.governance.errors import (
     ConfigurationConflictError,
     ValidationFailure,
 )
-from dal_obscura.application.reads.ports import ProjectionCompiler
-from dal_obscura.control.assets import schema as schema_service
-from dal_obscura.control.policies import service as policy_service
-from dal_obscura.control.workspace.attributes import provider_mapper
+from dal_obscura.application.governance.policies import preview as policy_service
+from dal_obscura.application.governance.ports import (
+    GovernancePluginRegistry,
+    GovernanceUnitOfWork,
+    PreviewIdentityMapper,
+)
+from dal_obscura.application.governance.values import AssetSchemaDiscovery
+from dal_obscura.application.reads.ports import ProjectionCompiler, RowTransformPort
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.policy.filters import deserialize_row_filter
 from dal_obscura.kernel.policy.models import AssetPolicy, MaskRule
-from dal_obscura.plugins import PluginRegistry
 
 MAX_SYNTHETIC_ROWS = 100
 MAX_SYNTHETIC_BYTES = 2 * 1024 * 1024
@@ -41,7 +40,7 @@ EVALUATOR_VERSION = "duckdb-synthetic-v1"
 class PolicyEvaluation:
     """Captured policy, mapped subject and detached bounded synthetic inputs."""
 
-    source: schema_service.AssetSchemaDiscovery
+    source: AssetSchemaDiscovery
     policy: AssetPolicy
     principal: Principal
     claims_json: str
@@ -51,7 +50,7 @@ class PolicyEvaluation:
 
 
 def capture_asset_evaluation(
-    store: Session,
+    store: GovernanceUnitOfWork,
     asset_id: UUID,
     actor: ControlPlaneActor,
     *,
@@ -61,7 +60,8 @@ def capture_asset_evaluation(
     rows: list[dict[str, object]] | None,
     provider_ordinal: int | None = None,
     egress_allowlist: tuple[str, ...] = (),
-    plugin_registry: PluginRegistry | None = None,
+    plugin_registry: GovernancePluginRegistry | None = None,
+    identity_mapper: PreviewIdentityMapper,
 ) -> PolicyEvaluation:
     source = schema_service.capture_asset_schema(
         store,
@@ -79,9 +79,18 @@ def capture_asset_evaluation(
         raise ValidationFailure("Synthetic identity claims are invalid") from exc
     provider_revision = None
     if provider_ordinal is not None:
-        mapper, provider = provider_mapper(store, provider_ordinal)
+        provider = next(
+            (
+                item
+                for item in store.workspace.list_auth_providers()
+                if item["ordinal"] == provider_ordinal and item["enabled"]
+            ),
+            None,
+        )
+        if provider is None:
+            raise ValidationFailure("Choose an enabled identity provider")
         try:
-            subject = mapper.map_claims(claims)
+            subject = identity_mapper.map_claims(provider, claims)
         except PermissionError as exc:
             raise ValidationFailure(str(exc)) from exc
         provider_revision = int(cast(int | str, provider["revision"]))
@@ -100,7 +109,7 @@ def capture_asset_evaluation(
 
 
 def ensure_asset_evaluation_current(
-    store: Session, captured: PolicyEvaluation, actor: ControlPlaneActor
+    store: GovernanceUnitOfWork, captured: PolicyEvaluation, actor: ControlPlaneActor
 ) -> None:
     asset = schema_service.ensure_asset_schema_current(store, captured.source, actor)
     revision = int(cast(int | str, asset["policy_revision"]))
@@ -109,7 +118,7 @@ def ensure_asset_evaluation_current(
             "Policy changed during evaluation; run evaluation again", current_revision=revision
         )
     if captured.provider_revision is not None:
-        revision = _db_workspace.get_auth_provider_revision(store)
+        revision = store.workspace.get_auth_provider_revision()
         if revision != captured.provider_revision:
             raise ConfigurationConflictError(
                 "Identity mapping changed during evaluation; run evaluation again",
@@ -118,7 +127,11 @@ def ensure_asset_evaluation_current(
 
 
 def evaluate_asset_policy(
-    captured: PolicyEvaluation, arrow_schema: pa.Schema, *, compiler: ProjectionCompiler
+    captured: PolicyEvaluation,
+    arrow_schema: pa.Schema,
+    *,
+    compiler: ProjectionCompiler,
+    transform: RowTransformPort,
 ) -> dict[str, object]:
     """Evaluate a captured policy over bounded synthetic rows without database IO."""
     rows = json.loads(captured.rows_json) if captured.rows_json is not None else None
@@ -199,7 +212,7 @@ def evaluate_asset_policy(
             arrow_schema, cast(list[str], preview["visible_columns"]), masks
         )
         transformed = list(
-            DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
+            transform.apply_filters_and_masks_stream(
                 batches,
                 projection,
                 row_filter,

@@ -153,7 +153,7 @@ class DataAccessFlightService(flight.FlightServerBase):
             except UnicodeDecodeError as exc:
                 raise pa.ArrowInvalid("Invalid ticket") from exc
             try:
-                result = self._reads.fetch(token, auth_request)
+                result = self._reads.fetch(token, auth_request, cancel_check=context.is_cancelled)
             except PermissionError as exc:
                 self._logger.warning("unauthorized", extra=self._log_extra())
                 raise flight.FlightUnauthorizedError("Unauthorized") from exc

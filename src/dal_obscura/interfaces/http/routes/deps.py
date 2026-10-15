@@ -4,44 +4,28 @@ from __future__ import annotations
 
 import ipaddress
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
-from typing import Annotated, TypeVar, cast
+from dataclasses import dataclass
+from typing import Annotated, cast
 from urllib.parse import urlsplit
 
 from fastapi import Cookie, Depends, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session, sessionmaker
 
+from dal_obscura.application.governance.assets.service import AssetsCommands
+from dal_obscura.application.governance.audit_service import AuditQueries
+from dal_obscura.application.governance.catalogs.service import CatalogsCommands
 from dal_obscura.application.governance.errors import (
-    AuthorizationFailure,
     ConfigurationConflictError,
-    PolicyValidationFailure,
     RevisionPreconditionRequired,
-    ValidationFailure,
 )
-from dal_obscura.application.reads.ports import ProjectionCompiler
-from dal_obscura.control.catalogs.discovery import DiscoveryCursors
-from dal_obscura.control.runtime import ControlContext
-from dal_obscura.identity.http_session import (
-    OidcActorResolver,
-    OidcNonceActorResolver,
-    oidc_actor_from_header,
-)
-from dal_obscura.identity.sessions import (
-    BrowserSessionStore,
-    LoginRateLimitDecision,
-    LoginRateLimiter,
-    LoginTransaction,
-    LoginTransactionStore,
-)
+from dal_obscura.application.governance.plugins import PluginCommands
+from dal_obscura.application.governance.policies.service import PoliciesCommands
+from dal_obscura.application.governance.sessions import SessionCommands
+from dal_obscura.application.governance.workspace.service import WorkspaceCommands
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
-from dal_obscura.plugins.registry import PluginRegistry
-from dal_obscura.runtime.secrets import SecretProvider
+from dal_obscura.kernel.identity.session import OidcNonceActorResolver
 
 AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
-ServiceResult = TypeVar("ServiceResult")
-MAX_BROWSER_SESSION_TTL_SECONDS = 86_400
-MAX_BROWSER_IDLE_TTL_SECONDS = 7_200
 
 _BEARER_AUTH = HTTPBearer(scheme_name="BearerAuth", auto_error=False)
 
@@ -73,37 +57,24 @@ class RevisionConflictResponse(HTTPException):
 class ControlPlaneDeps:
     """Route dependency bundle for auth checks and service session handling."""
 
-    session_maker: sessionmaker[Session]
+    sessions: SessionCommands
     admin_token: str
-    oidc_actor_resolver: OidcActorResolver | None
+    actor_resolver: Callable[[str], ControlPlaneActor | None] | None
     oidc_admin_group: str | None
     ui_auth_config: Mapping[str, object] | None
-    projection_compiler: ProjectionCompiler
-    session_ttl_seconds: int = 28_800
-    session_idle_ttl_seconds: int = 1_800
+    catalogs_commands: CatalogsCommands
+    workspace_commands: WorkspaceCommands
+    audit_queries: AuditQueries
+    plugin_commands: PluginCommands
+    assets_commands: AssetsCommands
+    policies_commands: PoliciesCommands
     allowed_origins: tuple[str, ...] = ()
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None
     authorization_code_exchange: AuthorizationCodeExchange | None = None
-    catalog_egress_allowlist: tuple[str, ...] = ()
     bootstrap_enabled: bool = True
-    login_rate_limit_attempts: int = 20
-    login_rate_limit_window_seconds: int = 60
-    login_rate_limit_block_seconds: int = 300
-    login_rate_limit_aggregate_attempts: int = 200
     trusted_proxy_peers: tuple[str, ...] = ()
-    plugin_registry: PluginRegistry | None = None
-    secret_provider: SecretProvider | None = None
-    discovery_cursors: DiscoveryCursors = field(default_factory=DiscoveryCursors)
 
     def __post_init__(self) -> None:
-        if not 1 <= self.session_ttl_seconds <= MAX_BROWSER_SESSION_TTL_SECONDS:
-            raise ValueError("session TTL must be between 1 second and 24 hours")
-        if not 1 <= self.session_idle_ttl_seconds <= MAX_BROWSER_IDLE_TTL_SECONDS:
-            raise ValueError("idle session TTL must be between 1 second and 2 hours")
-        if self.session_idle_ttl_seconds > self.session_ttl_seconds:
-            raise ValueError("idle session TTL cannot exceed session TTL")
-        if self.login_rate_limit_aggregate_attempts <= 0:
-            raise ValueError("aggregate login rate-limit attempts must be positive")
         for peer in self.trusted_proxy_peers:
             _parse_proxy_network(peer)
 
@@ -125,7 +96,7 @@ class ControlPlaneDeps:
             if session_token is None:
                 raise HTTPException(status_code=401, detail="Unauthorized")
             try:
-                actor = self.resolve_browser_session(session_token, csrf_cookie)
+                actor = self.sessions.resolve_browser_session(session_token, csrf_cookie)
             except ValueError as exc:
                 raise HTTPException(status_code=403, detail="CSRF validation failed") from exc
         else:
@@ -176,130 +147,9 @@ class ControlPlaneDeps:
     def resolve_bearer_token(self, token: str) -> ControlPlaneActor | None:
         """Resolves a provider bearer token into an actor."""
 
-        if self.oidc_actor_resolver is None:
+        if self.actor_resolver is None:
             return None
-        return oidc_actor_from_header(
-            f"Bearer {token}",
-            resolver=self.oidc_actor_resolver,
-            admin_group=self.oidc_admin_group,
-        )
-
-    def resolve_browser_session(
-        self,
-        token: str,
-        csrf_token: str | None = None,
-    ) -> ControlPlaneActor | None:
-        """Loads an unexpired browser session without exposing provider tokens."""
-
-        with self.session_maker() as session:
-            actor = BrowserSessionStore(session).resolve(
-                token,
-                csrf_token=csrf_token,
-                idle_ttl_seconds=self.session_idle_ttl_seconds,
-            )
-            if actor is not None:
-                session.commit()
-            return actor
-
-    def issue_browser_session_credentials(self, actor: ControlPlaneActor) -> tuple[str, str]:
-        """Mints the session and its browser-readable, session-bound CSRF secret."""
-
-        with self.session_maker() as session:
-            credentials = BrowserSessionStore(session).issue_with_csrf(
-                actor,
-                ttl_seconds=self.session_ttl_seconds,
-            )
-            session.commit()
-            return credentials
-
-    def revoke_browser_session(self, token: str) -> None:
-        """Revokes a browser session secret, if it exists."""
-
-        with self.session_maker() as session:
-            BrowserSessionStore(session).revoke(token)
-            session.commit()
-
-    def issue_login_transaction(
-        self,
-        *,
-        state: str,
-        nonce: str,
-        code_verifier: str,
-        redirect_uri: str,
-    ) -> None:
-        with self.session_maker() as session:
-            LoginTransactionStore(session).issue(
-                state=state,
-                nonce=nonce,
-                code_verifier=code_verifier,
-                redirect_uri=redirect_uri,
-            )
-            session.commit()
-
-    def check_login_rate_limit(
-        self,
-        client_key: str,
-        *,
-        aggregate_key: str | None = None,
-    ) -> LoginRateLimitDecision:
-        """Records a login start and returns the generic admission decision."""
-
-        with self.session_maker() as session:
-            limiter = LoginRateLimiter(session)
-            decision = limiter.allow(
-                client_key,
-                max_attempts=self.login_rate_limit_attempts,
-                window_seconds=self.login_rate_limit_window_seconds,
-                block_seconds=self.login_rate_limit_block_seconds,
-            )
-            if decision.allowed and aggregate_key and aggregate_key != client_key:
-                decision = limiter.allow(
-                    aggregate_key,
-                    max_attempts=self.login_rate_limit_aggregate_attempts,
-                    window_seconds=self.login_rate_limit_window_seconds,
-                    block_seconds=self.login_rate_limit_block_seconds,
-                )
-            session.commit()
-            return decision
-
-    def record_login_failure(
-        self,
-        client_key: str,
-        *,
-        aggregate_key: str | None = None,
-    ) -> LoginRateLimitDecision:
-        """Records a failed callback using the same durable client window."""
-
-        with self.session_maker() as session:
-            limiter = LoginRateLimiter(session)
-            decision = limiter.record_failure(
-                client_key,
-                max_attempts=self.login_rate_limit_attempts,
-                window_seconds=self.login_rate_limit_window_seconds,
-                block_seconds=self.login_rate_limit_block_seconds,
-            )
-            if decision.allowed and aggregate_key and aggregate_key != client_key:
-                decision = limiter.record_failure(
-                    aggregate_key,
-                    max_attempts=self.login_rate_limit_aggregate_attempts,
-                    window_seconds=self.login_rate_limit_window_seconds,
-                    block_seconds=self.login_rate_limit_block_seconds,
-                )
-            session.commit()
-            return decision
-
-    def clear_login_rate_limit(self, client_key: str) -> None:
-        """Clears login abuse state after a successful callback."""
-
-        with self.session_maker() as session:
-            LoginRateLimiter(session).clear(client_key)
-            session.commit()
-
-    def consume_login_transaction(self, state: str) -> LoginTransaction | None:
-        with self.session_maker() as session:
-            transaction = LoginTransactionStore(session).consume(state)
-            session.commit()
-            return transaction
+        return self.actor_resolver(token)
 
     def resolve_nonce_token(self, token: str, nonce_hash: str) -> ControlPlaneActor | None:
         if self.oidc_nonce_actor_resolver is None:
@@ -346,48 +196,6 @@ class ControlPlaneDeps:
         if not actor.platform_admin:
             raise HTTPException(status_code=403, detail="Platform admin required")
         return actor
-
-    def with_transaction(
-        self, callback: Callable[[ControlContext], ServiceResult]
-    ) -> ServiceResult:
-        with self.session_maker() as session:
-            service = ControlContext(
-                session,
-                catalog_egress_allowlist=self.catalog_egress_allowlist,
-                plugin_registry=self.plugin_registry,
-                secret_provider=self.secret_provider,
-            )
-            try:
-                result = callback(service)
-                session.commit()
-                return result
-            except PolicyValidationFailure as exc:
-                session.rollback()
-                raise HTTPException(
-                    status_code=422,
-                    detail=[
-                        {
-                            "loc": ["body", "rules", exc.rule_index],
-                            "msg": str(exc),
-                            "type": "value_error",
-                        }
-                    ],
-                ) from exc
-            except ValidationFailure as exc:
-                session.rollback()
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-            except AuthorizationFailure as exc:
-                session.rollback()
-                raise HTTPException(status_code=403, detail=str(exc)) from exc
-            except ConfigurationConflictError as exc:
-                session.rollback()
-                raise RevisionConflictResponse(exc) from exc
-            except LookupError as exc:
-                session.rollback()
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            except Exception:
-                session.rollback()
-                raise
 
 
 def _bearer_value(authorization: str) -> str | None:

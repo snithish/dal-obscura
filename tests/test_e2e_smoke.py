@@ -9,7 +9,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 from typing import Any
-from uuid import UUID
 
 import jwt
 import pyarrow as pa
@@ -22,15 +21,13 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, LongType, NestedField, StringType, StructType
 
-import tests.support.control.seed as _commands_seed
-from dal_obscura.adapters.sql import workspace as _db_workspace
 from dal_obscura.adapters.sql.database.db import (
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.control.assets import service as asset_service
-from dal_obscura.control.policies import service as policy_service
-from dal_obscura.control.runtime import ControlContext
+from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory
+from dal_obscura.application.governance.assets import service as asset_service
+from dal_obscura.application.governance.policies import service as policy_service
 from dal_obscura.interfaces.flight_contract import encode_plan_command
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
@@ -225,19 +222,16 @@ def control_plane_setup(
     engine = engine_factory(database_url)
     migrate_config_store(engine)
 
-    with session_factory(engine)() as session:
-        service = ControlContext(session)
-        _db_workspace.upsert_runtime_settings(
-            service.session, ticket_ttl_seconds=900, max_tickets=64, max_ticket_exchanges=1
+    with SqlGovernanceUnitOfWorkFactory(session_factory(engine))() as work:
+        work.workspace.upsert_runtime_settings(
+            ticket_ttl_seconds=900, max_tickets=64, max_ticket_exchanges=1
         )
-        _commands_seed.create_catalog(
-            service,
+        work.catalogs.upsert_catalog(
             name="e2e_catalog",
             plugin_id="iceberg.catalog",
             options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
         )
-        asset = _commands_seed.create_asset(
-            service,
+        asset = work.assets.upsert_asset(
             catalog="e2e_catalog",
             target="default.users",
             backend="iceberg",
@@ -245,8 +239,8 @@ def control_plane_setup(
             options={},
         )
         asset_service.replace_asset_schema_fields(
-            service.session,
-            UUID(asset["id"]),
+            work,
+            asset,
             [
                 {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64"},
                 {
@@ -304,8 +298,8 @@ def control_plane_setup(
             expected_revision=0,
         )
         policy_service.replace_policy_rules(
-            service.session,
-            UUID(asset["id"]),
+            work,
+            asset,
             [
                 {
                     "ordinal": 10,
@@ -322,14 +316,13 @@ def control_plane_setup(
             revoke_existing_tokens=False,
         )
         asset_service.replace_asset_owners(
-            service.session,
-            UUID(asset["id"]),
+            work,
+            asset,
             ["user:e2e-owner@example.com"],
             expected_revision=1,
             actor=None,
         )
-        _db_workspace.replace_auth_providers(
-            service.session,
+        work.workspace.replace_auth_providers(
             providers=[
                 {
                     "ordinal": 1,
@@ -344,7 +337,7 @@ def control_plane_setup(
                 }
             ],
         )
-        session.commit()
+        work.commit()
 
     return {"database_url": database_url, "private_key": oidc_jwks_server["private_key"]}
 

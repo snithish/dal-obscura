@@ -12,6 +12,9 @@ from tests.support.flight.flight import command_descriptor
 
 
 class DummyContext:
+    def is_cancelled(self):
+        return False
+
     def __init__(self, headers):
         self.headers = headers
 

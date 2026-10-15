@@ -7,7 +7,7 @@ from typing import cast
 import pytest
 
 from dal_obscura.adapters.sql.database.db import session_factory
-from dal_obscura.interfaces.cli.read import _start_health_server
+from dal_obscura.bootstrap.read import _start_health_server
 from dal_obscura.interfaces.flight.server import _health_payload
 from dal_obscura.interfaces.read_health import create_health_app, live_runtime_readiness
 from dal_obscura.runtime.configuration import DataPlaneRuntimeConfig
@@ -138,3 +138,32 @@ class _Runtime:
     ) -> None:
         self.auth_chain = auth_chain
         self.ticket = ticket
+
+
+@pytest.mark.socket
+def test_data_plane_health_owner_joins_worker_and_releases_socket(engine_factory):
+    from threading import enumerate as active_threads
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    engine = engine_factory("sqlite+pysqlite:///:memory:")
+    owner = _start_health_server(
+        session_factory(engine),
+        DataPlaneRuntimeConfig(
+            database_url="sqlite+pysqlite:///:memory:",
+            location="grpc://127.0.0.1:8815",
+            ticket_secret="ticket-secret",
+            health_port=port,
+        ),
+    )
+    assert owner is not None
+    try:
+        owner.close()
+        owner.close()
+        assert not any(thread.name == "dal-obscura-health" for thread in active_threads())
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind(("127.0.0.1", port))
+    finally:
+        owner.close()

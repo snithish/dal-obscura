@@ -4,6 +4,7 @@ import hashlib
 import json
 from dataclasses import replace
 from typing import Any, cast
+from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 import pyarrow as pa
@@ -16,12 +17,13 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringType, StructType
 from sqlalchemy.orm import Session
 
-from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
-from dal_obscura.control.assets.schema import (
+from dal_obscura.adapters.providers.governance import ProviderAssetSchemaLoader
+from dal_obscura.application.governance.assets.schema import (
     capture_asset_schema,
     get_asset_schema,
     schema_fingerprint,
 )
+from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProviderConfig, load_secret_provider
@@ -32,13 +34,15 @@ def discover_schema(
     store: Session, asset_id: UUID, actor: ControlPlaneActor, **options: Any
 ) -> dict[str, object]:
     captured = capture_asset_schema(
-        store,
+        Mock(assets=store, catalogs=store, workspace=store),
         asset_id,
         actor,
         egress_allowlist=options.get("egress_allowlist", ()),
         plugin_registry=options.get("plugin_registry"),
     )
-    return get_asset_schema(captured, **options)
+    return get_asset_schema(
+        captured, ProviderAssetSchemaLoader(**options).load_asset_schema(captured)
+    )
 
 
 class _FakeTable:
@@ -129,7 +133,10 @@ def _nested_schema() -> Schema:
 def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
     from dal_obscura_plugin_api.paths import FieldSegment
 
-    from dal_obscura.control.assets.schema import _arrow_field_node, _SchemaResponseBudget
+    from dal_obscura.application.governance.assets.schema import (
+        _arrow_field_node,
+        _SchemaResponseBudget,
+    )
 
     schema = _nested_schema()
     for field, arrow_field in zip(schema.fields, schema.as_arrow(), strict=True):
@@ -627,7 +634,8 @@ def test_schema_identity_rejects_base64_expansion_within_arrow_ipc_budget(digest
 def test_get_asset_schema_reports_scope_encoding_budget(monkeypatch) -> None:
     schema = pa.schema([pa.field("界" * 400_000, pa.string())])
     monkeypatch.setattr(
-        "dal_obscura.control.assets.schema.load_asset_schema", lambda *args, **kwargs: schema
+        "dal_obscura.adapters.providers.governance.ProviderAssetSchemaLoader.load_asset_schema",
+        lambda *args, **kwargs: schema,
     )
     asset_id = uuid4()
     with pytest.raises(ValidationFailure, match="Schema encoding exceeds"):
@@ -639,7 +647,7 @@ def test_get_asset_schema_reports_scope_encoding_budget(monkeypatch) -> None:
 
 
 def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(monkeypatch) -> None:
-    from dal_obscura.control.assets import schema as schema_service
+    from dal_obscura.application.governance.assets import schema as schema_service
 
     schema = pa.schema(
         [
@@ -649,7 +657,9 @@ def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(m
             )
         ]
     )
-    monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
+    monkeypatch.setattr(
+        ProviderAssetSchemaLoader, "load_asset_schema", lambda *args, **kwargs: schema
+    )
     visited = []
     original = schema_service.numeric_field_id
 
@@ -669,12 +679,13 @@ def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(m
 
 
 def test_get_asset_schema_preserves_long_names_within_response_budget(monkeypatch) -> None:
-    from dal_obscura.control.assets import schema as schema_service
     from dal_obscura.interfaces.http.routes.schemas import AssetSchemaResponse
 
     name = '界."' * 4096
     schema = pa.schema([pa.field(name, pa.struct([pa.field("leaf", pa.string())]))])
-    monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
+    monkeypatch.setattr(
+        ProviderAssetSchemaLoader, "load_asset_schema", lambda *args, **kwargs: schema
+    )
     asset_id = uuid4()
     result = discover_schema(
         _FakeStore(asset_id),  # type: ignore[arg-type]
@@ -690,11 +701,13 @@ def test_get_asset_schema_preserves_long_names_within_response_budget(monkeypatc
 
 
 def test_schema_response_budget_matches_serialized_http_contract(monkeypatch) -> None:
-    from dal_obscura.control.assets import schema as schema_service
+    from dal_obscura.application.governance.assets import schema as schema_service
     from dal_obscura.interfaces.http.routes.schemas import AssetSchemaResponse
 
     schema = _nested_schema().as_arrow()
-    monkeypatch.setattr(schema_service, "load_asset_schema", lambda *args, **kwargs: schema)
+    monkeypatch.setattr(
+        ProviderAssetSchemaLoader, "load_asset_schema", lambda *args, **kwargs: schema
+    )
     asset_id = uuid4()
 
     def discover():
@@ -827,20 +840,3 @@ def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
             plugin_registry=schema_registry(lambda *_args, **_: _FakeCatalog(_FakeTable(schema))),
         )
     assert "depth" in str(caught.value.__cause__)
-
-
-@pytest.fixture(autouse=True)
-def query_boundary(monkeypatch):
-    from tests.support.storage.storage_queries import install_query_doubles
-
-    install_query_doubles(
-        monkeypatch,
-        [
-            "get_workspace",
-            "get_workspace_asset",
-            "get_asset_binding",
-            "get_workspace_catalog",
-            "list_asset_owners",
-            "list_asset_grants",
-        ],
-    )
