@@ -12,6 +12,23 @@ root AGENTS.md rewrite remains unstaged. The branch is
 `codex/policy-authoring-hardening`, tracking the same branch on `origin`.
 `git diff --check` passed before staging. Existing verification results below
 describe the code in this checkpoint; no qualification gate is waived.
+
+Commands and results:
+
+- `git diff --check`: exit 0.
+- `git add -- examples/auth/_shared/scripts/build_runtime.py examples/demo/keycloak/scripts/provision_demo.py examples/nested-mor/scripts/verify.py pyproject.toml scripts/export_control_plane_openapi.py scripts/schema_capture_performance.py src tests docs/plans/architecture-implementation`: initial sandbox attempt failed to create the worktree index lock; the authorized escalated retry exited 0. AGENTS.md was excluded.
+- `git diff --cached --check`: exit 0; the staged AGENTS.md path list was empty.
+- `git commit -m 'refactor: establish kernel and application architecture boundaries'` with checkpoint and acceptance-conflict body paragraphs: exit 0, commit `44ae67f3`, 208 files changed. All four commit hooks passed: Ruff format, Ruff lint, Ty type check and Pytest non-heavy. The hooks temporarily stashed and restored the unrelated AGENTS.md changes.
+- `git push origin HEAD:refs/heads/codex/policy-authoring-hardening`: exit 0, remote advanced from `80dde1e4` to `44ae67f3`.
+
+Continuation review confirmed that T06 depends on T05 acceptance and every
+subsequent task depends on that serial chain. The scope question was presented
+again after the user's continuation request. T05 remains incomplete pending
+that answer; commit/push authorization does not waive its acceptance gate.
+Independent review confirmed SQL repository methods contain no commit and the
+unit of work retains explicit rollback/close handling. No dependent code was
+changed while awaiting clarification. This record update requires no Python
+wheel reinstall or application tests because it changes documentation only.
 No commit, push, merge, deployment or shared-service change is authorized.
 
 ## T00: capture baseline
