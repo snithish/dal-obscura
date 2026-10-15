@@ -1053,7 +1053,19 @@ exit 0. All 15 current task statuses and completion-evidence records agree.
 
 
 
-## Current cumulative workspace path inventory
+## Authorized final delivery
+
+The user explicitly requested committing and pushing the completed work.
+
+- `git diff --cached --check` initially found one extra blank line at the end of Workspace.tsx, which had been untracked during the earlier unstaged diff check. Removed that blank line; the repeated staged check exited 0. This whitespace-only cleanup changes no executable behavior.
+- `git add -- apps/governance-ui docs/architecture.md docs/plans/architecture-implementation/progress.md docs/plans/architecture-implementation/tasks.json examples/auth/_shared/scripts/build_runtime.py scripts/export_control_plane_openapi.py scripts/schema_capture_performance.py src/dal_obscura tests`: exit 0. AGENTS.md remained unstaged.
+- `git commit -F /tmp/dal-architecture-final-commit.txt`: exit 0, created 55cf23f6 (`refactor: complete approved architecture implementation`). Ruff format, Ruff lint, Ty type check and Pytest non-heavy commit hooks all passed. The hook restored the unrelated unstaged changes.
+- `git push origin HEAD:refs/heads/codex/policy-authoring-hardening`: exit 0, advanced the remote branch from 54e20730 to 55cf23f6.
+
+This delivery record is a documentation-only follow-up. The unrelated AGENTS.md
+rewrite remains excluded. No merge or deployment was performed.
+
+## Cumulative implementation path inventory
 
 The following list excludes the user-owned AGENTS.md rewrite. It includes the
 planning inputs that were already untracked. Those inputs remain unchanged
