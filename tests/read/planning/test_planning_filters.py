@@ -3,9 +3,10 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.policy.filters import deserialize_row_filter
-from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
-from dal_obscura.read.request import PlanRequest
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.filters import deserialize_row_filter
+from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
 from tests.support.read.read_scenarios import (
     AUTHORIZATION_HEADER,
     _build_use_case_dependencies,

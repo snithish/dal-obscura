@@ -1,5 +1,6 @@
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pyarrow as pa
 import pytest
@@ -7,12 +8,12 @@ from dal_obscura_iceberg.format import IcebergFormatPlugin
 from dal_obscura_plugin_api import ScanTask as PluginScanTask
 from dal_obscura_plugin_api import TableHandle, TableIdentifier
 
+from dal_obscura.adapters.providers.adapters import PublicPluginPartition, PublicPluginTableFormat
+from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
+from dal_obscura.application.reads.sources import ScanTask
 from dal_obscura.plugins.bootstrap import (
     create_plugin_registry,
 )
-from dal_obscura.read.tickets.envelope import SourceTaskCodec
-from dal_obscura.sources.adapters import PublicPluginPartition, PublicPluginTableFormat
-from dal_obscura.sources.planning import ScanTask
 
 
 def envelope():
@@ -57,6 +58,18 @@ def test_scan_envelope_preserves_schema_native_tasks_and_storage_bounds():
     assert restored.partition.task.to_json() == task.partition.task.to_json()
     assert restored.table_format.path_roots == ("/warehouse",)
     assert "format_factory" not in encoded
+
+
+def test_scan_envelope_matches_architecture_baseline():
+    codec, task = envelope()
+    baseline = (Path(__file__).parent / "fixtures" / "scan_envelope_v1.json").read_text().strip()
+    assert codec.encode(task) == baseline
+    restored = codec.decode(baseline)
+    assert restored.schema.equals(task.schema, check_metadata=True)
+    assert restored.partition.schema.equals(task.partition.schema, check_metadata=True)
+    assert restored.partition.task.to_json() == task.partition.task.to_json()
+    assert restored.table_format.handle.to_json() == task.table_format.handle.to_json()
+    assert restored.table_format.path_roots == task.table_format.path_roots
 
 
 def test_scan_envelope_rejects_oversized_schemas_before_arrow_decoding(monkeypatch):
@@ -161,9 +174,13 @@ def test_scan_envelope_captures_format_options_for_fetch(tmp_path):
 
     import pyarrow.parquet as pq
 
+    from dal_obscura.adapters.providers.catalogs import (
+        CatalogConfig,
+        CatalogRegistry,
+        ServiceConfig,
+    )
+    from dal_obscura.kernel.plans.request import PlanRequest
     from dal_obscura.plugins import PluginRegistry
-    from dal_obscura.read.request import PlanRequest
-    from dal_obscura.sources.catalogs import CatalogConfig, CatalogRegistry, ServiceConfig
     from tests.support.plugins.plugins import manifest_registry
     from tests.support.plugins.public_plugins import _fixture
 

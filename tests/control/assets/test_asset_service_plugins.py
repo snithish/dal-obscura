@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.assets.service import upsert_workspace_asset
-from dal_obscura.control.errors import ValidationFailure
 
 
 def _registry(*, overlap: bool = True) -> Any:

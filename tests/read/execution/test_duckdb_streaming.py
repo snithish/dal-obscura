@@ -5,15 +5,16 @@ from typing import cast
 import pyarrow as pa
 import pytest
 
-import dal_obscura.read.execution.transform as duckdb_transform
-from dal_obscura.policy.filters import parse_row_filter
-from dal_obscura.policy.models import MaskRule
-from dal_obscura.read.execution.transform import (
+import dal_obscura.adapters.duckdb.transform as duckdb_transform
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
     InputBatchLimitError,
     StreamAdmissionError,
     StreamMemoryLimitError,
 )
+from dal_obscura.kernel.policy.filters import parse_row_filter
+from dal_obscura.kernel.policy.models import MaskRule
 from tests.support.performance.memory_probe import run_memory_probe
 
 
@@ -27,9 +28,10 @@ def test_filters_and_masks_preserve_results_across_batch_boundaries():
         list(
             adapter.apply_filters_and_masks_stream(
                 batches,
-                ["id"],
+                DuckDBProjectionCompiler().compile(
+                    batches[0].schema, ["id"], {"id": MaskRule(type="redact", value="hidden")}
+                ),
                 parse_row_filter("id > 1", schema),
-                {"id": MaskRule(type="redact", value="hidden")},
             )
         )
     )
@@ -59,7 +61,11 @@ def test_duckdb_transform_denies_external_file_access(monkeypatch, tmp_path):
     monkeypatch.setattr(duckdb_transform.duckdb, "connect", checked_connect)
     batch = pa.record_batch([pa.array([1], type=pa.int64())], names=["id"])
     result = pa.Table.from_batches(
-        list(DuckDBRowTransformAdapter().apply_filters_and_masks_stream([batch], ["id"], None, {}))
+        list(
+            DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+            )
+        )
     )
     assert result.to_pylist() == [{"id": 1}]
     assert not destination.exists()
@@ -96,9 +102,10 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
     adapter = DuckDBRowTransformAdapter()
     stream = adapter.apply_filters_and_masks_stream(
         [pa.record_batch([pa.array([1, 2, 3, 4])], names=["id"])],
-        ["id"],
+        DuckDBProjectionCompiler().compile(
+            (pa.record_batch([pa.array([1, 2, 3, 4])], names=["id"])).schema, ["id"], {}
+        ),
         None,
-        {},
     )
     stream_iter = cast(Generator[pa.RecordBatch], stream)
 
@@ -113,15 +120,23 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
 def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
     adapter = DuckDBRowTransformAdapter(max_active_streams=1)
     batch = pa.record_batch([pa.array([1, 2, 3])], names=["id"])
-    first = adapter.apply_filters_and_masks_stream([batch], ["id"], None, {})
+    first = adapter.apply_filters_and_masks_stream(
+        [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+    )
 
     assert next(cast(Generator[pa.RecordBatch], first)).num_rows == 3
-    second = adapter.apply_filters_and_masks_stream([batch], ["id"], None, {})
+    second = adapter.apply_filters_and_masks_stream(
+        [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+    )
     with pytest.raises(StreamAdmissionError, match="capacity"):
         next(cast(Generator[pa.RecordBatch], second))
 
     cast(Generator[pa.RecordBatch], first).close()
-    assert list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
+    assert list(
+        adapter.apply_filters_and_masks_stream(
+            [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+        )
+    )
 
 
 def test_stream_admission_precedes_source_reads_and_creation_is_lazy():
@@ -133,10 +148,22 @@ def test_stream_admission_precedes_source_reads_and_creation_is_lazy():
         consumed.append(True)
         yield batch
 
-    first = iter(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+    first = iter(
+        adapter.apply_filters_and_masks_stream(
+            source(),
+            DuckDBProjectionCompiler().compile(pa.schema([pa.field("id", pa.int64())]), ["id"], {}),
+            None,
+        )
+    )
     assert consumed == []
     next(first)
-    second = iter(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+    second = iter(
+        adapter.apply_filters_and_masks_stream(
+            source(),
+            DuckDBProjectionCompiler().compile(pa.schema([pa.field("id", pa.int64())]), ["id"], {}),
+            None,
+        )
+    )
     with pytest.raises(StreamAdmissionError):
         next(second)
     assert consumed == [True]
@@ -148,7 +175,11 @@ def test_input_budget_counts_retained_slice_buffers():
     assert batch.nbytes == 8
     adapter = DuckDBRowTransformAdapter(max_input_batch_bytes=100)
     with pytest.raises(InputBatchLimitError, match="limit"):
-        list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+            )
+        )
 
 
 def test_input_failure_closes_source_and_releases_admission():
@@ -162,11 +193,23 @@ def test_input_failure_closes_source_and_releases_admission():
 
     adapter = DuckDBRowTransformAdapter(max_active_streams=1, max_input_batch_bytes=8)
     with pytest.raises(InputBatchLimitError):
-        list(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+        list(
+            adapter.apply_filters_and_masks_stream(
+                source(),
+                DuckDBProjectionCompiler().compile(
+                    pa.schema([pa.field("id", pa.string())]), ["id"], {}
+                ),
+                None,
+            )
+        )
     assert closed == [True]
     assert list(
         adapter.apply_filters_and_masks_stream(
-            [pa.record_batch([pa.array([1])], names=["id"])], ["id"], None, {}
+            [pa.record_batch([pa.array([1])], names=["id"])],
+            DuckDBProjectionCompiler().compile(
+                (pa.record_batch([pa.array([1])], names=["id"])).schema, ["id"], {}
+            ),
+            None,
         )
     )
 
@@ -184,7 +227,11 @@ def test_real_duckdb_oom_releases_slot_and_does_not_expose_query():
         with pytest.raises(StreamMemoryLimitError, match="memory budget exhausted") as error:
             list(
                 adapter.apply_filters_and_masks_stream(
-                    [batch], ["id"], None, {"id": MaskRule(type="hash")}
+                    [batch],
+                    DuckDBProjectionCompiler().compile(
+                        batch.schema, ["id"], {"id": MaskRule(type="hash")}
+                    ),
+                    None,
                 )
             )
         assert "SELECT" not in str(error.value)
@@ -202,7 +249,15 @@ def test_later_input_limit_failure_keeps_its_type_and_closes_source():
 
     adapter = DuckDBRowTransformAdapter(max_input_batch_bytes=8)
     with pytest.raises(InputBatchLimitError):
-        list(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+        list(
+            adapter.apply_filters_and_masks_stream(
+                source(),
+                DuckDBProjectionCompiler().compile(
+                    pa.schema([pa.field("id", pa.int64())]), ["id"], {}
+                ),
+                None,
+            )
+        )
     assert closed == [True]
 
 
@@ -217,7 +272,11 @@ def test_duckdb_transform_rejects_an_oversized_input_batch_before_query_executio
     batch = pa.record_batch([pa.array([1])], names=["id"])
 
     with pytest.raises(InputBatchLimitError, match="limit"):
-        list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+            )
+        )
 
 
 def test_duckdb_transform_streams_chunked_output(monkeypatch):
@@ -225,7 +284,13 @@ def test_duckdb_transform_streams_chunked_output(monkeypatch):
     adapter = DuckDBRowTransformAdapter()
     input_batch = pa.record_batch([pa.array(list(range(6)))], names=["id"])
 
-    result_batches = list(adapter.apply_filters_and_masks_stream([input_batch], ["id"], None, {}))
+    result_batches = list(
+        adapter.apply_filters_and_masks_stream(
+            [input_batch],
+            DuckDBProjectionCompiler().compile(input_batch.schema, ["id"], {}),
+            None,
+        )
+    )
 
     assert [batch.num_rows for batch in result_batches] == [2, 2, 2]
     result = pa.Table.from_batches(result_batches)
@@ -244,8 +309,9 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess(payload_bytes):
         from tests.support.performance.memory_probe import begin_memory_probe
         import pyarrow as pa
 
-        from dal_obscura.policy.filters import parse_row_filter
-        from dal_obscura.read.execution.transform import (
+        from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+        from dal_obscura.kernel.policy.filters import parse_row_filter
+        from dal_obscura.adapters.duckdb.transform import (
                         DuckDBRowTransformAdapter,
         )
 
@@ -268,9 +334,14 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess(payload_bytes):
 
         begin_memory_probe()
         row_count = 0
+        projection = DuckDBProjectionCompiler().compile(
+            pa.schema([("id", pa.int64()), ("value", pa.int64()), ("payload", pa.string())]),
+            ["id", "value", "payload"],
+            {},
+        )
         for batch in adapter.apply_filters_and_masks_stream(
             source(),
-            ["id", "value", "payload"],
+            projection,
             parse_row_filter(
                 "id >= 0",
                 pa.schema(
@@ -280,7 +351,6 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess(payload_bytes):
                     ]
                 ),
             ),
-            {},
         ):
             row_count += batch.num_rows
 
@@ -330,7 +400,11 @@ def test_first_output_does_not_consume_later_input_batches():
     adapter = DuckDBRowTransformAdapter()
     stream = cast(
         Generator[pa.RecordBatch],
-        adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}),
+        adapter.apply_filters_and_masks_stream(
+            source(),
+            DuckDBProjectionCompiler().compile(pa.schema([pa.field("id", pa.int64())]), ["id"], {}),
+            None,
+        ),
     )
     try:
         assert next(stream).column(0).to_pylist() == [0]
@@ -346,7 +420,11 @@ def test_input_schema_changes_are_rejected():
         pa.record_batch([pa.array(["changed"])], names=["id"]),
     ]
     with pytest.raises(ValueError, match="schema changed"):
-        list(adapter.apply_filters_and_masks_stream(batches, ["id"], None, {}))
+        list(
+            adapter.apply_filters_and_masks_stream(
+                batches, DuckDBProjectionCompiler().compile(batches[0].schema, ["id"], {}), None
+            )
+        )
 
 
 def test_connection_setup_failure_closes_connection(monkeypatch):

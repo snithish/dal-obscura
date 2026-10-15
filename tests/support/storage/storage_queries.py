@@ -4,7 +4,7 @@ The passed test object supplies query results; no fake SQLAlchemy engine or ORM
 internals are needed. Database behavior remains owned by integration tests.
 """
 
-from dal_obscura.storage import assets, audit, catalogs, policies, workspace
+from dal_obscura.adapters.sql import assets, audit, catalogs, policies, workspace
 
 
 def install_query_doubles(monkeypatch, names):

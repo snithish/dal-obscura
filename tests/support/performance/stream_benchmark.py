@@ -23,11 +23,12 @@ from pyiceberg.types import (
     TimestampType,
 )
 
-from dal_obscura.sources.catalogs import (
+from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.plugins.bootstrap import create_plugin_registry
 from tests.support.flight.flight import (
     build_flight_service,
     command_descriptor,
@@ -391,7 +392,8 @@ def _run_iceberg_stream_scenario(
                     options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
                 )
             },
-        )
+        ),
+        plugin_registry=create_plugin_registry(),
     )
     try:
         server = build_flight_service(

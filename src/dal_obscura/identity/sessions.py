@@ -13,13 +13,13 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.storage.database.orm import (
+from dal_obscura.adapters.sql.database.orm import (
     BrowserSessionRecord,
     LoginRateLimitRecord,
     LoginTransactionRecord,
     utcnow,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 class BrowserSessionStore:

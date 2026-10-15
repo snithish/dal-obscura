@@ -3,13 +3,14 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.policy.filters import deserialize_row_filter
-from dal_obscura.policy.models import AccessDecision, Principal
-from dal_obscura.read.execution.transform import (
+from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.filters import deserialize_row_filter
+from dal_obscura.kernel.policy.models import AccessDecision
 from tests.support.flight.flight import InMemoryPolicyAuthorizer
 from tests.support.read.read_scenarios import (
     AUTHORIZATION_HEADER,

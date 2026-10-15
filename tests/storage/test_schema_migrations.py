@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import inspect, text
 
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     ConfigStoreMigrationRequired,
     check_config_store_schema,
     migrate_config_store,
 )
-from dal_obscura.storage.database.orm import Base
+from dal_obscura.adapters.sql.database.orm import Base
 
 REVISION = "20261011_0001"
 
@@ -45,7 +45,7 @@ def test_migration_and_schema_check_are_idempotent(engine_factory) -> None:
 def test_explicit_downgrade_drops_the_config_store(engine_factory) -> None:
     from alembic import command
 
-    from dal_obscura.storage.database.db import _alembic_config
+    from dal_obscura.adapters.sql.database.db import _alembic_config
 
     engine = engine_factory("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
@@ -59,7 +59,7 @@ def test_explicit_downgrade_drops_the_config_store(engine_factory) -> None:
 
 
 def test_migration_accepts_percent_encoded_database_url(engine_factory, tmp_path):
-    from dal_obscura.storage.database.db import migrate_config_store
+    from dal_obscura.adapters.sql.database.db import migrate_config_store
 
     engine = engine_factory(f"sqlite+pysqlite:///{tmp_path}/config%25.db")
     try:
@@ -72,11 +72,11 @@ def test_database_enforces_singleton_workspace_and_runtime(engine_factory):
     import pytest
     from sqlalchemy.exc import IntegrityError
 
-    from dal_obscura.storage.database.db import (
+    from dal_obscura.adapters.sql.database.db import (
         migrate_config_store,
         session_factory,
     )
-    from dal_obscura.storage.database.orm import RuntimeSettingsRecord, WorkspaceRecord
+    from dal_obscura.adapters.sql.database.orm import RuntimeSettingsRecord, WorkspaceRecord
 
     engine = engine_factory("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
@@ -94,7 +94,7 @@ def test_baseline_matches_orm_columns_constraints_and_indexes(engine_factory):
     from alembic.autogenerate import compare_metadata
     from alembic.migration import MigrationContext
 
-    from dal_obscura.storage.database.db import migrate_config_store
+    from dal_obscura.adapters.sql.database.db import migrate_config_store
 
     engine = engine_factory("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
@@ -106,7 +106,7 @@ def test_baseline_matches_orm_columns_constraints_and_indexes(engine_factory):
 def test_postgres_preserves_complete_nested_schema_types():
     from uuid import uuid4
 
-    from dal_obscura.storage.database.orm import (
+    from dal_obscura.adapters.sql.database.orm import (
         AssetRecord,
         AssetSchemaFieldRecord,
         CatalogRecord,
@@ -145,7 +145,7 @@ def test_postgres_preserves_complete_nested_schema_types():
 def test_release_has_one_create_only_baseline(engine_factory):
     from alembic.script import ScriptDirectory
 
-    from dal_obscura.storage.database.db import _alembic_config
+    from dal_obscura.adapters.sql.database.db import _alembic_config
 
     engine = engine_factory("sqlite+pysqlite:///:memory:")
     revisions = list(ScriptDirectory.from_config(_alembic_config(engine)).walk_revisions())

@@ -3,8 +3,9 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
-from dal_obscura.read.request import PlanRequest
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
 from tests.support.read.read_scenarios import (
     AUTHORIZATION_HEADER,
     _build_use_case_dependencies,
@@ -22,6 +23,30 @@ from tests.support.read.use_cases import (
     TrackingTableFormat,
     scan_payload,
 )
+
+
+def test_schema_plan_and_fetch_use_the_injected_compiled_projection():
+    from dal_obscura.kernel.plans.projection import CompiledProjection
+
+    output_schema = pa.schema([pa.field("id", pa.int32())])
+
+    class LiteralCompiler:
+        def compile(self, schema, columns, masks):
+            return CompiledProjection(('CAST(42 AS INTEGER) AS "id"',), output_schema)
+
+    _, decision, table = _build_use_case_dependencies()
+    service = governed_read_service(table, decision, projection_compiler=LiteralCompiler())
+    request = PlanRequest(catalog="catalog1", target="users", columns=["id"])
+
+    declared = service.schema(request, AUTHORIZATION_HEADER)
+    planned = service.plan(request, AUTHORIZATION_HEADER)
+    fetched = service.fetch(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
+    result = pa.Table.from_batches(fetched.result_batches, schema=fetched.output_schema)
+
+    assert declared.output_schema.equals(output_schema, check_metadata=True)
+    assert planned.output_schema.equals(output_schema, check_metadata=True)
+    assert result.schema.equals(output_schema, check_metadata=True)
+    assert result.to_pylist() == [{"id": 42}]
 
 
 def test_plan_access_expands_wildcard_columns():

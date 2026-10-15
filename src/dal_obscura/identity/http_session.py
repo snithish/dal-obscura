@@ -15,11 +15,11 @@ from urllib.request import Request as UrlRequest
 from dal_obscura_plugin_api.execution import close_preserving_error
 from fastapi import HTTPException
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.identity.oidc import (
     OidcJwksIdentityProvider,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
 
 _logger = logging.getLogger(__name__)
 

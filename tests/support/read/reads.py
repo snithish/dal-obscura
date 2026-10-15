@@ -5,13 +5,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from dal_obscura.policy.authorization import AuthorizationPort
-from dal_obscura.read.execution.stream import ManagedStream, StreamGuard
-from dal_obscura.read.execution.transform import (
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.read.service import ReadService, ReadSettings
-from dal_obscura.sources.access import AccessContext
+from dal_obscura.application.reads.execution import ManagedStream, StreamGuard
+from dal_obscura.application.reads.service import ReadService, ReadSettings
+from dal_obscura.application.reads.sources import AccessContext
+from dal_obscura.kernel.policy.authorization import AuthorizationPort
 from tests.support.read.use_cases import FakeTicketCodec, FakeTicketStore, FixtureTaskCodec
 
 
@@ -27,6 +28,7 @@ def make_read_service(**options: Any) -> ReadService:
         name: options.pop(name) for name in ReadSettings.__dataclass_fields__ if name in options
     }
     return ReadService(
+        projection_compiler=options.pop("projection_compiler", DuckDBProjectionCompiler()),
         row_transform=options.pop("row_transform", DuckDBRowTransformAdapter()),
         access_context=options.pop("access_context", _UnusedSource()),
         ticket_codec=options.pop("ticket_codec", FakeTicketCodec()),

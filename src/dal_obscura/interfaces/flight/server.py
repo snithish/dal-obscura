@@ -7,6 +7,8 @@ from collections.abc import Callable, Mapping
 import pyarrow as pa
 import pyarrow.flight as flight
 
+from dal_obscura.application.reads.service import ReadService
+from dal_obscura.application.reads.sources import AccessContextUnavailable
 from dal_obscura.interfaces.flight.contracts import (
     REQUEST_HEADERS_MIDDLEWARE_KEY,
     RequestHeadersMiddlewareFactory,
@@ -15,8 +17,6 @@ from dal_obscura.interfaces.flight.contracts import (
 )
 from dal_obscura.interfaces.flight.streaming import make_stream
 from dal_obscura.observability import ServiceMetrics, get_resident_memory_bytes
-from dal_obscura.read.service import ReadService
-from dal_obscura.sources.access import AccessContextUnavailable
 
 HEALTH_ACTION = "healthz"
 

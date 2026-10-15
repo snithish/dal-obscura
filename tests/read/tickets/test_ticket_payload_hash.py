@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from dal_obscura.read.tickets.payload import ticket_payload_hash
+from dal_obscura.application.reads.tickets.payload import ticket_payload_hash
 from tests.support.read.tickets import ticket_payload
 
 

@@ -6,9 +6,9 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.errors import AuthorizationFailure
-from dal_obscura.storage import assets as _db_assets
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.application.governance.errors import AuthorizationFailure
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def ensure_asset_reader(

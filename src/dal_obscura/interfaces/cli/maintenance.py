@@ -13,8 +13,8 @@ from sqlalchemy import delete, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.storage.database.db import create_engine_from_url, session_factory
-from dal_obscura.storage.database.orm import (
+from dal_obscura.adapters.sql.database.db import create_engine_from_url, session_factory
+from dal_obscura.adapters.sql.database.orm import (
     BrowserSessionRecord,
     DataPlaneTicketRecord,
     LoginTransactionRecord,

@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.workspace.auth_providers import (
     OIDC_IDENTITY_MODULE,
     redact_auth_provider,

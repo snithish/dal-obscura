@@ -10,7 +10,7 @@ import time
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.application.governance.errors import ValidationFailure
 
 CURSOR_TTL_SECONDS = 600
 MAX_CURSOR_LENGTH = 12_000

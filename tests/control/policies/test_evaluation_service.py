@@ -7,7 +7,7 @@ import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api.schema.index import SchemaIndex
 
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.policies.evaluation import (
     MAX_SYNTHETIC_BYTES,
     _encode_synthetic_rows,

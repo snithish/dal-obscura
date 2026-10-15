@@ -48,7 +48,7 @@ test = [
 [project.scripts]
 dal-obscura = "dal_obscura.interfaces.cli.operator:main"
 dal-obscura-control-plane = "dal_obscura.interfaces.cli.control:main"
-dal-obscura-migrate = "dal_obscura.storage.database.cli:main"
+dal-obscura-migrate = "dal_obscura.adapters.sql.database.cli:main"
 dal-obscura-maintenance = "dal_obscura.interfaces.cli.maintenance:main"
 
 [build-system]

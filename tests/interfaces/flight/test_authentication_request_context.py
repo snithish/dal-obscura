@@ -4,10 +4,10 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.application.reads.contracts import GetSchemaResult
 from dal_obscura.interfaces.flight.contracts import authentication_request_from_context
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
-from dal_obscura.read.contracts import GetSchemaResult
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
 from tests.support.flight.flight import command_descriptor
 
 

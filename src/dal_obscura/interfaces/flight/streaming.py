@@ -5,7 +5,7 @@ from collections.abc import Iterable, Iterator
 import pyarrow as pa
 import pyarrow.flight as flight
 
-from dal_obscura.read.execution.contracts import StreamResourceError
+from dal_obscura.application.reads.execution import StreamResourceError
 
 
 def make_stream(schema: pa.Schema, batches: Iterable[pa.RecordBatch]) -> flight.GeneratorStream:

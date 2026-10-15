@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dal_obscura.identity.contracts import AuthenticationRequest
-from dal_obscura.policy.models import Principal
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.identity.principal import Principal
 
 
 class RecordingIdentityProvider:

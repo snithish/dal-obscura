@@ -10,8 +10,8 @@ import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from sqlalchemy import select
 
-from dal_obscura.storage.database.db import session_factory
-from dal_obscura.storage.database.orm import AssetRecord, CatalogRecord, PolicyRuleRecord
+from dal_obscura.adapters.sql.database.db import session_factory
+from dal_obscura.adapters.sql.database.orm import AssetRecord, CatalogRecord, PolicyRuleRecord
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXED_DUMMY_PORT = 31337

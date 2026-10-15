@@ -3,11 +3,12 @@ import hashlib
 import pyarrow as pa
 import pytest
 
-from dal_obscura.policy.filters import parse_row_filter
-from dal_obscura.policy.models import MaskRule
-from dal_obscura.read.execution.transform import (
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.kernel.policy.filters import parse_row_filter
+from dal_obscura.kernel.policy.models import MaskRule
 from tests.support.performance.benchmark_data import (
     nested_masking_batches,
     record_benchmark_info,
@@ -27,12 +28,14 @@ def test_benchmark_row_filter_only(benchmark):
     row_filter = parse_row_filter("region = 'us'", batches[0].schema)
 
     def run() -> pa.Table:
+        projection = DuckDBProjectionCompiler().compile(
+            batches[0].schema, ["id", "email", "region"], {}
+        )
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
-                ["id", "email", "region"],
+                projection,
                 row_filter,
-                {},
             )
         )
         return pa.Table.from_batches(result)
@@ -64,15 +67,16 @@ def test_benchmark_mask_only(benchmark):
     batches = scalar_masking_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
 
     def run() -> pa.Table:
+        projection = DuckDBProjectionCompiler().compile(
+            batches[0].schema,
+            ["id", "email", "region"],
+            {"id": MaskRule(type="hash"), "email": MaskRule(type="redact", value="[hidden]")},
+        )
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
-                ["id", "email", "region"],
+                projection,
                 None,
-                {
-                    "id": MaskRule(type="hash"),
-                    "email": MaskRule(type="redact", value="[hidden]"),
-                },
             )
         )
         return pa.Table.from_batches(result)
@@ -102,15 +106,16 @@ def test_benchmark_row_filter_and_top_level_masks(benchmark):
     row_filter = parse_row_filter("region = 'us'", batches[0].schema)
 
     def run() -> pa.Table:
+        projection = DuckDBProjectionCompiler().compile(
+            batches[0].schema,
+            ["id", "email", "region"],
+            {"id": MaskRule(type="hash"), "email": MaskRule(type="redact", value="[hidden]")},
+        )
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
-                ["id", "email", "region"],
+                projection,
                 row_filter,
-                {
-                    "id": MaskRule(type="hash"),
-                    "email": MaskRule(type="redact", value="[hidden]"),
-                },
             )
         )
         return pa.Table.from_batches(result)
@@ -142,12 +147,14 @@ def test_benchmark_row_filter_and_nested_masks(benchmark):
     row_filter = parse_row_filter("active = true", batches[0].schema)
 
     def run() -> pa.Table:
+        projection = DuckDBProjectionCompiler().compile(
+            batches[0].schema, ["id", "user"], {"user.address.zip": MaskRule(type="hash")}
+        )
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
-                ["id", "user"],
+                projection,
                 row_filter,
-                {"user.address.zip": MaskRule(type="hash")},
             )
         )
         return pa.Table.from_batches(result)

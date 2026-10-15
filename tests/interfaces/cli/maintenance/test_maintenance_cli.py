@@ -3,21 +3,21 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.sql.database.db import (
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.adapters.sql.database.orm import WorkspaceRecord
+from dal_obscura.adapters.sql.tickets import (
+    SqlAlchemyTicketStore,
+)
+from dal_obscura.application.reads.tickets.payload import TicketPayload
 from dal_obscura.identity.sessions import (
     BrowserSessionStore,
     LoginTransactionStore,
 )
 from dal_obscura.interfaces.cli.maintenance import invalidate_access
-from dal_obscura.read.tickets.payload import TicketPayload
-from dal_obscura.storage.database.db import (
-    migrate_config_store,
-    session_factory,
-)
-from dal_obscura.storage.database.orm import WorkspaceRecord
-from dal_obscura.storage.tickets import (
-    SqlAlchemyTicketStore,
-)
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def _session_maker(tmp_path, engine_factory) -> sessionmaker[Session]:

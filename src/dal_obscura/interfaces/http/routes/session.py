@@ -12,7 +12,6 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
-from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.identity.http_session import (
     actor_response,
     public_ui_auth_config,
@@ -25,6 +24,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     SessionResponse,
     UiAuthConfigResponse,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901

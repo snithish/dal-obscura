@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def test_federated_identity_preserves_exact_issuer_and_escapes_delimiters() -> None:

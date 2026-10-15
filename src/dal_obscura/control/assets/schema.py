@@ -25,7 +25,9 @@ from dal_obscura_plugin_api.schema.index import field_children
 from pyiceberg.schema import Schema
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.providers.schema import load_source_schema
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.application.governance.errors import ConfigurationConflictError, ValidationFailure
 from dal_obscura.control.assets.access import ensure_asset_capability
 from dal_obscura.control.catalogs.service import (
     CatalogDiscovery,
@@ -33,15 +35,13 @@ from dal_obscura.control.catalogs.service import (
     ensure_catalog_discovery_current,
     validate_catalog_options,
 )
-from dal_obscura.control.errors import ConfigurationConflictError, ValidationFailure
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.policy.mask_types import SUPPORTED_MASK_TYPES
 from dal_obscura.plugins import PluginRegistry
-from dal_obscura.policy.mask_types import SUPPORTED_MASK_TYPES
 from dal_obscura.runtime.secrets import (
     SecretProvider,
     resolve_secret_refs,
 )
-from dal_obscura.sources.schema import load_source_schema
-from dal_obscura.storage import assets as _db_assets
 
 MAX_SCHEMA_RESPONSE_BYTES = 8 * 1024 * 1024
 _RESPONSE_ENCODER = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"), allow_nan=False)

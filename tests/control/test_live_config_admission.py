@@ -10,24 +10,31 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from dal_obscura.policy.models import Principal
-from dal_obscura.sources.published import (
+from dal_obscura.adapters.providers.published import (
     PublishedPolicy,
     _catalog_config_for_asset,
     _schema_identities,
     _validate_schema_admission,
 )
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
-from dal_obscura.storage.database.orm import (
+from dal_obscura.adapters.sql.database.orm import (
     AssetRecord,
     CatalogRecord,
     PolicyRuleRecord,
     RuntimeSettingsRecord,
     WorkspaceRecord,
 )
-from dal_obscura.storage.snapshots import LiveAsset, LiveCatalog, LiveConfigStore
+from dal_obscura.adapters.sql.snapshots import LiveConfigStore
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.snapshot import (
+    PublishedAssetSnapshot,
+    PublishedCatalog,
+    PublishedSchema,
+    PublishedSource,
+)
+from dal_obscura.kernel.policy.models import AccessRule, AssetPolicy
 
 ICEBERG_CATALOG_ID = "iceberg.catalog"
 
@@ -35,7 +42,7 @@ ICEBERG_CATALOG_ID = "iceberg.catalog"
 def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
     _seed_live_asset(db_session, policy_version=123)
     authorizer = PublishedPolicy(
-        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset(
+        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset_and_catalog(
             catalog="analytics", target="default.users"
         )
     )
@@ -55,45 +62,36 @@ def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
 
 @pytest.mark.parametrize("plugin_id", ["untrusted.catalog", "iceberg.catalog"])
 def test_live_config_rejects_tampered_plugin_binding(plugin_id):
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", plugin_id, 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "plugins": {"catalog": plugin_id, "table_format": "iceberg"},
-            "target": {"backend": "iceberg", "table": "default.users"},
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", "default.users", {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=None,
+        asset_id=None,
     )
-    catalog = LiveCatalog(
-        catalog="analytics",
-        config={"options": {}},
-    )
+    catalog = PublishedCatalog("analytics", "", 0, {})
 
     with pytest.raises(ValueError, match="unsupported without an admitted registry"):
-        _catalog_config_for_asset(catalog, asset)
+        _catalog_config_for_asset(
+            replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id))
+        )
 
 
 def test_live_config_passes_runtime_path_enforcer_to_catalog():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "iceberg.catalog", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "plugins": {"catalog": "iceberg.catalog", "table_format": "iceberg"},
-            "target": {"backend": "iceberg", "table": "default.users"},
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", "default.users", {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=None,
+        asset_id=None,
     )
-    catalog = LiveCatalog(
-        catalog="analytics",
-        config={"options": {}},
-    )
+    catalog = PublishedCatalog("analytics", "", 0, {})
     enforcer = PathRuleEnforcer([{"root": "s3://warehouse"}])
 
     resolved = _catalog_config_for_asset(
-        catalog,
-        asset,
+        replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
         path_enforcer=enforcer,
         plugin_registry=_AdmittedPluginSnapshot(
             ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
@@ -112,29 +110,24 @@ class _AdmittedPluginSnapshot:
 
 
 def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "iceberg.catalog", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "plugins": {"catalog": "iceberg.catalog", "table_format": "iceberg"},
-            "target": {"backend": "iceberg", "table": "default.users"},
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", "default.users", {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=None,
+        asset_id=None,
     )
-    catalog = LiveCatalog(
-        catalog="analytics",
-        config={"options": {}},
-    )
+    catalog = PublishedCatalog("analytics", "", 0, {})
 
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
         _catalog_config_for_asset(
-            catalog, asset, plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.catalog"))
+            replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
+            plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.catalog")),
         )
 
     resolved = _catalog_config_for_asset(
-        catalog,
-        asset,
+        replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
         plugin_registry=_AdmittedPluginSnapshot(
             ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
         ),
@@ -143,18 +136,11 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
 
     retired = replace(
         asset,
-        compiled_config={
-            **asset.compiled_config,
-            "plugins": {
-                "catalog": ("dal_obscura.sources.catalogs.IcebergCatalog"),
-                "table_format": "iceberg",
-            },
-        },
+        catalog=replace(asset.catalog, plugin_id="dal_obscura.sources.catalogs.IcebergCatalog"),
     )
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
         _catalog_config_for_asset(
-            catalog,
-            retired,
+            replace(retired, catalog=replace(catalog, plugin_id=retired.catalog.plugin_id)),
             plugin_registry=_AdmittedPluginSnapshot(
                 ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
             ),
@@ -162,23 +148,17 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
 
 
 def test_live_config_preserves_external_plugin_identity():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "manifest", 0, {}),
         target="default.users",
-        backend="parquet.dataset",
-        compiled_config={
-            "plugins": {"catalog": "manifest", "table_format": "parquet.dataset"},
-            "target": {"backend": "parquet.dataset", "table": "default.users"},
-        },
-        policy_version=1,
+        source=PublishedSource("parquet.dataset", "default.users", {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=None,
+        asset_id=None,
     )
-    catalog = LiveCatalog(
-        catalog="analytics",
-        config={"plugin_id": "manifest", "options": {"root": "/srv/data"}},
-    )
+    catalog = PublishedCatalog("analytics", "manifest", 0, {"root": "/srv/data"})
     resolved = _catalog_config_for_asset(
-        catalog,
-        asset,
+        replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
         plugin_registry=_AdmittedPluginSnapshot(
             ("catalog", "manifest"), ("table_format", "parquet.dataset")
         ),
@@ -188,26 +168,18 @@ def test_live_config_preserves_external_plugin_identity():
 
 
 def test_live_config_preserves_catalog_plugin_revision():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "manifest", 0, {}),
         target="default.users",
-        backend="parquet.dataset",
-        compiled_config={
-            "plugins": {"catalog": "manifest", "table_format": "parquet.dataset"},
-            "target": {"backend": "parquet.dataset", "table": "default.users"},
-        },
-        policy_version=1,
+        source=PublishedSource("parquet.dataset", "default.users", {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=None,
+        asset_id=None,
     )
-    catalog = LiveCatalog(
-        catalog="analytics",
-        config={"options": {"root": "/srv/data"}},
-        plugin_id="manifest",
-        plugin_revision=17,
-    )
+    catalog = PublishedCatalog("analytics", "manifest", 17, {"root": "/srv/data"})
 
     resolved = _catalog_config_for_asset(
-        catalog,
-        asset,
+        replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
         plugin_registry=_AdmittedPluginSnapshot(
             ("catalog", "manifest"), ("table_format", "parquet.dataset")
         ),
@@ -237,12 +209,13 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
             for (path, field_id), field_type in identities.items()
         ]
     }
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={"schema": admission},
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(1, tuple(admission["fields"]), False, None),
+        asset_id=None,
     )
 
     _validate_schema_admission(asset, schema)
@@ -261,17 +234,15 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
 def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
     schema = pa.schema([pa.field("email", pa.string())])
     field_id = "iceberg:1"
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "stable_ids": True,
-                "fields": [{"path": ["email"], "field_id": field_id, "type": "string"}],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(
+            1, ({"path": ["email"], "field_id": field_id, "type": "string"},), True, None
+        ),
+        asset_id=None,
     )
 
     with pytest.raises(ValueError, match="stable provider field IDs"):
@@ -281,19 +252,23 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
 def test_schema_admission_rejects_binary_metadata_replaced_with_escape_text():
     original = pa.schema([pa.field("email", pa.string(), metadata={b"key": b"\xff"})])
     identities = _schema_identities(original)
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "fields": [
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(
+            1,
+            tuple(
+                [
                     {"path": list(path), "field_id": field_id, "type": field_type}
                     for (path, field_id), field_type in identities.items()
                 ]
-            }
-        },
-        policy_version=1,
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
     changed = pa.schema([pa.field("email", pa.string(), metadata={b"key": b"\\xff"})])
 
@@ -309,12 +284,18 @@ def test_runtime_schema_identities_reject_oversized_canonical_metadata():
 
 
 def test_legacy_wildcard_policy_requires_schema_admission():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={"policy": {"rules": [{"columns": ["*"], "masks": {}}]}},
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(
+            1,
+            "analytics",
+            "default.users",
+            [AccessRule(principals=["*"], columns=["*"], masks={}, effect="allow")],
+        ),
+        admitted_schema=None,
+        asset_id=None,
     )
 
     with pytest.raises(ValueError, match="requires schema admission"):
@@ -322,12 +303,18 @@ def test_legacy_wildcard_policy_requires_schema_admission():
 
 
 def test_legacy_parent_policy_requires_schema_admission():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={"policy": {"rules": [{"columns": ["profile"], "masks": {}}]}},
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(
+            1,
+            "analytics",
+            "default.users",
+            [AccessRule(principals=["*"], columns=["profile"], masks={}, effect="allow")],
+        ),
+        admitted_schema=None,
+        asset_id=None,
     )
     schema = pa.schema([pa.field("profile", pa.struct([pa.field("email", pa.string())]))])
 
@@ -342,7 +329,7 @@ def test_live_store_fails_closed_by_default_after_transient_failure(
     _seed_live_asset(db_session, policy_version=123)
     config_store = LiveConfigStore(session_factory(db_session.get_bind().engine))
 
-    config_store.get_asset(catalog="analytics", target="default.users")
+    config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
 
     def fail_get(*args, **kwargs):
         del args, kwargs
@@ -351,13 +338,13 @@ def test_live_store_fails_closed_by_default_after_transient_failure(
     monkeypatch.setattr(config_store, "_live_asset", fail_get)
 
     with pytest.raises(RuntimeError, match="database unavailable"):
-        config_store.get_asset(catalog="analytics", target="default.users")
+        config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
 
 
 def test_live_store_rejects_directly_removed_assets(db_session: Session):
     _seed_live_asset(db_session, policy_version=123)
     config_store = LiveConfigStore(session_factory(db_session.get_bind().engine))
-    config_store.get_asset(catalog="analytics", target="default.users")
+    config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
 
     asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
     assert asset is not None
@@ -365,7 +352,7 @@ def test_live_store_rejects_directly_removed_assets(db_session: Session):
     db_session.commit()
 
     with pytest.raises(LookupError, match="No live asset"):
-        config_store.get_asset(catalog="analytics", target="default.users")
+        config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
 
 
 def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
@@ -377,13 +364,13 @@ def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
     record.masks_json["email"] = {}
     flag_modified(record, "masks_json")
     db_session.commit()
-    authorizer = PublishedPolicy(
-        LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset(
-            catalog="analytics", target="default.users"
-        )
-    )
-
     with pytest.raises(ValueError, match=r"mask\.type"):
+        authorizer = PublishedPolicy(
+            LiveConfigStore(session_factory(db_session.get_bind().engine)).get_asset_and_catalog(
+                catalog="analytics", target="default.users"
+            )
+        )
+
         authorizer.authorize(
             principal=Principal(id="user1", groups=[], attributes={}),
             target="default.users",
@@ -393,25 +380,26 @@ def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
 
 
 def test_live_schema_admission_rejects_rebound_or_added_field():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "encoding": 1,
-                "fields": [
-                    {
-                        "name": "profile.email",
-                        "field_id": "iceberg:3",
-                        "path": ["profile", "email"],
-                        "type": "string",
-                        "nullable": True,
-                    }
-                ],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(
+            1,
+            (
+                {
+                    "name": "profile.email",
+                    "field_id": "iceberg:3",
+                    "path": ["profile", "email"],
+                    "type": "string",
+                    "nullable": True,
+                },
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
     schema = pa.schema(
         [
@@ -428,25 +416,26 @@ def test_live_schema_admission_rejects_rebound_or_added_field():
 
 
 def test_live_schema_admission_requires_refresh_after_renamed_field():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "encoding": 1,
-                "fields": [
-                    {
-                        "name": "profile.email",
-                        "field_id": "iceberg:3",
-                        "path": ["profile", "email"],
-                        "type": "string",
-                        "nullable": True,
-                    }
-                ],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(
+            1,
+            (
+                {
+                    "name": "profile.email",
+                    "field_id": "iceberg:3",
+                    "path": ["profile", "email"],
+                    "type": "string",
+                    "nullable": True,
+                },
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
     schema = pa.schema(
         [
@@ -465,46 +454,47 @@ def test_live_schema_admission_requires_refresh_after_renamed_field():
 
 
 def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "encoding": 1,
-                "fields": [
-                    {
-                        "name": "id",
-                        "field_id": "iceberg:1",
-                        "path": ["id"],
-                        "type": "long",
-                        "nullable": False,
-                    },
-                    {
-                        "name": "email",
-                        "field_id": "iceberg:2",
-                        "path": ["email"],
-                        "type": "string",
-                        "nullable": True,
-                    },
-                    {
-                        "name": "profile",
-                        "field_id": "iceberg:3",
-                        "path": ["profile"],
-                        "type": "struct<name: string>",
-                        "nullable": True,
-                    },
-                    {
-                        "name": "name",
-                        "field_id": "iceberg:4",
-                        "path": ["profile", "name"],
-                        "type": "string",
-                        "nullable": True,
-                    },
-                ],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(
+            1,
+            (
+                {
+                    "name": "id",
+                    "field_id": "iceberg:1",
+                    "path": ["id"],
+                    "type": "long",
+                    "nullable": False,
+                },
+                {
+                    "name": "email",
+                    "field_id": "iceberg:2",
+                    "path": ["email"],
+                    "type": "string",
+                    "nullable": True,
+                },
+                {
+                    "name": "profile",
+                    "field_id": "iceberg:3",
+                    "path": ["profile"],
+                    "type": "struct<name: string>",
+                    "nullable": True,
+                },
+                {
+                    "name": "name",
+                    "field_id": "iceberg:4",
+                    "path": ["profile", "name"],
+                    "type": "string",
+                    "nullable": True,
+                },
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
 
     _validate_schema_admission(
@@ -543,39 +533,40 @@ def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: d
 
 
 def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.nested",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "encoding": 1,
-                "fields": [
-                    {
-                        "name": "tags.$element",
-                        "field_id": "iceberg:11",
-                        "path": ["tags", "$element"],
-                        "type": "string",
-                        "nullable": True,
-                    },
-                    {
-                        "name": "attributes.$key",
-                        "field_id": "iceberg:12",
-                        "path": ["attributes", "$key"],
-                        "type": "string",
-                        "nullable": False,
-                    },
-                    {
-                        "name": "attributes.$value.label",
-                        "field_id": "iceberg:14",
-                        "path": ["attributes", "$value", "label"],
-                        "type": "string",
-                        "nullable": True,
-                    },
-                ],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.nested", []),
+        admitted_schema=PublishedSchema(
+            1,
+            (
+                {
+                    "name": "tags.$element",
+                    "field_id": "iceberg:11",
+                    "path": ["tags", "$element"],
+                    "type": "string",
+                    "nullable": True,
+                },
+                {
+                    "name": "attributes.$key",
+                    "field_id": "iceberg:12",
+                    "path": ["attributes", "$key"],
+                    "type": "string",
+                    "nullable": False,
+                },
+                {
+                    "name": "attributes.$value.label",
+                    "field_id": "iceberg:14",
+                    "path": ["attributes", "$value", "label"],
+                    "type": "string",
+                    "nullable": True,
+                },
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
     schema = pa.schema(
         [
@@ -607,25 +598,26 @@ def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
 
 
 def test_live_schema_admission_rejects_collection_identity_drift():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.nested",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "encoding": 1,
-                "fields": [
-                    {
-                        "name": "tags.$element",
-                        "field_id": "iceberg:11",
-                        "path": ["tags", "$element"],
-                        "type": "string",
-                        "nullable": True,
-                    }
-                ],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.nested", []),
+        admitted_schema=PublishedSchema(
+            1,
+            (
+                {
+                    "name": "tags.$element",
+                    "field_id": "iceberg:11",
+                    "path": ["tags", "$element"],
+                    "type": "string",
+                    "nullable": True,
+                },
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
     schema = pa.schema(
         [
@@ -642,25 +634,26 @@ def test_live_schema_admission_rejects_collection_identity_drift():
 
 
 def test_live_schema_admission_rejects_duplicate_live_field_ids():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.duplicate",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "encoding": 1,
-                "fields": [
-                    {
-                        "name": "id",
-                        "field_id": "iceberg:1",
-                        "path": ["id"],
-                        "type": "int64",
-                        "nullable": False,
-                    }
-                ],
-            }
-        },
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.duplicate", []),
+        admitted_schema=PublishedSchema(
+            1,
+            (
+                {
+                    "name": "id",
+                    "field_id": "iceberg:1",
+                    "path": ["id"],
+                    "type": "int64",
+                    "nullable": False,
+                },
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
     schema = pa.schema(
         [
@@ -677,12 +670,13 @@ def test_live_schema_admission_rejects_tampered_admission_digest():
     fields = [
         {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64", "nullable": False}
     ]
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.tampered",
-        backend="iceberg",
-        compiled_config={"schema": {"encoding": 1, "fields": fields, "digest": "0" * 64}},
-        policy_version=1,
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.tampered", []),
+        admitted_schema=PublishedSchema(1, tuple(fields), False, "0" * 64),
+        asset_id=None,
     )
 
     with pytest.raises(ValueError, match="admission digest"):
@@ -748,17 +742,17 @@ def _seed_live_asset(
 
 
 def test_explicit_allow_all_does_not_require_a_frozen_column_selection():
-    asset = LiveAsset(
-        catalog="analytics",
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        policy_version=1,
-        compiled_config={
-            "policy": {
-                "rules": [
-                    {"effect": "allow_all", "principals": ["*"], "columns": ["*"], "masks": {}}
-                ]
-            }
-        },
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(
+            1,
+            "analytics",
+            "default.users",
+            [AccessRule(principals=["*"], columns=["*"], masks={}, effect="allow_all")],
+        ),
+        admitted_schema=None,
+        asset_id=None,
     )
     _validate_schema_admission(asset, pa.schema([pa.field("new_column", pa.string())]))

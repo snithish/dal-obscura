@@ -2,8 +2,8 @@ from uuid import uuid4
 
 import pytest
 
-from dal_obscura.storage import assets
-from dal_obscura.storage.database.orm import AssetRecord, CatalogRecord
+from dal_obscura.adapters.sql import assets
+from dal_obscura.adapters.sql.database.orm import AssetRecord, CatalogRecord
 
 
 @pytest.mark.parametrize("overload", ["bytes", "fields"])

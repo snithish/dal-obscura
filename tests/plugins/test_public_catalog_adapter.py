@@ -10,17 +10,17 @@ from dal_obscura_manifest_parquet.format import parquet_factory
 from dal_obscura_plugin_api import DiscoveryPage, ExecutionContext, TableHandle, TableIdentifier
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
 
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.tickets.envelope import SourceTaskCodec
-from dal_obscura.sources.adapters import (
+from dal_obscura.adapters.providers.adapters import (
     PublicPluginCatalogAdapter,
     PublicPluginTableFormat,
 )
-from dal_obscura.sources.catalogs import (
+from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
+from dal_obscura.kernel.plans.request import PlanRequest
 from tests.support.plugins.plugins import manifest_registry
 from tests.support.plugins.public_plugins import _contract_format, _fixture
 from tests.support.sources.discovery import _unchecked_discovery_page
@@ -290,7 +290,7 @@ def test_catalog_identifiers_round_trip_without_dotted_name_collisions():
 def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
     import hashlib
 
-    from dal_obscura.policy.models import AccessDecision, MaskRule
+    from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
     from tests.support.read.read_scenarios import (
         AUTHORIZATION_HEADER,
         governed_read_service,

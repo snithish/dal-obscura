@@ -9,12 +9,12 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
-from dal_obscura.identity.contracts import (
-    AuthenticationRequest,
-    MissingCredentialsError,
-)
 from dal_obscura.identity.oidc import (
     OidcJwksIdentityProvider,
+)
+from dal_obscura.kernel.identity.authentication import (
+    AuthenticationRequest,
+    MissingCredentialsError,
 )
 
 ISSUER = "https://keycloak.example.test/realms/acme"

@@ -1,10 +1,11 @@
 from typing import Any, cast
 
-from dal_obscura.identity.contracts import AuthenticationRequest
-from dal_obscura.policy.models import AccessDecision, MaskRule, Principal
-from dal_obscura.read.tickets.payload import TicketPayload
-from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
-from dal_obscura.sources.contracts import Source
+from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.application.reads.sources import Source
+from dal_obscura.application.reads.tickets.payload import TicketPayload
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
 from tests.support.arrow import id_region_batch, id_region_schema
 from tests.support.read.reads import StaticAccessContext, make_read_service
 from tests.support.read.use_cases import (

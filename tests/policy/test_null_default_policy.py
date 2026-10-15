@@ -1,11 +1,6 @@
-from dal_obscura.policy.models import (
-    AccessRule,
-    DatasetPolicy,
-    MaskRule,
-    Policy,
-    Principal,
-)
-from dal_obscura.policy.policy_resolution import resolve_access
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.policy.models import AccessRule, DatasetPolicy, MaskRule, Policy
+from dal_obscura.kernel.policy.policy_resolution import resolve_access
 
 
 def resolve(rules, principal=None):
@@ -85,7 +80,7 @@ def test_explicit_null_wins_over_incompatible_masks_in_every_order():
 def test_policy_compiler_rejects_non_null_map_key_masks():
     import pytest
 
-    from dal_obscura.control.errors import ValidationFailure
+    from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
 
     with pytest.raises(ValidationFailure, match="Map keys support only the null mask"):
@@ -104,7 +99,7 @@ def test_policy_compiler_rejects_non_null_map_key_masks():
 def test_compiler_rejects_display_aliases_and_requires_canonical_paths():
     import pytest
 
-    from dal_obscura.control.errors import ValidationFailure
+    from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
 
     fields: list[dict[str, object]] = [
@@ -122,7 +117,7 @@ def test_overlapping_masks_cannot_silently_replace_each_other():
 
     import pytest
 
-    from dal_obscura.control.errors import ValidationFailure
+    from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
 
     fields: list[dict[str, object]] = [
@@ -139,7 +134,7 @@ def test_overlapping_masks_cannot_silently_replace_each_other():
 def test_unused_mask_values_are_rejected_instead_of_affecting_conflict_resolution():
     import pytest
 
-    from dal_obscura.control.errors import ValidationFailure
+    from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
 
     for kind in ("hash", "null", "email"):

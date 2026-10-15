@@ -8,16 +8,16 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from dal_obscura.identity import http_session
-from dal_obscura.identity.contracts import AuthenticationRequest
-from dal_obscura.identity.http_session import create_oidc_actor_resolver
-from dal_obscura.identity.names import encode_federated_identity
-from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.policy.models import Principal
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
-from dal_obscura.storage.database.orm import AssetRecord, DataPlaneTicketRecord
+from dal_obscura.adapters.sql.database.orm import AssetRecord, DataPlaneTicketRecord
+from dal_obscura.identity import http_session
+from dal_obscura.identity.http_session import create_oidc_actor_resolver
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.identity.names import encode_federated_identity
+from dal_obscura.kernel.identity.principal import Principal
 from tests.support.control.actors import _actor_for_token, _bearer, _client
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
@@ -246,10 +246,10 @@ def test_cookie_mutation_origin_and_host_matrix(
 def test_static_bootstrap_token_can_be_disabled_when_oidc_admin_is_available(
     http_client, db_engine
 ):
-    from dal_obscura.interfaces.http.app import create_app
-    from dal_obscura.storage.database.db import (
+    from dal_obscura.adapters.sql.database.db import (
         session_factory,
     )
+    from dal_obscura.interfaces.http.app import create_app
 
     engine = db_engine
     client = http_client(

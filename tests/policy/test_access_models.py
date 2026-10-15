@@ -2,13 +2,13 @@ from typing import cast
 
 import pytest
 
-from dal_obscura.policy.models import (
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.policy.models import (
     AccessDecision,
     AccessRule,
     DatasetPolicy,
     MaskRule,
     Policy,
-    Principal,
     PrincipalConditionValue,
 )
 

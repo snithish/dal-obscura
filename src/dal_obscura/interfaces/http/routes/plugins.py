@@ -6,13 +6,14 @@ from dal_obscura_plugin_api import PluginDescriptor, PluginKind
 from fastapi import APIRouter, Depends
 
 import dal_obscura.control.plugins as _commands_plugins
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     PluginLifecycleRequest,
     PluginLifecycleResponse,
     PluginListResponse,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.plugins import PluginLifecycleState
 
 
@@ -54,7 +55,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         target = PluginLifecycleState(request.target)
         return deps.with_transaction(
             lambda service: _commands_plugins.set_plugin_lifecycle(
-                service, kind=kind, plugin_id=plugin_id, target=target, actor=actor
+                service,
+                kind=kind,
+                plugin_id=plugin_id,
+                target=target,
+                actor=actor,
+                correlation_id=current_request_id(),
             )
         )
 

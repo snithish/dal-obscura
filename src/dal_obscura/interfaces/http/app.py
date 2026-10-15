@@ -16,17 +16,18 @@ from starlette.exceptions import HTTPException
 from starlette.types import Message
 
 from dal_obscura import __version__
-from dal_obscura.control.context import (
-    current_request_id,
-    reset_request_id,
-    set_request_id,
-)
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
 from dal_obscura.identity.http_session import (
     OidcActorResolver,
     OidcNonceActorResolver,
     exchange_authorization_code,
 )
 from dal_obscura.interfaces.http.health import install_health_routes
+from dal_obscura.interfaces.http.request_context import (
+    current_request_id,
+    reset_request_id,
+    set_request_id,
+)
 from dal_obscura.interfaces.http.routes import (
     assets as asset_routes,
 )
@@ -364,6 +365,7 @@ def create_app(  # noqa: C901
     from dal_obscura.control.catalogs.discovery import DiscoveryCursors
 
     deps = ControlPlaneDeps(
+        projection_compiler=DuckDBProjectionCompiler(),
         session_maker=session_maker,
         admin_token=admin_token,
         oidc_actor_resolver=oidc_actor_resolver,

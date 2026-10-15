@@ -9,6 +9,9 @@ import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 
+from dal_obscura.adapters.sql.database.db import (
+    session_factory,
+)
 from dal_obscura.identity.http_session import exchange_authorization_code
 from dal_obscura.interfaces.http import app as api_module
 from dal_obscura.interfaces.http.app import create_app
@@ -17,9 +20,6 @@ from dal_obscura.interfaces.http.routes.session import (
     _oidc_endpoint,
     _post_login_redirect,
     _provider_logout_url,
-)
-from dal_obscura.storage.database.db import (
-    session_factory,
 )
 
 

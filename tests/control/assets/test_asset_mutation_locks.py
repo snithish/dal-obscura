@@ -5,8 +5,8 @@ from uuid import uuid4
 
 import pytest
 
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.assets import service as asset_service
-from dal_obscura.control.errors import ValidationFailure
 
 
 def test_owner_replacement_locks_before_read_and_write() -> None:

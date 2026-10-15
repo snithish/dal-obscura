@@ -1,11 +1,12 @@
 import base64
 import hmac
 from hashlib import sha256
+from pathlib import Path
 
 import pytest
 
-from dal_obscura.read.tickets.payload import TicketPayload
-from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.application.reads.tickets.payload import TicketPayload
 from tests.support.read.tickets import ticket_payload
 
 
@@ -27,6 +28,20 @@ def _ticket_payload() -> TicketPayload:
         policy_version=1,
         expires_at=2**31,
         nonce="abc123",
+    )
+
+
+def test_signed_ticket_matches_architecture_baseline(monkeypatch):
+    codec = HmacTicketCodecAdapter("secret")
+    payload = _ticket_payload()
+    baseline = (Path(__file__).parent / "fixtures" / "signed_reference.txt").read_text().strip()
+    assert codec.sign_payload(payload) == baseline
+    monkeypatch.setattr("dal_obscura.adapters.tickets.signing.time.time", lambda: 100)
+    restored = codec.verify(baseline)
+    assert (restored.ticket_id, restored.expires_at, restored.nonce) == (
+        payload.ticket_id,
+        payload.expires_at,
+        payload.nonce,
     )
 
 
@@ -113,7 +128,7 @@ def test_ticket_rejects_expiry_at_current_second(monkeypatch):
         expires_at=100,
         nonce="expired",
     )
-    monkeypatch.setattr("dal_obscura.read.tickets.signing.time.time", lambda: 100)
+    monkeypatch.setattr("dal_obscura.adapters.tickets.signing.time.time", lambda: 100)
 
     with pytest.raises(PermissionError, match="expired"):
         codec.verify(codec.sign_payload(payload))

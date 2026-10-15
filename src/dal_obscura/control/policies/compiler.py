@@ -16,13 +16,10 @@ from dal_obscura_plugin_api.paths import (
     parse_field_path,
 )
 
-from dal_obscura.control.errors import PolicyValidationFailure, ValidationFailure
-from dal_obscura.policy.filters import deserialize_row_filter
-from dal_obscura.policy.mask_types import SUPPORTED_MASK_TYPES
-from dal_obscura.policy.models import (
-    AccessRule,
-    MaskRule,
-)
+from dal_obscura.application.governance.errors import PolicyValidationFailure, ValidationFailure
+from dal_obscura.kernel.policy.filters import deserialize_row_filter
+from dal_obscura.kernel.policy.mask_types import SUPPORTED_MASK_TYPES
+from dal_obscura.kernel.policy.models import AccessRule, MaskRule
 
 _MASK_TYPES = frozenset(SUPPORTED_MASK_TYPES)
 _RULE_FIELDS = {

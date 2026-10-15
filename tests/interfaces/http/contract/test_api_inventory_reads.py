@@ -4,10 +4,10 @@ import asyncio
 from collections.abc import MutableMapping
 from typing import Any
 
-from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
+from dal_obscura.interfaces.http.app import create_app
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 

@@ -16,14 +16,14 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.identity.sessions import BrowserSessionStore
-from dal_obscura.interfaces.cli.maintenance import invalidate_access
-from dal_obscura.read.tickets.payload import TicketPayload
-from dal_obscura.storage.database.orm import WorkspaceRecord
-from dal_obscura.storage.tickets import (
+from dal_obscura.adapters.sql.database.orm import WorkspaceRecord
+from dal_obscura.adapters.sql.tickets import (
     SqlAlchemyTicketStore,
 )
+from dal_obscura.application.reads.tickets.payload import TicketPayload
+from dal_obscura.identity.sessions import BrowserSessionStore
+from dal_obscura.interfaces.cli.maintenance import invalidate_access
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from tests.support.storage.postgres import isolated_postgres_sessions
 
 _FIXTURE = Path(__file__).parents[1] / "acceptance" / "fixtures" / "ticket_payload_v2.json"

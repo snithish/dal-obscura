@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR
 from dal_obscura_plugin_api import ScanTask, TableHandle, TableIdentifier
 
-from dal_obscura.sources.adapters import (
+from dal_obscura.adapters.providers.adapters import (
     PublicPluginTableFormat,
 )
 

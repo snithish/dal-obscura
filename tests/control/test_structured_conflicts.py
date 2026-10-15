@@ -1,5 +1,5 @@
-from dal_obscura.control.errors import ConfigurationConflictError
-from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import ConfigurationConflictError
 
 
 def test_revision_conflict_carries_revision_independent_of_message():

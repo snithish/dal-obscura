@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,

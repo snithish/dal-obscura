@@ -6,9 +6,9 @@ from typing import cast
 
 from fastapi import APIRouter, Depends
 
-from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.control.workspace import attributes as identity_attributes
 from dal_obscura.control.workspace import service as workspace_service
+from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AttributeMappingPreviewRequest,
@@ -19,6 +19,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     RuntimeSettingsRequest,
     RuntimeSettingsResponse,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -85,6 +86,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 path_rules=request.path_rules,
                 expected_revision=request.expected_revision,
                 actor_principal="system" if actor is None else actor.identity_key(),
+                correlation_id=current_request_id(),
             )
         )
         return cast(
@@ -116,6 +118,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                     request.providers,
                     expected_revision=request.expected_revision,
                     actor_principal="system" if actor is None else actor.identity_key(),
+                    correlation_id=current_request_id(),
                 )
             )
             or [],

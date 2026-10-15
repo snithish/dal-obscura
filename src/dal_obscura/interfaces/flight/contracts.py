@@ -15,13 +15,13 @@ from dal_obscura_plugin_api.paths import (
 from dal_obscura.flight.v1.read_pb2 import FieldPath as FieldPathProto
 from dal_obscura.flight.v1.read_pb2 import FieldPathSegment as FieldPathSegmentProto
 from dal_obscura.flight.v1.read_pb2 import PlanRequest as PlanRequestProto
-from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.interfaces.flight_contract import (
     FLIGHT_PROTOCOL_VERSION,
     decode_plan_command,
 )
-from dal_obscura.policy.filters import RowFilter, deserialize_row_filter
-from dal_obscura.read.request import PlanRequest
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.filters import RowFilter, deserialize_row_filter
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"
 SUPPORTED_PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION

@@ -1,12 +1,12 @@
 import pyarrow as pa
 import pytest
 
-import dal_obscura.read.execution.transform as duckdb_transform
-from dal_obscura.policy.models import MaskRule
-from dal_obscura.policy.projection import compile_projection
-from dal_obscura.read.execution.transform import (
+import dal_obscura.adapters.duckdb.transform as duckdb_transform
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.kernel.policy.models import MaskRule
 
 
 def test_duckdb_transform_executes_projection_and_mask_for_quoted_identifiers():
@@ -22,11 +22,13 @@ def test_duckdb_transform_executes_projection_and_mask_for_quoted_identifiers():
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], columns, None, masks
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, columns, masks), None
             )
         )
     )
-    assert result.schema.equals(compile_projection(batch.schema, columns, masks).output_schema)
+    assert result.schema.equals(
+        DuckDBProjectionCompiler().compile(batch.schema, columns, masks).output_schema
+    )
     assert result.to_pydict() == {
         "id + 1": [7, 8],
         'bad"name': [sha256(b"secret").hexdigest(), None],
@@ -58,12 +60,14 @@ def test_nested_projection_ignores_masks_outside_the_selected_path():
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], columns, None, masks
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, columns, masks), None
             )
         )
     )
     assert result.to_pylist() == [{"user": {"address": {"zip": 1234}}}]
-    assert result.schema.equals(compile_projection(batch.schema, columns, masks).output_schema)
+    assert result.schema.equals(
+        DuckDBProjectionCompiler().compile(batch.schema, columns, masks).output_schema
+    )
 
 
 def test_nested_child_projection_cannot_bypass_null_mask_on_parent():
@@ -76,9 +80,10 @@ def test_nested_child_projection_cannot_bypass_null_mask_on_parent():
     result_batches = list(
         DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
             [input_batch],
-            ["profile.ssn"],
+            DuckDBProjectionCompiler().compile(
+                input_batch.schema, ["profile.ssn"], {"profile": MaskRule(type="null")}
+            ),
             None,
-            {"profile": MaskRule(type="null")},
         )
     )
 
@@ -110,9 +115,11 @@ def test_masked_schema_updates_nested_field_types():
         ]
     )
 
-    masked_schema = compile_projection(
-        schema, ["user"], {"user.address.zip": MaskRule(type="hash")}
-    ).output_schema
+    masked_schema = (
+        DuckDBProjectionCompiler()
+        .compile(schema, ["user"], {"user.address.zip": MaskRule(type="hash")})
+        .output_schema
+    )
 
     address_field = masked_schema.field("user").type.field("address")
     assert address_field.type.field("zip").type == pa.string()
@@ -135,9 +142,11 @@ def test_masked_schema_exposes_nested_projection_as_pruned_struct():
         ]
     )
 
-    masked_schema = compile_projection(
-        schema, ["user.address.zip"], {"user.address.zip": MaskRule(type="hash")}
-    ).output_schema
+    masked_schema = (
+        DuckDBProjectionCompiler()
+        .compile(schema, ["user.address.zip"], {"user.address.zip": MaskRule(type="hash")})
+        .output_schema
+    )
 
     assert masked_schema.names == ["user"]
     address_field = masked_schema.field("user").type.field("address")
@@ -156,9 +165,10 @@ def test_redact_mask_preserves_null_and_honors_an_empty_replacement():
         list(
             adapter.apply_filters_and_masks_stream(
                 [batch],
-                ["email"],
+                DuckDBProjectionCompiler().compile(
+                    batch.schema, ["email"], {"email": MaskRule(type="redact", value="")}
+                ),
                 None,
-                {"email": MaskRule(type="redact", value="")},
             )
         )
     )
@@ -181,7 +191,11 @@ def test_email_mask_nulls_malformed_values_instead_of_passing_them_through():
     result = pa.Table.from_batches(
         list(
             adapter.apply_filters_and_masks_stream(
-                [batch], ["email"], None, {"email": MaskRule(type="email")}
+                [batch],
+                DuckDBProjectionCompiler().compile(
+                    batch.schema, ["email"], {"email": MaskRule(type="email")}
+                ),
+                None,
             )
         )
     )
@@ -200,7 +214,18 @@ def test_duckdb_transform_returns_empty_iterator_without_connecting(monkeypatch)
     monkeypatch.setattr(duckdb_transform.duckdb, "connect", fake_connect)
     adapter = DuckDBRowTransformAdapter()
 
-    assert list(adapter.apply_filters_and_masks_stream([], ["id"], None, {})) == []
+    assert (
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [],
+                DuckDBProjectionCompiler().compile(
+                    pa.schema([pa.field("id", pa.int64())]), ["id"], {}
+                ),
+                None,
+            )
+        )
+        == []
+    )
     assert connect_calls == 0
 
 
@@ -244,9 +269,12 @@ def test_duckdb_transform_applies_list_of_struct_mask():
     result_batches = list(
         adapter.apply_filters_and_masks_stream(
             [input_batch],
-            ["metadata"],
+            DuckDBProjectionCompiler().compile(
+                input_batch.schema,
+                ["metadata"],
+                {"metadata.preferences.$element.theme": MaskRule(type="redact", value="[hidden]")},
+            ),
             None,
-            {"metadata.preferences.$element.theme": MaskRule(type="redact", value="[hidden]")},
         )
     )
     result = pa.Table.from_batches(result_batches)
@@ -254,11 +282,13 @@ def test_duckdb_transform_applies_list_of_struct_mask():
     preferences = result.column("metadata").to_pylist()[0]["preferences"]
     assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
     assert result.schema.equals(
-        compile_projection(
+        DuckDBProjectionCompiler()
+        .compile(
             input_batch.schema,
             ["metadata"],
             {"metadata.preferences.$element.theme": MaskRule(type="redact", value="[hidden]")},
-        ).output_schema
+        )
+        .output_schema
     )
 
 
@@ -273,9 +303,8 @@ def test_duckdb_transform_preserves_literal_dotted_top_level_field_name():
         list(
             adapter.apply_filters_and_masks_stream(
                 [input_batch],
-                ['["profile.name"]'],
+                DuckDBProjectionCompiler().compile(input_batch.schema, ['["profile.name"]'], {}),
                 None,
-                {},
             )
         )
     )
@@ -301,20 +330,25 @@ def test_duckdb_transform_projects_and_masks_map_value_struct_leaves():
         list(
             adapter.apply_filters_and_masks_stream(
                 [input_batch],
-                ["contacts.$key", "contacts.$value.name"],
+                DuckDBProjectionCompiler().compile(
+                    input_batch.schema,
+                    ["contacts.$key", "contacts.$value.name"],
+                    {"contacts.$value.name": MaskRule(type="redact", value="[hidden]")},
+                ),
                 None,
-                {"contacts.$value.name": MaskRule(type="redact", value="[hidden]")},
             )
         )
     )
 
     assert result.column("contacts").to_pylist() == [[("primary", {"name": "[hidden]"})]]
     assert result.schema.equals(
-        compile_projection(
+        DuckDBProjectionCompiler()
+        .compile(
             input_batch.schema,
             ["contacts.$key", "contacts.$value.name"],
             {"contacts.$value.name": MaskRule(type="redact", value="[hidden]")},
-        ).output_schema
+        )
+        .output_schema
     )
 
 
@@ -335,20 +369,25 @@ def test_duckdb_transform_projects_and_masks_canonical_list_element_leaves():
         list(
             adapter.apply_filters_and_masks_stream(
                 [input_batch],
-                ["contacts.$element.email"],
+                DuckDBProjectionCompiler().compile(
+                    input_batch.schema,
+                    ["contacts.$element.email"],
+                    {"contacts.$element.email": MaskRule(type="email")},
+                ),
                 None,
-                {"contacts.$element.email": MaskRule(type="email")},
             )
         )
     )
 
     assert result.column("contacts").to_pylist() == [[{"email": "a***@example.com"}], None]
     assert result.schema.equals(
-        compile_projection(
+        DuckDBProjectionCompiler()
+        .compile(
             input_batch.schema,
             ["contacts.$element.email"],
             {"contacts.$element.email": MaskRule(type="email")},
-        ).output_schema
+        )
+        .output_schema
     )
 
 
@@ -364,25 +403,21 @@ def test_null_map_key_hides_entire_map_and_preserves_projected_value_schema():
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], columns, None, masks
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, columns, masks), None
             )
         )
     )
     assert result.to_pylist() == [{"contacts": None}]
-    assert result.schema == compile_projection(schema, columns, masks).output_schema
+    assert result.schema == DuckDBProjectionCompiler().compile(schema, columns, masks).output_schema
     assert result.schema.field("contacts").type.item_type.names == ["name"]
 
 
 def test_null_default_masks_deep_list_siblings_without_hiding_selected_leaf():
     from dal_obscura_plugin_api.schema.index import SchemaIndex
 
-    from dal_obscura.policy.models import (
-        AccessRule,
-        DatasetPolicy,
-        Policy,
-        Principal,
-    )
-    from dal_obscura.policy.policy_resolution import resolve_access
+    from dal_obscura.kernel.identity.principal import Principal
+    from dal_obscura.kernel.policy.models import AccessRule, DatasetPolicy, Policy
+    from dal_obscura.kernel.policy.policy_resolution import resolve_access
 
     leaf = pa.struct([pa.field("city", pa.string()), pa.field("postcode", pa.string())])
     element = pa.struct([pa.field("details", pa.struct([pa.field("address", leaf)]))])
@@ -412,7 +447,7 @@ def test_null_default_masks_deep_list_siblings_without_hiding_selected_leaf():
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], columns, None, masks
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, columns, masks), None
             )
         )
     )
@@ -427,7 +462,9 @@ def test_implicit_list_element_mask_paths_are_rejected():
     )
 
     with pytest.raises(ValueError, match="does not contain a struct"):
-        compile_projection(schema, ["contacts"], {"contacts.email": MaskRule(type="hash")})
+        DuckDBProjectionCompiler().compile(
+            schema, ["contacts"], {"contacts.email": MaskRule(type="hash")}
+        )
 
 
 @pytest.mark.parametrize(
@@ -442,12 +479,14 @@ def test_mask_schema_and_execution_reject_the_same_invalid_configuration(mask):
     schema = pa.schema([pa.field("id", pa.int64())])
 
     with pytest.raises(ValueError):
-        compile_projection(schema, ["id"], {"id": mask})
+        DuckDBProjectionCompiler().compile(schema, ["id"], {"id": mask})
     batch = pa.record_batch([pa.array([7])], schema=schema)
     with pytest.raises(ValueError):
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], ["id"], None, {"id": mask}
+                [batch],
+                DuckDBProjectionCompiler().compile(batch.schema, ["id"], {"id": mask}),
+                None,
             )
         )
 
@@ -489,12 +528,15 @@ def test_nested_parent_mask_governs_pruned_descendant(container, mask, masked_va
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], columns, None, masks
+                [batch], DuckDBProjectionCompiler().compile(batch.schema, columns, masks), None
             )
         )
     )
     assert result.to_pylist() == [expected]
-    assert result.schema == compile_projection(batch.schema, columns, masks).output_schema
+    assert (
+        result.schema
+        == DuckDBProjectionCompiler().compile(batch.schema, columns, masks).output_schema
+    )
 
 
 @pytest.mark.parametrize("hide_key", [False, True])
@@ -515,13 +557,18 @@ def test_full_map_selection_enforces_descendant_masks(hide_key):
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], ["contacts"], None, masks
+                [batch],
+                DuckDBProjectionCompiler().compile(batch.schema, ["contacts"], masks),
+                None,
             )
         )
     )
     expected = [None, None, None] if hide_key else [[("private-key", {"secret": None})], None, []]
     assert result.column("contacts").to_pylist() == expected
-    assert result.schema == compile_projection(schema, ["contacts"], masks).output_schema
+    assert (
+        result.schema
+        == DuckDBProjectionCompiler().compile(schema, ["contacts"], masks).output_schema
+    )
 
 
 @pytest.mark.parametrize("slice_offset", [1, 3, 9])
@@ -557,7 +604,7 @@ def test_sliced_nested_arrow_batches_preserve_values_and_nulls(slice_offset):
     }
     result = pa.Table.from_batches(
         DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-            [batch], schema.names, None, masks
+            [batch], DuckDBProjectionCompiler().compile(batch.schema, schema.names, masks), None
         )
     )
     assert result.to_pylist() == [
@@ -621,11 +668,15 @@ def test_scalar_masks_execute_values_and_match_advertised_schema():
     result = pa.Table.from_batches(
         list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
-                [batch], list(masks), None, masks
+                [batch],
+                DuckDBProjectionCompiler().compile(batch.schema, list(masks), masks),
+                None,
             )
         )
     )
-    assert result.schema.equals(compile_projection(batch.schema, list(masks), masks).output_schema)
+    assert result.schema.equals(
+        DuckDBProjectionCompiler().compile(batch.schema, list(masks), masks).output_schema
+    )
     assert result.to_pydict() == {
         "hashed": [sha256(b"123").hexdigest(), None],
         "redacted": ["***", None],

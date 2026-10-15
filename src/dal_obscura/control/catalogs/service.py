@@ -17,20 +17,20 @@ from uuid import UUID
 from dal_obscura_plugin_api import CatalogConfig, DiscoveryPage, PluginDescriptor
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.errors import ConfigurationConflictError, ValidationFailure
+from dal_obscura.adapters.providers.discovery import (
+    ICEBERG_CATALOG_ID,
+    discover_public_catalog_tables,
+)
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import catalogs as _db_catalogs
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import ConfigurationConflictError, ValidationFailure
 from dal_obscura.control.workspace.service import required_workspace
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import (
     SecretProvider,
     resolve_secret_refs,
 )
-from dal_obscura.sources.discovery import (
-    ICEBERG_CATALOG_ID,
-    discover_public_catalog_tables,
-)
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import catalogs as _db_catalogs
-from dal_obscura.storage import workspace as _db_workspace
 
 _MAX_OPTION_DEPTH = 16
 _MAX_OPTION_NODES = 1_024
@@ -231,6 +231,7 @@ def upsert_workspace_catalog(
     expected_revision: int | None = None,
     actor_principal: str = "system",
     plugin_registry: PluginRegistry | None = None,
+    correlation_id: str | None = None,
 ) -> dict[str, str]:
     """Creates or updates a workspace catalog definition."""
 
@@ -253,6 +254,7 @@ def upsert_workspace_catalog(
         resource_type="catalog",
         resource_id=str(catalog_id),
         details={"name": name, "plugin_id": plugin_id, "option_keys": sorted(options)},
+        correlation_id=correlation_id,
     )
     return {"id": str(catalog_id), "name": name}
 

@@ -14,7 +14,25 @@ import uvicorn
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.identity.contracts import IdentityPort
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.adapters.providers.published import LiveConfigCatalogRegistry
+from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
+from dal_obscura.adapters.sql.database.db import (
+    check_config_store_schema,
+    create_engine_from_url,
+    session_factory,
+)
+from dal_obscura.adapters.sql.snapshots import LiveConfigStore
+from dal_obscura.adapters.sql.tickets import (
+    SqlAlchemyTicketStore,
+)
+from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.application.reads.ports import IdentityPort
+from dal_obscura.application.reads.service import ReadService, ReadSettings
+from dal_obscura.application.reads.sources import LiveRuntime
 from dal_obscura.identity.oidc import (
     OidcJwksIdentityProvider,
 )
@@ -25,12 +43,6 @@ from dal_obscura.plugins import load_plugin_lock_file
 from dal_obscura.plugins.bootstrap import (
     create_plugin_registry,
 )
-from dal_obscura.read.execution.transform import (
-    DuckDBRowTransformAdapter,
-)
-from dal_obscura.read.service import ReadService, ReadSettings
-from dal_obscura.read.tickets.envelope import SourceTaskCodec
-from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
 from dal_obscura.runtime.configuration import (
     DataPlaneRuntimeConfig,
     load_data_plane_runtime_config,
@@ -39,16 +51,6 @@ from dal_obscura.runtime.secrets import (
     SecretProvider,
     load_secret_provider,
     resolve_secret_refs,
-)
-from dal_obscura.sources.published import LiveConfigCatalogRegistry
-from dal_obscura.storage.database.db import (
-    check_config_store_schema,
-    create_engine_from_url,
-    session_factory,
-)
-from dal_obscura.storage.snapshots import LiveConfigStore, LiveRuntime
-from dal_obscura.storage.tickets import (
-    SqlAlchemyTicketStore,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -110,6 +112,7 @@ def main() -> None:
         _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
         ticket_settings = live_runtime.ticket
         reads = ReadService(
+            projection_compiler=DuckDBProjectionCompiler(),
             identity=identity,
             access_context=catalog_registry,
             row_transform=row_transform,

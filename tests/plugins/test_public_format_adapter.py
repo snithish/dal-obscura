@@ -8,10 +8,10 @@ import pytest
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR
 from dal_obscura_plugin_api import ExecutionContext, ScanTask, TableHandle, TableIdentifier
 
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.sources.adapters import (
+from dal_obscura.adapters.providers.adapters import (
     PublicPluginTableFormat,
 )
+from dal_obscura.kernel.plans.request import PlanRequest
 from tests.support.plugins.public_plugins import _contract_format
 
 
@@ -228,7 +228,7 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
 
             return schema, batches()
 
-    from dal_obscura.sources import adapters as public_plugin_adapter
+    from dal_obscura.adapters.providers import adapters as public_plugin_adapter
 
     monkeypatch.setattr(
         public_plugin_adapter,
@@ -486,7 +486,7 @@ def test_format_without_current_descriptor_is_rejected_and_closed():
 
 
 def test_optional_filter_pushdown_keeps_full_filter_for_core():
-    from dal_obscura.policy.filters import parse_row_filter
+    from dal_obscura.kernel.policy.filters import parse_row_filter
 
     schema = pa.schema([pa.field("id", pa.int64())])
     table, calls = _contract_format(schema)
@@ -555,7 +555,7 @@ def test_execution_uses_the_read_deadline_instead_of_the_planning_timeout():
 
 
 def test_expired_batch_context_does_not_read_source():
-    from dal_obscura.sources.adapters import (
+    from dal_obscura.adapters.providers.adapters import (
         _checked_plugin_batches,
     )
 
@@ -688,7 +688,7 @@ def test_public_format_keeps_deep_metadata_and_plans_native_top_level_projection
     planned = source.plan(PlanRequest(catalog="fixture", target="default.users", columns=["id"]), 1)
     assert planned.schema.equals(schema, check_metadata=True)
     assert len(planned.tasks) == 1
-    from dal_obscura.sources.adapters import PublicPluginPartition
+    from dal_obscura.adapters.providers.adapters import PublicPluginPartition
 
     partition = planned.tasks[0].partition
     assert isinstance(partition, PublicPluginPartition)

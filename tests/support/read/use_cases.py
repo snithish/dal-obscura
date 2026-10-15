@@ -8,19 +8,19 @@ from typing import cast
 
 import pyarrow as pa
 
-from dal_obscura.identity.contracts import AuthenticationRequest
-from dal_obscura.policy.filters import deserialize_row_filter
-from dal_obscura.policy.models import AccessDecision, Principal
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.tickets.contracts import StoredTicket
-from dal_obscura.read.tickets.payload import (
+from dal_obscura.application.reads.sources import Plan, ScanTask, Source
+from dal_obscura.application.reads.tickets.contracts import StoredTicket
+from dal_obscura.application.reads.tickets.payload import (
     ScanPayload,
     TicketPayload,
     TicketReference,
     ticket_payload_hash,
 )
-from dal_obscura.sources.contracts import Source
-from dal_obscura.sources.planning import Plan, ScanTask
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.filters import deserialize_row_filter
+from dal_obscura.kernel.policy.models import AccessDecision
 
 
 def scan_payload() -> ScanPayload:
@@ -272,8 +272,8 @@ class FakeTicketStore:
 
 
 class FakeRowTransform:
-    def apply_filters_and_masks_stream(self, batches, columns, row_filter, masks):
-        del columns, row_filter, masks
+    def apply_filters_and_masks_stream(self, batches, projection, row_filter):
+        del projection, row_filter
         return batches
 
 
@@ -316,10 +316,10 @@ class FixtureTaskCodec:
 
     @staticmethod
     def _production():
+        from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
         from dal_obscura.plugins.bootstrap import (
             create_plugin_registry,
         )
-        from dal_obscura.read.tickets.envelope import SourceTaskCodec
 
         return SourceTaskCodec(create_plugin_registry())
 

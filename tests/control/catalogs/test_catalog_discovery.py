@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from dal_obscura_plugin_api import DiscoveryPage, PluginDescriptor, TableIdentifier
 
+import dal_obscura.adapters.providers.discovery as discovery
 import dal_obscura.control.catalogs.service as catalog_service
-import dal_obscura.sources.discovery as discovery
-from dal_obscura.plugins import PluginRegistry
-from dal_obscura.sources.discovery import (
+from dal_obscura.adapters.providers.discovery import (
     discover_public_catalog_tables,
 )
+from dal_obscura.plugins import PluginRegistry
 from tests.support.sources.discovery import (
     PagedCatalogRegistry,
     _unchecked_discovery_page,

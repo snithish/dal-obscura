@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.read.request import PlanRequest
+from dal_obscura.kernel.plans.request import PlanRequest
 
 
 def test_plan_request_copies_caller_columns() -> None:

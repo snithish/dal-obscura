@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
-from dal_obscura.read.execution.limits import validate_memory_limit
+from dal_obscura.adapters.duckdb.limits import validate_memory_limit
 from dal_obscura.runtime.secrets import (
     SecretProviderConfig,
     secret_provider_config_from_environment,

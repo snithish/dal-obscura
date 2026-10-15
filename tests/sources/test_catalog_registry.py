@@ -8,15 +8,15 @@ from dal_obscura_iceberg import catalog as iceberg_catalog
 from dal_obscura_iceberg.catalog import IcebergCatalog
 from dal_obscura_iceberg.format import IcebergFormatPlugin
 
-from dal_obscura.plugins.bootstrap import (
-    create_plugin_registry,
-)
-from dal_obscura.sources import catalogs as registry_module
-from dal_obscura.sources.adapters import PublicPluginCatalogAdapter
-from dal_obscura.sources.catalogs import (
+from dal_obscura.adapters.providers import catalogs as registry_module
+from dal_obscura.adapters.providers.adapters import PublicPluginCatalogAdapter
+from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
+)
+from dal_obscura.plugins.bootstrap import (
+    create_plugin_registry,
 )
 
 
@@ -43,7 +43,8 @@ def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch
                 "first": CatalogConfig(name="first", options={}),
                 "second": CatalogConfig(name="second", options={}),
             }
-        )
+        ),
+        plugin_registry=create_plugin_registry(),
     )
 
     with pytest.raises(RuntimeError, match="first close failed"):
@@ -102,7 +103,7 @@ def test_catalog_registry_reads_iceberg_through_admitted_plugin_factory(tmp_path
         iceberg_sql_catalog_options,
     )
 
-    from dal_obscura.read.request import PlanRequest
+    from dal_obscura.kernel.plans.request import PlanRequest
 
     create_iceberg_table(tmp_path, "routing", "warehouse", append_batches=[[0, 1]])
     registry = CatalogRegistry(
@@ -156,7 +157,8 @@ def test_catalog_registry_close_releases_adapters_and_rejects_reuse(monkeypatch)
         lambda *_args, **_kwargs: ClosableCatalog(),
     )
     registry = CatalogRegistry(
-        ServiceConfig(catalogs={"analytics": CatalogConfig(name="analytics", options={})})
+        ServiceConfig(catalogs={"analytics": CatalogConfig(name="analytics", options={})}),
+        plugin_registry=create_plugin_registry(),
     )
 
     registry.close()
@@ -196,7 +198,8 @@ def test_catalog_registry_construction_closes_partially_built_generation(monkeyp
                     "analytics": CatalogConfig(name="analytics", options={}),
                     "replacement": CatalogConfig(name="replacement", options={}),
                 }
-            )
+            ),
+            plugin_registry=create_plugin_registry(),
         )
     assert closed == ["catalog"]
 
@@ -223,7 +226,8 @@ def test_catalog_registry_construction_preserves_build_failure_when_cleanup_fail
                     "analytics": CatalogConfig(name="analytics", options={}),
                     "replacement": CatalogConfig(name="replacement", options={}),
                 }
-            )
+            ),
+            plugin_registry=create_plugin_registry(),
         )
 
 

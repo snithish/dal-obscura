@@ -4,12 +4,12 @@ from typing import cast
 
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.runtime import ControlContext
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.plugins import PluginLifecycleState
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import workspace as _db_workspace
 
 
 def set_plugin_lifecycle(
@@ -19,6 +19,7 @@ def set_plugin_lifecycle(
     plugin_id: str,
     target: PluginLifecycleState,
     actor: ControlPlaneActor,
+    correlation_id: str | None = None,
 ) -> dict[str, str]:
     """Apply and audit one explicit process-local plugin lifecycle change."""
 
@@ -40,5 +41,6 @@ def set_plugin_lifecycle(
         resource_type="plugin",
         resource_id=f"{kind}:{plugin_id}",
         details={"target": lifecycle.value},
+        correlation_id=correlation_id,
     )
     return {"kind": kind, "plugin_id": plugin_id, "lifecycle": lifecycle.value}

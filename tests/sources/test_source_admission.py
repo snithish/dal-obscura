@@ -2,8 +2,8 @@
 
 import pytest
 
-from dal_obscura.sources.discovery import discover_public_catalog_tables
-from dal_obscura.sources.schema import load_source_schema
+from dal_obscura.adapters.providers.discovery import discover_public_catalog_tables
+from dal_obscura.adapters.providers.schema import load_source_schema
 
 
 @pytest.mark.parametrize("operation", ["discovery", "schema"])

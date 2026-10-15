@@ -4,9 +4,10 @@ import pyarrow as pa
 import pytest
 from dal_obscura_plugin_conformance.iceberg_fixtures import create_iceberg_table
 
-from dal_obscura.sources.catalogs import (
+from dal_obscura.adapters.providers.catalogs import (
     CatalogRegistry,
 )
+from dal_obscura.plugins.bootstrap import create_plugin_registry
 from tests.support.flight.flight import (
     build_flight_service,
     command_descriptor,
@@ -44,7 +45,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         },
     )
 
-    catalog_registry = CatalogRegistry(service_config)
+    catalog_registry = CatalogRegistry(service_config, plugin_registry=create_plugin_registry())
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
@@ -99,7 +100,7 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
     )
 
     server = build_flight_service(
-        catalog_registry=CatalogRegistry(service_config),
+        catalog_registry=CatalogRegistry(service_config, plugin_registry=create_plugin_registry()),
         policy_rules=[
             {
                 "principals": ["user1"],
@@ -142,7 +143,7 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
         },
     )
 
-    catalog_registry = CatalogRegistry(service_config)
+    catalog_registry = CatalogRegistry(service_config, plugin_registry=create_plugin_registry())
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[
@@ -187,7 +188,7 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
         },
     )
 
-    catalog_registry = CatalogRegistry(service_config)
+    catalog_registry = CatalogRegistry(service_config, plugin_registry=create_plugin_registry())
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[

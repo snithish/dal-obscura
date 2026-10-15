@@ -4,13 +4,13 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.identity.sessions import BrowserSessionStore
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.storage.database.orm import BrowserSessionRecord, utcnow
+from dal_obscura.adapters.sql.database.orm import BrowserSessionRecord, utcnow
+from dal_obscura.identity.sessions import BrowserSessionStore
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def test_browser_session_is_opaque_and_revocable(engine_factory) -> None:

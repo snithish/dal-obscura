@@ -16,13 +16,13 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringType, StructType
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.assets.schema import (
     capture_asset_schema,
     get_asset_schema,
     schema_fingerprint,
 )
-from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProviderConfig, load_secret_provider
 from tests.support.sources.schema_catalog import schema_registry

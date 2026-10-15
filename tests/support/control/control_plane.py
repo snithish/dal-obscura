@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from dal_obscura.adapters.sql.database.db import session_factory
 from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.storage.database.db import session_factory
 
 ICEBERG_CATALOG_ID = "iceberg.catalog"
 

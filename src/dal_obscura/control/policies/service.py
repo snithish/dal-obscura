@@ -8,21 +8,21 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import policies as _db_policies
 from dal_obscura.control.assets.access import ensure_asset_capability, ensure_asset_owner
 from dal_obscura.control.policies.compiler import compile_policy_rule_payloads
-from dal_obscura.policy.attribute_conditions import attributes_match
-from dal_obscura.policy.models import (
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.policy.attribute_conditions import attributes_match
+from dal_obscura.kernel.policy.models import (
     AccessRule,
     AssetPolicy,
     MaskRule,
-    Principal,
     PrincipalConditionValue,
 )
-from dal_obscura.policy.policy_resolution import resolve_access
-from dal_obscura.storage import assets as _db_assets
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import policies as _db_policies
+from dal_obscura.kernel.policy.policy_resolution import resolve_access
 
 
 def list_policy_rules(
@@ -46,6 +46,7 @@ def replace_policy_rules(
     actor: ControlPlaneActor,
     expected_revision: int | None = None,
     revoke_existing_tokens: bool = False,
+    correlation_id: str | None = None,
 ) -> dict[str, int]:
     """Validates and replaces policy rules for one asset."""
 
@@ -75,6 +76,7 @@ def replace_policy_rules(
         actor_principal=actor.identity_key(),
         action="asset.policy.replace",
         details={"policy_revision": revision, "revoked_token_count": revoked_count},
+        correlation_id=correlation_id,
     )
     return {"policy_revision": revision, "revoked_token_count": revoked_count}
 
@@ -84,6 +86,7 @@ def revoke_asset_tickets(
     asset_id: UUID,
     *,
     actor: ControlPlaneActor,
+    correlation_id: str | None = None,
 ) -> dict[str, int]:
     """Revokes all unexpired asset tokens; only owners and platform admins may do so."""
 
@@ -96,6 +99,7 @@ def revoke_asset_tickets(
         actor_principal=actor.identity_key(),
         action="asset.tokens.revoke",
         details={"revoked_token_count": revoked_count},
+        correlation_id=correlation_id,
     )
     return {"revoked_token_count": revoked_count}
 
@@ -207,7 +211,7 @@ def preview_principal(
     principal: str, groups: Sequence[str], claims: dict[str, object]
 ) -> Principal:
     """Normalize synthetic internal attributes through the policy preview boundary."""
-    from dal_obscura.control.errors import ValidationFailure
+    from dal_obscura.application.governance.errors import ValidationFailure
 
     if any(isinstance(value, dict | list) for value in claims.values()):
         raise ValidationFailure(

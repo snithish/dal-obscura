@@ -23,16 +23,16 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, LongType, NestedField, StringType, StructType
 
 import tests.support.control.seed as _commands_seed
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.adapters.sql.database.db import (
+    migrate_config_store,
+    session_factory,
+)
 from dal_obscura.control.assets import service as asset_service
 from dal_obscura.control.policies import service as policy_service
 from dal_obscura.control.runtime import ControlContext
 from dal_obscura.interfaces.flight_contract import encode_plan_command
-from dal_obscura.storage import workspace as _db_workspace
-from dal_obscura.storage.database.db import (
-    migrate_config_store,
-    session_factory,
-)
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 pytestmark = pytest.mark.heavy
 

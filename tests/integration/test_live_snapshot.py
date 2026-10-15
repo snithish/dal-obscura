@@ -5,17 +5,17 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import event, select
 
-from dal_obscura.storage import assets as _db_assets
-from dal_obscura.storage import catalogs as _db_catalogs
-from dal_obscura.storage import policies as _db_policies
-from dal_obscura.storage import workspace as _db_workspace
-from dal_obscura.storage.database.orm import (
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.adapters.sql import catalogs as _db_catalogs
+from dal_obscura.adapters.sql import policies as _db_policies
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.adapters.sql.database.orm import (
     AssetRecord,
     AssetSchemaFieldRecord,
     CatalogRecord,
     PolicyRuleRecord,
 )
-from dal_obscura.storage.snapshots import LiveConfigStore
+from dal_obscura.adapters.sql.snapshots import LiveConfigStore
 from tests.support.sources.live_config import seed_live_config
 from tests.support.storage.postgres import isolated_postgres_sessions
 
@@ -62,31 +62,28 @@ def test_postgres_snapshot_survives_writer_commit_between_configuration_reads():
 
         event.listen(engine, "after_cursor_execute", concurrent_write)
         try:
-            asset, catalog = store.get_asset_and_catalog(
-                catalog="analytics", target="default.users"
-            )
+            asset = store.get_asset_and_catalog(catalog="analytics", target="default.users")
         finally:
             event.remove(engine, "after_cursor_execute", concurrent_write)
         assert isolation == ["repeatable read"]
-        assert "schema" not in asset.compiled_config
-        assert asset.policy_version == 4
-        assert asset.compiled_config["policy"]["rules"][0]["columns"] == ["id"]
-        assert catalog.config["options"]["uri"] == "sqlite:///catalog.db"
-        next_asset, next_catalog = store.get_asset_and_catalog(
-            catalog="analytics", target="default.users"
-        )
-        assert next_asset.compiled_config["schema"]["fields"][0]["name"] == "id"
-        assert next_asset.policy_version == 5
-        assert next_asset.compiled_config["policy"]["rules"][0]["columns"] == ["email"]
-        assert next_catalog.config["options"]["uri"] == "sqlite:///new.db"
+        assert asset.admitted_schema is None
+        assert asset.policy.version == 4
+        assert asset.policy.rules[0].columns == ("id",)
+        assert asset.catalog.options["uri"] == "sqlite:///catalog.db"
+        next_asset = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        assert next_asset.admitted_schema is not None
+        assert next_asset.admitted_schema.fields[0]["name"] == "id"
+        assert next_asset.policy.version == 5
+        assert next_asset.policy.rules[0].columns == ("email",)
+        assert next_asset.catalog.options["uri"] == "sqlite:///new.db"
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("resource", ["policy", "asset", "catalog", "runtime", "auth"])
 def test_resource_cas_rejects_stale_session_after_another_writer_commits(resource):
 
-    from dal_obscura.control.errors import ConfigurationConflictError
-    from dal_obscura.storage.database.orm import RuntimeSettingsRecord, WorkspaceRecord
+    from dal_obscura.adapters.sql.database.orm import RuntimeSettingsRecord, WorkspaceRecord
+    from dal_obscura.application.governance.errors import ConfigurationConflictError
 
     with isolated_postgres_sessions() as factory:
         with factory() as session:

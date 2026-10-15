@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from dal_obscura.adapters.sql.database.db import session_factory
 from dal_obscura.interfaces.http.app import create_app
 from dal_obscura.runtime.secrets import SecretProviderConfig, load_secret_provider
-from dal_obscura.storage.database.db import session_factory
 from examples.demo.keycloak.scripts import provision_demo, seed_table
 
 

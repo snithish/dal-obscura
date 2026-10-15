@@ -9,10 +9,10 @@ from dal_obscura_secrets import EnvironmentBackend
 from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
+from dal_obscura.adapters.sql.database.db import migrate_config_store
 from dal_obscura.interfaces.cli import control as control_plane_cli
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProvider
-from dal_obscura.storage.database.db import migrate_config_store
 
 
 def test_control_plane_cli_starts_configured_app(engine_factory, monkeypatch, tmp_path) -> None:

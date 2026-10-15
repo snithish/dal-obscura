@@ -12,30 +12,30 @@ import pyarrow as pa
 import pyarrow.flight as flight
 from sqlalchemy.orm import Session
 
-from dal_obscura.identity.contracts import AuthenticationRequest
+from dal_obscura.adapters.duckdb.transform import (
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.adapters.providers.published import LiveConfigCatalogRegistry
+from dal_obscura.adapters.sql.database.db import session_factory
+from dal_obscura.adapters.sql.snapshots import LiveConfigStore
+from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.application.reads.ports import ScanTaskCodec
+from dal_obscura.application.reads.sources import Plan, ScanTask, Source
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.interfaces.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_plan_command
-from dal_obscura.policy.models import (
+from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.models import (
     AccessDecision,
     AccessRule,
     DatasetPolicy,
     MaskRule,
     Policy,
-    Principal,
     PrincipalConditionValue,
 )
-from dal_obscura.policy.policy_resolution import resolve_access
-from dal_obscura.read.execution.transform import (
-    DuckDBRowTransformAdapter,
-)
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.tickets.envelope import ScanTaskCodec
-from dal_obscura.read.tickets.signing import HmacTicketCodecAdapter
-from dal_obscura.sources.contracts import Source
-from dal_obscura.sources.planning import Plan, ScanTask
-from dal_obscura.sources.published import LiveConfigCatalogRegistry
-from dal_obscura.storage.database.db import session_factory
-from dal_obscura.storage.snapshots import LiveConfigStore
+from dal_obscura.kernel.policy.policy_resolution import resolve_access
+from dal_obscura.plugins.bootstrap import create_plugin_registry
 from tests.support.read.reads import StaticAccessContext, make_read_service
 from tests.support.read.use_cases import FakeTicketStore
 
@@ -244,7 +244,9 @@ def build_flight_service(
 
     if live_config_requested:
         config_store = LiveConfigStore(session_factory(cast(Session, db_session).get_bind().engine))
-        resolved_registry = LiveConfigCatalogRegistry(config_store)
+        resolved_registry = LiveConfigCatalogRegistry(
+            config_store, plugin_registry=create_plugin_registry()
+        )
         resolved_authorizer = None
     else:
         resolved_registry = catalog_registry

@@ -3,10 +3,10 @@ from typing import Any
 import pyarrow as pa
 import pytest
 
-from dal_obscura.read.execution.transform import (
+from dal_obscura.adapters.duckdb.transform import (
     _DUCKDB_ARROW_OUTPUT_BATCH_SIZE,
 )
-from dal_obscura.sources.planning import ScanTask
+from dal_obscura.application.reads.sources import ScanTask
 from tests.support.flight.flight import (
     StubTableFormat,
     build_flight_service,

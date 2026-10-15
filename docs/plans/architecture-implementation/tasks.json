@@ -1,0 +1,155 @@
+{
+  "status": "blocked",
+  "execution_authorization": "User authorized implementation and, on 2026-10-15, committing progress and pushing the current branch before continuing implementation. Merge and deployment remain unauthorized.",
+  "tasks": [
+    {
+      "id": "T00",
+      "title": "Capture baseline",
+      "depends_on": [],
+      "status": "complete",
+      "specification": "README.md#t00",
+      "completion_evidence": "progress.md#t00-capture-baseline: Q0/Q1 pass, 1209 tests, compatibility fixtures, five wheel capacity repetitions and schema/lifecycle baselines; unmeasured comparisons stated."
+    },
+    {
+      "id": "T01",
+      "title": "Move identity and policy contracts",
+      "depends_on": [
+        "T00"
+      ],
+      "status": "complete",
+      "specification": "README.md#t01",
+      "completion_evidence": "progress.md#t01-move-identity-and-policy-contracts: focused tests unchanged before/after, Q1 1209 passed, kernel boundary and retired-import audits passed."
+    },
+    {
+      "id": "T02",
+      "title": "Isolate compiler and admission",
+      "depends_on": [
+        "T01"
+      ],
+      "status": "complete",
+      "specification": "README.md#t02",
+      "completion_evidence": "progress.md#t02-isolate-compiler-and-admission: new injection behavior red/green, Q1 1210 passed, memory probes and compiler/boundary/OpenAPI audits passed."
+    },
+    {
+      "id": "T03",
+      "title": "Separate read application and providers",
+      "depends_on": [
+        "T02"
+      ],
+      "status": "complete",
+      "specification": "README.md#t03",
+      "completion_evidence": "progress.md#t03-separate-read-application-and-providers: before/after focused 512 passed, Q1 1210 passed, inward-import audit and frozen ticket/scan fixtures passed."
+    },
+    {
+      "id": "T04",
+      "title": "Create immutable typed snapshots",
+      "depends_on": [
+        "T03"
+      ],
+      "status": "complete",
+      "specification": "README.md#t04",
+      "completion_evidence": "progress.md#t04-create-immutable-typed-snapshots: immutable capture tests, Q1 1212 passed, six PostgreSQL tests before/after, identical migration DDL/isolation, installed resources and OpenAPI passed."
+    },
+    {
+      "id": "T05",
+      "title": "Establish governance persistence ports",
+      "depends_on": [
+        "T04"
+      ],
+      "status": "blocked",
+      "specification": "README.md#t05",
+      "completion_evidence": null,
+      "blocking_reason": "Clarify T05 all-SQL-writes acceptance scope versus T06/T07 legacy command/transaction migration and T08 session migration. Independent T05 work passes Q1; see progress.md."
+    },
+    {
+      "id": "T06",
+      "title": "Migrate assets and policies",
+      "depends_on": [
+        "T05"
+      ],
+      "status": "pending",
+      "specification": "README.md#t06",
+      "completion_evidence": null
+    },
+    {
+      "id": "T07",
+      "title": "Migrate remaining governance",
+      "depends_on": [
+        "T06"
+      ],
+      "status": "pending",
+      "specification": "README.md#t07",
+      "completion_evidence": null
+    },
+    {
+      "id": "T08",
+      "title": "Centralize startup and sessions",
+      "depends_on": [
+        "T07"
+      ],
+      "status": "pending",
+      "specification": "README.md#t08",
+      "completion_evidence": null
+    },
+    {
+      "id": "T09",
+      "title": "Supervise execution lifecycle",
+      "depends_on": [
+        "T08"
+      ],
+      "status": "pending",
+      "specification": "README.md#t09",
+      "completion_evidence": null
+    },
+    {
+      "id": "T10",
+      "title": "Own UI session lifecycle",
+      "depends_on": [
+        "T09"
+      ],
+      "status": "pending",
+      "specification": "README.md#t10",
+      "completion_evidence": null
+    },
+    {
+      "id": "T11",
+      "title": "Own asset and policy workflows",
+      "depends_on": [
+        "T10"
+      ],
+      "status": "pending",
+      "specification": "README.md#t11",
+      "completion_evidence": null
+    },
+    {
+      "id": "T12",
+      "title": "Own management queries",
+      "depends_on": [
+        "T11"
+      ],
+      "status": "pending",
+      "specification": "README.md#t12",
+      "completion_evidence": null
+    },
+    {
+      "id": "T13",
+      "title": "Enforce boundaries and remove obsolete paths",
+      "depends_on": [
+        "T12"
+      ],
+      "status": "pending",
+      "specification": "README.md#t13",
+      "completion_evidence": null
+    },
+    {
+      "id": "T14",
+      "title": "Qualify and deliver",
+      "depends_on": [
+        "T13"
+      ],
+      "status": "pending",
+      "specification": "README.md#t14",
+      "completion_evidence": null
+    }
+  ]
+}

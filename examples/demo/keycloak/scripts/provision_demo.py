@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from dal_obscura_plugin_api.paths import FieldPath
 
-from dal_obscura.identity.names import encode_federated_group, encode_federated_identity
+from dal_obscura.kernel.identity.names import encode_federated_group, encode_federated_identity
 
 FIXTURE_FILE = Path(__file__).resolve().parents[1] / "fixtures/demo_fixture.json"
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")

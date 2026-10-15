@@ -8,9 +8,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from dal_obscura.control import audit_service
-from dal_obscura.control.access import ControlPlaneActor
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import AuditEventPageResponse
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:

@@ -8,19 +8,19 @@ from typing import Any, cast
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import ValidationFailure
+from dal_obscura.application.governance.values import WorkspaceState
 from dal_obscura.control.workspace.auth_providers import (
     redact_auth_provider,
     validate_auth_provider_payloads,
 )
-from dal_obscura.storage import assets as _db_assets
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import workspace as _db_workspace
-from dal_obscura.storage.database.orm import WorkspaceRecord
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
-def required_workspace(store: Session) -> WorkspaceRecord:
+def required_workspace(store: Session) -> WorkspaceState:
     """Returns the default workspace context or raises when none exists."""
 
     context = _db_workspace.get_workspace(store)
@@ -119,6 +119,7 @@ def replace_workspace_auth_providers(
     *,
     expected_revision: int | None = None,
     actor_principal: str = "system",
+    correlation_id: str | None = None,
 ) -> list[dict[str, object]]:
     """Replaces the workspace authentication provider chain."""
 
@@ -137,6 +138,7 @@ def replace_workspace_auth_providers(
             "provider_count": len(providers),
             "enabled_count": sum(1 for provider in providers if provider.get("enabled", True)),
         },
+        correlation_id=correlation_id,
     )
     return list_workspace_auth_providers(store)
 
@@ -150,6 +152,7 @@ def upsert_workspace_runtime_settings(
     expected_revision: int | None = None,
     *,
     actor_principal: str = "system",
+    correlation_id: str | None = None,
 ) -> dict[str, object]:
     """Creates or updates workspace runtime ticket settings."""
 
@@ -191,6 +194,7 @@ def upsert_workspace_runtime_settings(
             "max_ticket_exchanges": max_ticket_exchanges,
             "path_rules": normalized_path_rules,
         },
+        correlation_id=correlation_id,
     )
     settings = _db_workspace.get_runtime_settings(store)
     if settings is None:

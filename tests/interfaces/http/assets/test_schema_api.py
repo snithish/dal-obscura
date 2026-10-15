@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType, StructType
 
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
 from dal_obscura.control.assets import schema as schema_service
 from dal_obscura.interfaces.http.routes.schemas import PolicyEvaluationResponse
 from tests.support.control.workspace import (
@@ -722,8 +723,8 @@ def test_postgres_policy_evaluation_rechecks_read_capability_after_duckdb(monkey
 def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory):
     from uuid import UUID
 
-    from dal_obscura.control.access import ControlPlaneActor
     from dal_obscura.control.policies import evaluation as evaluation_service
+    from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
     client = client_factory()
     asset = _provision_reviewable_asset(client)
@@ -745,7 +746,7 @@ def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory
     groups.append("later-group")
     claims["department"] = "Other"
     result = evaluation_service.evaluate_asset_policy(
-        captured, pa.schema([pa.field("id", pa.int64())])
+        captured, pa.schema([pa.field("id", pa.int64())]), compiler=DuckDBProjectionCompiler()
     )
     payload = PolicyEvaluationResponse.model_validate(result)
     assert payload.rows == [{"id": 7}]

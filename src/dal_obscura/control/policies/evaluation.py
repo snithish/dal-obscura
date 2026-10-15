@@ -14,22 +14,23 @@ import pyarrow as pa
 from dal_obscura_plugin_api.schema.index import SchemaIndex
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.assets import schema as schema_service
-from dal_obscura.control.errors import (
+from dal_obscura.adapters.duckdb.transform import (
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import (
     ConfigurationConflictError,
     ValidationFailure,
 )
+from dal_obscura.application.reads.ports import ProjectionCompiler
+from dal_obscura.control.assets import schema as schema_service
 from dal_obscura.control.policies import service as policy_service
 from dal_obscura.control.workspace.attributes import provider_mapper
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.policy.filters import deserialize_row_filter
+from dal_obscura.kernel.policy.models import AssetPolicy, MaskRule
 from dal_obscura.plugins import PluginRegistry
-from dal_obscura.policy.filters import deserialize_row_filter
-from dal_obscura.policy.models import AssetPolicy, MaskRule, Principal
-from dal_obscura.policy.projection import compile_projection
-from dal_obscura.read.execution.transform import (
-    DuckDBRowTransformAdapter,
-)
-from dal_obscura.storage import workspace as _db_workspace
 
 MAX_SYNTHETIC_ROWS = 100
 MAX_SYNTHETIC_BYTES = 2 * 1024 * 1024
@@ -116,7 +117,9 @@ def ensure_asset_evaluation_current(
             )
 
 
-def evaluate_asset_policy(captured: PolicyEvaluation, arrow_schema: pa.Schema) -> dict[str, object]:
+def evaluate_asset_policy(
+    captured: PolicyEvaluation, arrow_schema: pa.Schema, *, compiler: ProjectionCompiler
+) -> dict[str, object]:
     """Evaluate a captured policy over bounded synthetic rows without database IO."""
     rows = json.loads(captured.rows_json) if captured.rows_json is not None else None
     claims = json.loads(captured.claims_json)
@@ -192,21 +195,21 @@ def evaluate_asset_policy(captured: PolicyEvaluation, arrow_schema: pa.Schema) -
     row_filter_sql = cast(str | None, preview["row_filter"])
     row_filter = deserialize_row_filter(row_filter_sql) if row_filter_sql else None
     try:
+        projection = compiler.compile(
+            arrow_schema, cast(list[str], preview["visible_columns"]), masks
+        )
         transformed = list(
             DuckDBRowTransformAdapter().apply_filters_and_masks_stream(
                 batches,
-                cast(list[str], preview["visible_columns"]),
+                projection,
                 row_filter,
-                masks,
             )
         )
     except Exception as exc:
         # Evaluator errors can include synthetic values or provider internals;
         # return a stable message at the browser boundary.
         raise ValidationFailure("Synthetic evaluation failed") from exc
-    output_schema = compile_projection(
-        arrow_schema, cast(list[str], preview["visible_columns"]), masks
-    ).output_schema
+    output_schema = projection.output_schema
     output = (
         pa.Table.from_batches(transformed, schema=output_schema)
         if transformed

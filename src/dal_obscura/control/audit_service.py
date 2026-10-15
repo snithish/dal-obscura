@@ -7,11 +7,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.assets.access import ensure_asset_capability
-from dal_obscura.control.errors import ValidationFailure
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def list_audit_events_page(

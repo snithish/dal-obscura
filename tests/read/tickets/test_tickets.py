@@ -4,10 +4,10 @@ from typing import Any, cast
 
 import pytest
 
-from dal_obscura.policy.models import Principal
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.tickets.contracts import StoredTicket
-from dal_obscura.read.tickets.payload import ScanPayload
+from dal_obscura.application.reads.tickets.contracts import StoredTicket
+from dal_obscura.application.reads.tickets.payload import ScanPayload
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.plans.request import PlanRequest
 from tests.support.read.read_scenarios import (
     AUTHORIZATION_HEADER,
     _build_use_case_dependencies,
@@ -216,7 +216,7 @@ def test_plan_access_does_not_sign_ticket_when_persistence_fails():
 
 
 def test_invalid_output_projection_does_not_issue_or_persist_tickets():
-    from dal_obscura.policy.models import AccessDecision, MaskRule
+    from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
 
     _, _, table = _build_use_case_dependencies()
     store, codec = FakeTicketStore(), FakeTicketCodec()

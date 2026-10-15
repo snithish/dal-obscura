@@ -1,7 +1,7 @@
 import pyarrow as pa
 import pytest
 
-from dal_obscura.read.execution.stream import ManagedStream
+from dal_obscura.application.reads.execution import ManagedStream
 
 
 class Source:

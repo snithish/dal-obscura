@@ -9,18 +9,19 @@ import pyarrow as pa
 import pytest
 from sqlalchemy import event, select
 
-from dal_obscura.policy.models import Principal
-from dal_obscura.sources.published import LiveConfigCatalogRegistry
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.providers.published import LiveConfigCatalogRegistry
+from dal_obscura.adapters.sql.database.db import (
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.storage.database.orm import (
+from dal_obscura.adapters.sql.database.orm import (
     AssetRecord,
     CatalogRecord,
     PolicyRuleRecord,
 )
-from dal_obscura.storage.snapshots import LiveConfigStore
+from dal_obscura.adapters.sql.snapshots import LiveConfigStore
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.plugins.bootstrap import create_plugin_registry
 from tests.support.read.reads import make_read_service
 from tests.support.read.use_cases import StubTableFormat
 from tests.support.sources.live_config import seed_live_config
@@ -37,8 +38,8 @@ def _table():
 
 
 def test_schema_read_reuses_the_schema_admitted_with_the_source(setup, monkeypatch):
-    from dal_obscura.identity.contracts import AuthenticationRequest
-    from dal_obscura.read.request import PlanRequest
+    from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+    from dal_obscura.kernel.plans.request import PlanRequest
     from tests.support.read.use_cases import FakeIdentity
 
     _, _, store = setup
@@ -51,7 +52,7 @@ def test_schema_read_reuses_the_schema_admitted_with_the_source(setup, monkeypat
         return original(self)
 
     monkeypatch.setattr(StubTableFormat, "get_schema", counted)
-    registry = LiveConfigCatalogRegistry(store)
+    registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())
     reader = make_read_service(
         identity=FakeIdentity(Principal(id="user1", groups=[], attributes={})),
         access_context=registry,
@@ -96,7 +97,7 @@ def setup(engine_factory, tmp_path):
     with factory() as session:
         seed_live_config(session)
     Provider.created = []
-    with patch("dal_obscura.sources.published.CatalogRegistry", Provider):
+    with patch("dal_obscura.adapters.providers.published.CatalogRegistry", Provider):
         yield engine, factory, LiveConfigStore(factory)
     engine.dispose()
 
@@ -127,23 +128,23 @@ def test_snapshot_keeps_binding_policy_and_schema_in_one_database_view(setup):
 
     event.listen(engine, "after_cursor_execute", after_read)
     try:
-        asset, catalog = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        asset = store.get_asset_and_catalog(catalog="analytics", target="default.users")
     finally:
         event.remove(engine, "after_cursor_execute", after_read)
     assert changed
-    assert asset.policy_version == 4
-    assert asset.compiled_config["policy"]["rules"][0]["columns"] == ["id"]
-    assert catalog.config["options"]["uri"] == "sqlite:///catalog.db"
-    next_asset, next_catalog = store.get_asset_and_catalog(
-        catalog="analytics", target="default.users"
-    )
-    assert next_asset.policy_version == 5
-    assert next_catalog.config["options"]["uri"] == "sqlite:///new.db"
+    assert asset.policy.version == 4
+    assert asset.policy.rules[0].columns == ("id",)
+    assert asset.catalog.options["uri"] == "sqlite:///catalog.db"
+    next_asset = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+    assert next_asset.policy.version == 5
+    assert next_asset.catalog.options["uri"] == "sqlite:///new.db"
 
 
 def test_capacity_waits_for_lease_and_eviction_closes_only_idle_provider(setup):
     _, factory, store = setup
-    registry = LiveConfigCatalogRegistry(store, max_cached_providers=1)
+    registry = LiveConfigCatalogRegistry(
+        store, max_cached_providers=1, plugin_registry=create_plugin_registry()
+    )
     started = Event()
     finished = Event()
 
@@ -170,7 +171,7 @@ def test_capacity_waits_for_lease_and_eviction_closes_only_idle_provider(setup):
 
 def test_close_defers_in_flight_provider_and_rejects_new_requests(setup):
     _, _, store = setup
-    registry = LiveConfigCatalogRegistry(store)
+    registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())
     with registry.open("analytics", "default.users"):
         provider = Provider.created[0]
         registry.close()
@@ -188,7 +189,7 @@ def test_shutdown_cleanup_preserves_request_failure_and_releases_capacity(
     setup, monkeypatch, request_fails
 ):
     _, _, store = setup
-    registry = LiveConfigCatalogRegistry(store)
+    registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())
 
     def failing_close(self):
         self.closed = True
@@ -207,7 +208,7 @@ def test_shutdown_cleanup_preserves_request_failure_and_releases_capacity(
 
 def test_many_concurrent_requests_share_one_provider(setup):
     _, _, store = setup
-    registry = LiveConfigCatalogRegistry(store)
+    registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())
 
     def request(_):
         with registry.open("analytics", "default.users") as context:
@@ -221,8 +222,8 @@ def test_many_concurrent_requests_share_one_provider(setup):
 
 @pytest.mark.parametrize("operation", ["schema", "plan"])
 def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypatch, operation):
-    from dal_obscura.identity.contracts import AuthenticationRequest
-    from dal_obscura.read.request import PlanRequest
+    from dal_obscura.kernel.identity.authentication import AuthenticationRequest
+    from dal_obscura.kernel.plans.request import PlanRequest
     from tests.support.read.use_cases import FakeIdentity, FakeTicketCodec, FakeTicketStore
 
     engine, factory, store = setup
@@ -250,7 +251,7 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
         return original(self, catalog, target)
 
     monkeypatch.setattr(Provider, "resolve", resolve)
-    registry = LiveConfigCatalogRegistry(store)
+    registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())
     identity = FakeIdentity(Principal(id="user1", groups=[], attributes={}))
 
     ticket_store = FakeTicketStore()
@@ -281,7 +282,9 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
 
 def test_cold_provider_creation_does_not_block_other_configuration(setup, monkeypatch):
     _, factory, store = setup
-    registry = LiveConfigCatalogRegistry(store, max_cached_providers=2)
+    registry = LiveConfigCatalogRegistry(
+        store, max_cached_providers=2, plugin_registry=create_plugin_registry()
+    )
     entered = Event()
     proceed = Event()
     original = Provider.__init__
@@ -312,7 +315,9 @@ def test_cold_provider_creation_does_not_block_other_configuration(setup, monkey
 
 def test_factory_failure_releases_capacity_for_retry(setup, monkeypatch):
     _, _, store = setup
-    registry = LiveConfigCatalogRegistry(store, max_cached_providers=1)
+    registry = LiveConfigCatalogRegistry(
+        store, max_cached_providers=1, plugin_registry=create_plugin_registry()
+    )
     original = Provider.__init__
 
     def fail(self, *args, **kwargs):
@@ -331,10 +336,15 @@ def test_factory_failure_releases_capacity_for_retry(setup, monkeypatch):
 
 
 def test_full_capacity_wait_is_bounded(setup):
-    from dal_obscura.sources.access import AccessContextUnavailable
+    from dal_obscura.application.reads.sources import AccessContextUnavailable
 
     _, factory, store = setup
-    registry = LiveConfigCatalogRegistry(store, max_cached_providers=1, provider_wait_seconds=0.02)
+    registry = LiveConfigCatalogRegistry(
+        store,
+        max_cached_providers=1,
+        provider_wait_seconds=0.02,
+        plugin_registry=create_plugin_registry(),
+    )
     with registry.open("analytics", "default.users"):
         _edit(factory, uri="sqlite:///changed.db")
         with pytest.raises(AccessContextUnavailable), registry.open("analytics", "default.users"):
@@ -344,7 +354,9 @@ def test_full_capacity_wait_is_bounded(setup):
 
 def test_close_attempts_all_idle_providers_after_one_close_fails(setup, monkeypatch):
     _, factory, store = setup
-    registry = LiveConfigCatalogRegistry(store, max_cached_providers=2)
+    registry = LiveConfigCatalogRegistry(
+        store, max_cached_providers=2, plugin_registry=create_plugin_registry()
+    )
     with registry.open("analytics", "default.users"):
         pass
     _edit(factory, uri="sqlite:///changed.db")
@@ -383,7 +395,7 @@ def test_assets_share_provider_but_use_their_own_physical_binding(setup):
             )
         )
         session.commit()
-    registry = LiveConfigCatalogRegistry(store)
+    registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())
     with registry.open("analytics", "default.users"):
         pass
     with registry.open("analytics", "another.asset"):
@@ -405,7 +417,7 @@ def test_target_snapshot_cost_stays_bounded_as_unrelated_assets_grow(setup):
 
     event.listen(engine, "after_cursor_execute", observe)
     try:
-        first, _ = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        first = store.get_asset_and_catalog(catalog="analytics", target="default.users")
         baseline = len(statements)
         with factory() as session:
             catalog = session.scalar(select(CatalogRecord))
@@ -426,7 +438,7 @@ def test_target_snapshot_cost_stays_bounded_as_unrelated_assets_grow(setup):
             )
             session.commit()
         statements.clear()
-        second, _ = store.get_asset_and_catalog(catalog="analytics", target="default.users")
+        second = store.get_asset_and_catalog(catalog="analytics", target="default.users")
         assert second == first
         assert len(statements) == baseline
         assert len(statements) <= 3
@@ -438,19 +450,17 @@ def test_slow_eviction_close_does_not_block_warm_provider(setup, monkeypatch):
     from unittest.mock import Mock
 
     _, factory, store = setup
-    registry = LiveConfigCatalogRegistry(store, max_cached_providers=2)
+    registry = LiveConfigCatalogRegistry(
+        store, max_cached_providers=2, plugin_registry=create_plugin_registry()
+    )
     with registry.open("analytics", "default.users"):
         pass
     _edit(factory, uri="sqlite:///warm.db")
-    warm_asset, warm_catalog = store.get_asset_and_catalog(
-        catalog="analytics", target="default.users"
-    )
+    warm_asset = store.get_asset_and_catalog(catalog="analytics", target="default.users")
     with registry.open("analytics", "default.users"):
         pass
     _edit(factory, uri="sqlite:///third.db")
-    cold_asset, cold_catalog = store.get_asset_and_catalog(
-        catalog="analytics", target="default.users"
-    )
+    cold_asset = store.get_asset_and_catalog(catalog="analytics", target="default.users")
     closing = Event()
     proceed = Event()
     original_close = Provider.close
@@ -464,8 +474,8 @@ def test_slow_eviction_close_does_not_block_warm_provider(setup, monkeypatch):
     monkeypatch.setattr(Provider, "close", slow_close)
     local_store = Mock(spec=LiveConfigStore)
     local_store.get_asset_and_catalog.side_effect = [
-        (cold_asset, cold_catalog),
-        (warm_asset, warm_catalog),
+        cold_asset,
+        warm_asset,
     ]
     monkeypatch.setattr(registry, "_store", local_store)
 

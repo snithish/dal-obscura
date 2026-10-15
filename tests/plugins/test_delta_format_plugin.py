@@ -7,8 +7,8 @@ import pyarrow as pa
 import pytest
 from deltalake import DeltaTable
 
-from dal_obscura.read.request import PlanRequest
-from dal_obscura.read.tickets.envelope import SourceTaskCodec
+from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
+from dal_obscura.kernel.plans.request import PlanRequest
 from tests.support.qualification.consumer_backends import delta_registry, nested_consumer_table
 
 

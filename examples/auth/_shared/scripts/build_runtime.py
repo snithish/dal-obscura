@@ -13,18 +13,18 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import BooleanType, DoubleType, IntegerType, LongType, NestedField, StringType
 
-from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
+from dal_obscura.interfaces.http.app import create_app
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 ADMIN_TOKEN = "local-example-admin"
 CATALOG_NAME = "example_catalog"
 TABLE_TARGET = "default.users"
-ICEBERG_CATALOG_MODULE = "dal_obscura.sources.catalogs.IcebergCatalog"
+ICEBERG_CATALOG_MODULE = "dal_obscura.adapters.providers.catalogs.IcebergCatalog"
 
 TYPE_BUILDERS: dict[str, tuple[type, pa.DataType]] = {
     "string": (StringType, pa.string()),

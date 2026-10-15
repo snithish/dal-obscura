@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sqlalchemy import inspect
 
-from dal_obscura.storage.database.cli import run
+from dal_obscura.adapters.sql.database.cli import run
 
 
 def _database_url(path: Path) -> str:

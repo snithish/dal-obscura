@@ -17,12 +17,12 @@ import jwt
 from dal_obscura_plugin_api.execution import close_preserving_error
 
 from dal_obscura.identity.claims import PrincipalClaimMapper
-from dal_obscura.identity.contracts import (
+from dal_obscura.kernel.identity.authentication import (
     AuthenticationRequest,
     InvalidCredentialsError,
     MissingCredentialsError,
 )
-from dal_obscura.policy.models import Principal
+from dal_obscura.kernel.identity.principal import Principal
 
 JsonObject = Mapping[str, Any]
 JsonFetcher = Callable[[str], JsonObject]

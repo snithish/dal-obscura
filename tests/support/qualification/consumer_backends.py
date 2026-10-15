@@ -31,14 +31,14 @@ from dal_obscura_plugin_conformance.native_delta import delete_delta_rows
 from deltalake import WriterProperties, write_deltalake
 from pyiceberg.catalog import load_catalog
 
-from dal_obscura.plugins import PluginRegistry
-from dal_obscura.plugins.bootstrap import create_plugin_registry
-from dal_obscura.read.tickets.envelope import SourceTaskCodec
-from dal_obscura.sources.catalogs import (
+from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
+from dal_obscura.plugins import PluginRegistry
+from dal_obscura.plugins.bootstrap import create_plugin_registry
 from tests.support.arrow import metadata_schema
 from tests.support.flight.flight import (
     InMemoryPolicyAuthorizer,
@@ -91,7 +91,7 @@ def catalog_registry(options, *, plugin_id=None, plugins=None) -> CatalogRegistr
                 )
             }
         ),
-        plugin_registry=plugins,
+        plugin_registry=plugins if plugins is not None else create_plugin_registry(),
     )
 
 

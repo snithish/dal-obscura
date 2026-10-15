@@ -7,17 +7,17 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.providers.discovery import ICEBERG_CATALOG_ID
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import catalogs as _db_catalogs
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.assets.access import ensure_asset_capability
 from dal_obscura.control.catalogs.service import validate_descriptor_options
-from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.workspace.service import required_workspace
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.plugins import PluginRegistry
-from dal_obscura.sources.discovery import ICEBERG_CATALOG_ID
-from dal_obscura.storage import assets as _db_assets
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import catalogs as _db_catalogs
-from dal_obscura.storage import workspace as _db_workspace
 
 _ASSET_CAPABILITIES = ("read", "edit", "grant")
 
@@ -165,6 +165,8 @@ def replace_asset_owners(
     owners: list[str],
     expected_revision: int | None = None,
     actor: ControlPlaneActor | None = None,
+    *,
+    correlation_id: str | None = None,
 ) -> list[str]:
     """Replaces owners for one governed asset."""
 
@@ -192,6 +194,7 @@ def replace_asset_owners(
             actor_principal=actor.identity_key(),
             action="asset.owners.replace",
             details={"owner_count": len(normalized)},
+            correlation_id=correlation_id,
         )
     return normalized
 
@@ -206,6 +209,8 @@ def replace_asset_grants(
     grants: list[dict[str, str]],
     expected_revision: int | None = None,
     actor: ControlPlaneActor | None = None,
+    *,
+    correlation_id: str | None = None,
 ) -> list[dict[str, str]]:
     allowed = {"read", "edit", "grant"}
     if any(str(grant.get("capability")) not in allowed for grant in grants):
@@ -227,6 +232,7 @@ def replace_asset_grants(
             actor_principal=actor.identity_key(),
             action="asset.grants.replace",
             details={"grant_count": len(normalized)},
+            correlation_id=correlation_id,
         )
     return normalized
 

@@ -3,25 +3,35 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
-from dal_obscura.sources.published import _schema_identities, _validate_schema_admission
-from dal_obscura.storage.snapshots import LiveAsset
+from dal_obscura.adapters.providers.published import _schema_identities, _validate_schema_admission
+from dal_obscura.kernel.plans.snapshot import (
+    PublishedAssetSnapshot,
+    PublishedCatalog,
+    PublishedSchema,
+    PublishedSource,
+)
+from dal_obscura.kernel.policy.models import AssetPolicy
 
 
-def _asset_for(schema: pa.Schema) -> LiveAsset:
+def _asset_for(schema: pa.Schema) -> PublishedAssetSnapshot:
     identities = _schema_identities(schema)
-    return LiveAsset(
-        catalog="analytics",
+    return PublishedAssetSnapshot(
+        catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "schema": {
-                "fields": [
+        source=PublishedSource("iceberg", None, {}),
+        policy=AssetPolicy(1, "analytics", "default.users", []),
+        admitted_schema=PublishedSchema(
+            1,
+            tuple(
+                [
                     {"path": list(path), "field_id": field_id, "type": field_type}
                     for (path, field_id), field_type in identities.items()
                 ]
-            }
-        },
-        policy_version=1,
+            ),
+            False,
+            None,
+        ),
+        asset_id=None,
     )
 
 

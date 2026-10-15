@@ -7,7 +7,7 @@ from math import isfinite
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.identity.claims import validate_attribute_definitions
 
 OIDC_IDENTITY_MODULE = "dal_obscura.identity.oidc.OidcJwksIdentityProvider"

@@ -1,10 +1,11 @@
 import pyarrow as pa
 
-from dal_obscura.policy.filters import parse_row_filter
-from dal_obscura.policy.models import MaskRule
-from dal_obscura.read.execution.transform import (
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.kernel.policy.filters import parse_row_filter
+from dal_obscura.kernel.policy.models import MaskRule
 
 
 def test_duckdb_transform_filters_on_hidden_execution_column():
@@ -20,9 +21,8 @@ def test_duckdb_transform_filters_on_hidden_execution_column():
     result_batches = list(
         adapter.apply_filters_and_masks_stream(
             [input_batch],
-            ["id"],
+            DuckDBProjectionCompiler().compile(input_batch.schema, ["id"], {}),
             parse_row_filter("region = 'us'", input_batch.schema),
-            {},
         )
     )
     result = pa.Table.from_batches(result_batches)
@@ -40,9 +40,12 @@ def test_duckdb_transform_filters_original_masked_values_before_output_mask():
     result_batches = list(
         adapter.apply_filters_and_masks_stream(
             [input_batch],
-            ["email"],
+            DuckDBProjectionCompiler().compile(
+                input_batch.schema,
+                ["email"],
+                {"email": MaskRule(type="redact", value="[hidden]")},
+            ),
             parse_row_filter("email = 'alice@example.com'", input_batch.schema),
-            {"email": MaskRule(type="redact", value="[hidden]")},
         )
     )
     result = pa.Table.from_batches(result_batches)
@@ -62,9 +65,8 @@ def test_duckdb_transform_evaluates_function_filters_on_hidden_values():
     batches = list(
         adapter.apply_filters_and_masks_stream(
             [input_batch],
-            ["id"],
+            DuckDBProjectionCompiler().compile(input_batch.schema, ["id"], {}),
             parse_row_filter("lower(region) = 'us'", input_batch.schema),
-            {},
         )
     )
 

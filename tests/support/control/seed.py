@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.adapters.sql import catalogs as _db_catalogs
 from dal_obscura.control.runtime import ControlContext
-from dal_obscura.storage import assets as _db_assets
-from dal_obscura.storage import catalogs as _db_catalogs
 
 
 def create_catalog(

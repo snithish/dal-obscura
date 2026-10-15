@@ -1,14 +1,14 @@
 import pytest
 
-from dal_obscura.policy.models import (
+from dal_obscura.kernel.identity.principal import Principal
+from dal_obscura.kernel.policy.models import (
     AccessRule,
     AssetPolicy,
     DatasetPolicy,
     MaskRule,
     Policy,
-    Principal,
 )
-from dal_obscura.policy.policy_resolution import resolve_access
+from dal_obscura.kernel.policy.policy_resolution import resolve_access
 
 
 def test_resolve_access_allows_columns():

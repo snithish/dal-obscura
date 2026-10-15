@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from dal_obscura_plugin_conformance.iceberg_fixtures import iceberg_sql_catalog_options
 
-from dal_obscura.sources.catalogs import (
+from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     ServiceConfig,
 )

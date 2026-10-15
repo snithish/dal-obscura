@@ -6,10 +6,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.catalogs import service as catalog_service
 from dal_obscura.control.catalogs.discovery import MAX_CURSOR_LENGTH
-from dal_obscura.control.errors import ValidationFailure
+from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     CatalogDiagnosticResponse,
@@ -19,6 +19,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     CatalogRequest,
     CatalogTablesResponse,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -47,6 +48,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                     egress_allowlist=service.catalog_egress_allowlist,
                     actor_principal=actor.identity_key(),
                     plugin_registry=service.plugin_registry,
+                    correlation_id=current_request_id(),
                 )
                 for name in sorted(request.catalogs)
             ]
@@ -159,6 +161,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 egress_allowlist=service.catalog_egress_allowlist,
                 actor_principal="system" if actor is None else actor.identity_key(),
                 plugin_registry=service.plugin_registry,
+                correlation_id=current_request_id(),
             )
         )
 

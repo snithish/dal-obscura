@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Literal, TypedDict, cast
 
-from dal_obscura.policy.models import Principal
+from dal_obscura.kernel.identity.principal import Principal
 
 
 class AttributeDefinition(TypedDict):

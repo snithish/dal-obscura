@@ -12,15 +12,15 @@ from fastapi import Cookie, Depends, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.control.access import ControlPlaneActor
-from dal_obscura.control.catalogs.discovery import DiscoveryCursors
-from dal_obscura.control.errors import (
+from dal_obscura.application.governance.errors import (
     AuthorizationFailure,
     ConfigurationConflictError,
     PolicyValidationFailure,
     RevisionPreconditionRequired,
     ValidationFailure,
 )
+from dal_obscura.application.reads.ports import ProjectionCompiler
+from dal_obscura.control.catalogs.discovery import DiscoveryCursors
 from dal_obscura.control.runtime import ControlContext
 from dal_obscura.identity.http_session import (
     OidcActorResolver,
@@ -34,6 +34,7 @@ from dal_obscura.identity.sessions import (
     LoginTransaction,
     LoginTransactionStore,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from dal_obscura.plugins.registry import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProvider
 
@@ -77,6 +78,7 @@ class ControlPlaneDeps:
     oidc_actor_resolver: OidcActorResolver | None
     oidc_admin_group: str | None
     ui_auth_config: Mapping[str, object] | None
+    projection_compiler: ProjectionCompiler
     session_ttl_seconds: int = 28_800
     session_idle_ttl_seconds: int = 1_800
     allowed_origins: tuple[str, ...] = ()

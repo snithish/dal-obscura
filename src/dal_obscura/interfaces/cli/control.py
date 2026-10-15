@@ -12,6 +12,12 @@ from urllib.parse import SplitResult, urlsplit
 import uvicorn
 from sqlalchemy.exc import SQLAlchemyError
 
+from dal_obscura.adapters.sql.database.db import (
+    ConfigStoreSchemaError,
+    check_config_store_schema,
+    create_engine_from_url,
+    session_factory,
+)
 from dal_obscura.identity.http_session import (
     OidcActorResolver,
     OidcNonceActorResolver,
@@ -25,12 +31,6 @@ from dal_obscura.plugins.bootstrap import (
 )
 from dal_obscura.runtime.secrets import (
     load_secret_provider_from_environment,
-)
-from dal_obscura.storage.database.db import (
-    ConfigStoreSchemaError,
-    check_config_store_schema,
-    create_engine_from_url,
-    session_factory,
 )
 
 

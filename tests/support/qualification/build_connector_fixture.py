@@ -37,16 +37,16 @@ if str(REPO_ROOT) not in sys.path:
 from dal_obscura_plugin_conformance.iceberg_fixtures import create_iceberg_table  # noqa: E402
 
 import tests.support.control.seed as _commands_seed  # noqa: E402
-from dal_obscura.control.access import ControlPlaneActor  # noqa: E402
-from dal_obscura.control.assets import service as asset_service  # noqa: E402
-from dal_obscura.control.policies import service as policy_service  # noqa: E402
-from dal_obscura.control.runtime import ControlContext  # noqa: E402
-from dal_obscura.storage import workspace as _db_workspace  # noqa: E402
-from dal_obscura.storage.database.db import (  # noqa: E402
+from dal_obscura.adapters.sql import workspace as _db_workspace  # noqa: E402
+from dal_obscura.adapters.sql.database.db import (  # noqa: E402
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
+from dal_obscura.control.assets import service as asset_service  # noqa: E402
+from dal_obscura.control.policies import service as policy_service  # noqa: E402
+from dal_obscura.control.runtime import ControlContext  # noqa: E402
+from dal_obscura.kernel.identity.actor import ControlPlaneActor  # noqa: E402
 
 JWT_SECRET = "spark-jwt-secret-32-characters-long"
 TICKET_SECRET = "spark-ticket-secret-32-characters"

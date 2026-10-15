@@ -7,11 +7,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 
 import dal_obscura.control.workspace.attributes as _commands_identity_attributes
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.assets import schema as schema_service
-from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.control.policies import evaluation as evaluation_service
 from dal_obscura.control.policies import service as policy_service
+from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AttributeProviderResponse,
@@ -20,6 +20,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     PolicyMutationResponse,
     PolicyRulesRequest,
 )
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -41,6 +42,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 actor=actor,
                 expected_revision=request.expected_revision,
                 revoke_existing_tokens=request.revoke_existing_tokens,
+                correlation_id=current_request_id(),
             )
         )
         return PolicyMutationResponse(asset_id=str(asset_id), **result)
@@ -88,7 +90,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 plugin_registry=deps.plugin_registry,
                 secret_provider=deps.secret_provider,
             )
-            payload = evaluation_service.evaluate_asset_policy(captured, schema)
+            payload = evaluation_service.evaluate_asset_policy(
+                captured, schema, compiler=deps.projection_compiler
+            )
         except ValidationFailure as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         deps.with_transaction(

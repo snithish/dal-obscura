@@ -6,11 +6,11 @@ import pytest
 from dal_obscura_plugin_api import DiscoveryPage, TableIdentifier
 from fastapi.testclient import TestClient
 
-from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.runtime.secrets import load_secret_provider_from_environment
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
+from dal_obscura.interfaces.http.app import create_app
+from dal_obscura.runtime.secrets import load_secret_provider_from_environment
 from tests.support.control.workspace import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
@@ -242,7 +242,7 @@ def test_workspace_catalog_rejects_python_module_identity(client_factory):
     response = client.put(
         "/v1/catalogs/analytics",
         json={
-            "plugin_id": ("dal_obscura.sources.catalogs.IcebergCatalog"),
+            "plugin_id": ("dal_obscura.adapters.providers.catalogs.IcebergCatalog"),
             "options": {"uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,

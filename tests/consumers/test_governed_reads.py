@@ -63,7 +63,7 @@ def test_python_and_duckdb_receive_identical_masked_nested_rows(governed_server)
 def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path, backend, name):
     from dal_obscura_plugin_api.paths import FieldPath, FieldSegment
 
-    from dal_obscura.read.tickets.envelope import SourceTaskCodec
+    from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
     from tests.support.flight.flight import InMemoryPolicyAuthorizer, build_flight_service
     from tests.support.policy.policy import allow_rule
     from tests.support.qualification.consumer_backends import (

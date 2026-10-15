@@ -6,13 +6,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.sql import assets as _db_assets
+from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.assets import access as asset_access
 from dal_obscura.control.assets import schema as schema_service
 from dal_obscura.control.assets import service as asset_service
-from dal_obscura.control.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control.policies import service as policy_service
 from dal_obscura.control.runtime import ControlContext
+from dal_obscura.interfaces.http.request_context import current_request_id
 from dal_obscura.interfaces.http.routes.deps import ControlPlaneDeps
 from dal_obscura.interfaces.http.routes.schemas import (
     AssetAccessResponse,
@@ -31,7 +32,7 @@ from dal_obscura.interfaces.http.routes.schemas import (
     AssetSchemaResponse,
     AssetTokenRevocationResponse,
 )
-from dal_obscura.storage import assets as _db_assets
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -100,7 +101,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> AssetTokenRevocationResponse:
         result = deps.with_transaction(
             lambda service: policy_service.revoke_asset_tickets(
-                service.session, asset_id, actor=actor
+                service.session, asset_id, actor=actor, correlation_id=current_request_id()
             )
         )
         return AssetTokenRevocationResponse(asset_id=str(asset_id), **result)
@@ -118,6 +119,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 request.owners,
                 expected_revision=request.expected_revision,
                 actor=actor,
+                correlation_id=current_request_id(),
             )
         )
         return AssetOwnersResponse(asset_id=str(asset_id), owners=owners)
@@ -232,6 +234,7 @@ def _replace_authorized_asset_grants(
             grants,
             expected_revision=request.expected_revision,
             actor=actor,
+            correlation_id=current_request_id(),
         ),
     }
 

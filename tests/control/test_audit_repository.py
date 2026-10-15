@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from dal_obscura.storage import audit as _db_audit
-from dal_obscura.storage import workspace as _db_workspace
-from dal_obscura.storage.database.orm import (
+from dal_obscura.adapters.sql import audit as _db_audit
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.adapters.sql.database.orm import (
     AssetOwnerRecord,
     AssetRecord,
     AuditEventRecord,

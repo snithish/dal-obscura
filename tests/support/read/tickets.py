@@ -3,7 +3,7 @@
 from dataclasses import replace
 from typing import Any
 
-from dal_obscura.read.tickets.payload import TicketPayload
+from dal_obscura.application.reads.tickets.payload import TicketPayload
 from tests.support.read.use_cases import scan_payload
 
 

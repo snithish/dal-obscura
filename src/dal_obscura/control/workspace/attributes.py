@@ -7,12 +7,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.control.access import ControlPlaneActor
+from dal_obscura.adapters.sql import workspace as _db_workspace
+from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.control.assets import access as asset_access
-from dal_obscura.control.errors import ValidationFailure
 from dal_obscura.control.workspace import attributes as identity_attributes
 from dal_obscura.identity.claims import PrincipalClaimMapper
-from dal_obscura.storage import workspace as _db_workspace
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def attribute_catalog(store: Session) -> list[dict[str, object]]:

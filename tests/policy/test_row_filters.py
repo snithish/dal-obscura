@@ -2,7 +2,7 @@ import pyarrow as pa
 import pytest
 from sqlglot import exp
 
-from dal_obscura.policy.filters import (
+from dal_obscura.kernel.policy.filters import (
     RowFilter,
     deserialize_row_filter,
     parse_row_filter,

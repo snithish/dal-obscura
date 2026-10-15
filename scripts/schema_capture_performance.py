@@ -19,12 +19,12 @@ import pyarrow as pa
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
-from dal_obscura.interfaces.http.app import create_app
-from dal_obscura.storage.database.db import (
+from dal_obscura.adapters.sql.database.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
+from dal_obscura.interfaces.http.app import create_app
 
 
 def measure(field_count: int, iterations: int) -> dict[str, object]:
