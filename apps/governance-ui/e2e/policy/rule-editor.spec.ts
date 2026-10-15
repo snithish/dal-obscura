@@ -1,6 +1,15 @@
+import type { FixtureRule } from "../support/api-types";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "../support/fixtures";
-const rule = { ordinal: 10, effect: "allow", principals: ["group:analysts"], columns: ["email"], masks: {}, row_filter: null, when: {} };
+const rule: FixtureRule = {
+  ordinal: 10,
+  effect: "allow",
+  principals: ["group:analysts"],
+  columns: ["email"],
+  masks: {},
+  row_filter: null,
+  when: {},
+};
 
 test("read-only access disables all authoring", async ({ page }) => {
   await authenticatedApi(page, { ruleEditor: true, readOnly: true, initialPolicyRules: [rule] });
@@ -19,12 +28,18 @@ test("editor fits a narrow viewport", async ({ page }, testInfo) => {
   await page.getByLabel("Mask", { exact: true }).selectOption("hash");
   await page.getByRole("button", { name: "Exempt people or groups", exact: true }).click();
   await expect(page.getByRole("button", { name: "Apply mask", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
   await page.screenshot({ path: testInfo.outputPath("policy-mobile.png"), fullPage: true });
 });
 
 test("revision conflicts preserve column edits", async ({ page }) => {
-  await authenticatedApi(page, { ruleEditor: true, conflictSave: true, initialPolicyRules: [rule] });
+  await authenticatedApi(page, {
+    ruleEditor: true,
+    conflictSave: true,
+    initialPolicyRules: [rule],
+  });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await page.getByRole("button", { name: /Allowed columns:/ }).click();
   await page.getByRole("combobox", { name: "Search allowed columns" }).fill("phone");

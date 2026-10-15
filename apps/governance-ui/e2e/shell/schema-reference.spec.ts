@@ -1,9 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { openDeepReference, referenceName, referencePath, referenceType, schemaReferenceApi } from "./schema-reference.fixture";
+import {
+  openDeepReference,
+  referenceName,
+  referencePath,
+  referenceType,
+  schemaReferenceApi,
+} from "./schema-reference.fixture";
 import { uxAssetId } from "../support/ux-fixture";
 
-test("keyboard search reaches a leaf before inspection without changing rule selection", async ({ page }) => {
+test("keyboard search reaches a leaf before inspection without changing rule selection", async ({
+  page,
+}) => {
   await schemaReferenceApi(page);
   await page.goto(`/?asset=${uxAssetId}#assets`);
   await page.getByRole("button", { name: "Show schema", exact: true }).click();
@@ -24,11 +32,15 @@ test("keyboard search reaches a leaf before inspection without changing rule sel
 });
 
 for (const width of [1440, 390, 320]) {
-  test(`deep schema inspection preserves exact identity and keyboard focus at ${width}px`, async ({ page }) => {
+  test(`deep schema inspection preserves exact identity and keyboard focus at ${width}px`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height: 1100 });
     await schemaReferenceApi(page);
     let writes = 0;
-    page.on("request", (request) => { if (request.method() !== "GET" && request.url().includes("/v1/assets/")) writes++; });
+    page.on("request", (request) => {
+      if (request.method() !== "GET" && request.url().includes("/v1/assets/")) writes++;
+    });
     const sidebar = await openDeepReference(page);
     const row = sidebar.getByRole("button", { name: `Inspect ${referencePath}`, exact: true });
     await row.focus();
@@ -39,8 +51,12 @@ for (const width of [1440, 390, 320]) {
     await expect(details.locator("[data-field-detail=name]")).toHaveText(referenceName);
     await expect(details.locator("[data-field-detail=type]")).toHaveText(referenceType);
     const label = row.locator(".schema-field-name");
-    expect(await label.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(100);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    expect(
+      await label.evaluate((element) => element.getBoundingClientRect().width),
+    ).toBeGreaterThan(100);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
     await details.focus();
     await details.press("End");
     await expect.poll(() => details.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);

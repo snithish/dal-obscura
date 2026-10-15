@@ -28,14 +28,18 @@ test("mutation HTML challenges clear private workspace state", async ({ page }) 
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
 
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await page.route("**/v1/assets/**/policy", async (route) => route.fulfill({
-    status: 200,
-    headers: { "content-type": "text/html" },
-    body: "<html><title>Sign in</title></html>",
-  }));
+  await page.route("**/v1/assets/**/policy", async (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "content-type": "text/html" },
+      body: "<html><title>Sign in</title></html>",
+    }),
+  );
   await page.getByRole("button", { name: "Save policy", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
-  await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
+  await expect(
+    page.getByText("The browser or edge session expired. Sign in again to continue."),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Save policy", exact: true })).toHaveCount(0);
 });
@@ -77,7 +81,9 @@ test("late settings responses cannot replace the current administrator page", as
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
 });
 
-test("late connection responses cannot replace the current administrator page", async ({ page }) => {
+test("late connection responses cannot replace the current administrator page", async ({
+  page,
+}) => {
   const deferredConnections = deferredResponse();
   await authenticatedApi(page, { admin: true, deferredConnections });
   await page.goto("/#connections");
@@ -112,13 +118,19 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await expect(search).toBeEnabled();
   await search.fill("fresh");
-  await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
+  await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText(
+    "fresh-orders",
+  );
 
   deferredInventory.release();
   const abandonedInventory = await deferredInventory.completed;
   expect(abandonedInventory.failure()?.errorText).toBe("net::ERR_ABORTED");
-  await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
-  await expect(page.getByRole("region", { name: "Governed assets table" })).not.toContainText("stale-orders");
+  await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText(
+    "fresh-orders",
+  );
+  await expect(page.getByRole("region", { name: "Governed assets table" })).not.toContainText(
+    "stale-orders",
+  );
 });
 
 test("late live policy saves cannot clear a newer local edit", async ({ page }) => {
@@ -147,16 +159,26 @@ test("late policy evaluations cannot replace a newer unsaved edit", async ({ pag
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   await page.getByRole("button", { name: "Test Policy", exact: true }).click();
-  await page.getByRole("dialog", { name: "Test policy", exact: true }).getByRole("button", { name: "Test saved policy", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Test policy", exact: true })
+    .getByRole("button", { name: "Test saved policy", exact: true })
+    .click();
   await deferredEvaluate.started;
-  await page.getByRole("dialog", { name: "Test policy", exact: true }).getByRole("button", { name: "Close policy test", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Test policy", exact: true })
+    .getByRole("button", { name: "Close policy test", exact: true })
+    .click();
   await page.getByRole("button", { name: "New rule", exact: true }).click();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
 
   deferredEvaluate.release();
   await deferredEvaluate.completed;
   await page.getByRole("button", { name: "Test Policy", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Test policy", exact: true }).getByRole("button", { name: "Test saved policy", exact: true })).toBeEnabled();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Test policy", exact: true })
+      .getByRole("button", { name: "Test saved policy", exact: true }),
+  ).toBeEnabled();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await expect(page.getByText("Server-side evaluation completed: denied.")).toHaveCount(0);
 });

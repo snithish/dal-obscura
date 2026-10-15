@@ -8,11 +8,13 @@ test.beforeEach(async ({ page }) => signedOutApi(page));
 type Rgb = [number, number, number];
 
 function contrastRatio(foreground: Rgb, background: Rgb) {
-  const luminance = (rgb: Rgb) => rgb.reduce((total, channel, index) => {
-    const normalized = channel / 255;
-    const linear = normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-    return total + linear * [0.2126, 0.7152, 0.0722][index];
-  }, 0);
+  const luminance = (rgb: Rgb) =>
+    rgb.reduce((total, channel, index) => {
+      const normalized = channel / 255;
+      const linear =
+        normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      return total + linear * [0.2126, 0.7152, 0.0722][index];
+    }, 0);
   const foregroundLuminance = luminance(foreground);
   const backgroundLuminance = luminance(background);
   const lighter = Math.max(foregroundLuminance, backgroundLuminance);
@@ -23,33 +25,44 @@ function contrastRatio(foreground: Rgb, background: Rgb) {
 function parseRgb(value: string): Rgb {
   const match = value.match(/rgba?\(([^)]+)\)/);
   expect(match).not.toBeNull();
-  const channels = match![1].split(",").slice(0, 3).map((channel) => Number(channel.trim()));
+  const channels = match![1]
+    .split(",")
+    .slice(0, 3)
+    .map((channel) => Number(channel.trim()));
   expect(channels).toHaveLength(3);
   return channels as Rgb;
 }
 
 async function renderedContrastSamples(page: Page, selector: string) {
-  return page.locator(selector).evaluateAll((elements) => elements.map((element) => {
-    const color = getComputedStyle(element).color;
-    let current: Element | null = element;
-    let background = "rgb(255, 255, 255)";
-    while (current) {
-      const candidate = getComputedStyle(current).backgroundColor;
-      const channels = candidate.match(/rgba?\(([^)]+)\)/)?.[1].split(",").map((channel) => Number(channel.trim()));
-      if (channels && (channels.length < 4 || channels[3] > 0)) {
-        background = candidate;
-        break;
+  return page.locator(selector).evaluateAll((elements) =>
+    elements.map((element) => {
+      const color = getComputedStyle(element).color;
+      let current: Element | null = element;
+      let background = "rgb(255, 255, 255)";
+      while (current) {
+        const candidate = getComputedStyle(current).backgroundColor;
+        const channels = candidate
+          .match(/rgba?\(([^)]+)\)/)?.[1]
+          .split(",")
+          .map((channel) => Number(channel.trim()));
+        if (channels && (channels.length < 4 || channels[3] > 0)) {
+          background = candidate;
+          break;
+        }
+        current = current.parentElement;
       }
-      current = current.parentElement;
-    }
-    return { role: element.tagName.toLowerCase(), color, background };
-  }));
+      return { role: element.tagName.toLowerCase(), color, background };
+    }),
+  );
 }
 
-test("built shell has a fresh style nonce and working library controls under CSP", async ({ page }) => {
+test("built shell has a fresh style nonce and working library controls under CSP", async ({
+  page,
+}) => {
   const violations: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error" && /content security policy/i.test(message.text())) violations.push(message.text());
+    if (message.type() === "error" && /content security policy/i.test(message.text()))
+      violations.push(message.text());
   });
   const response = await page.goto("/");
   const firstNonce = await page.locator('meta[name="csp-nonce"]').getAttribute("content");
@@ -63,7 +76,10 @@ test("built shell has a fresh style nonce and working library controls under CSP
   await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Command search" })).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(page.getByRole("combobox", { name: "Command search" })).toHaveAttribute("aria-activedescendant", /.+/);
+  await expect(page.getByRole("combobox", { name: "Command search" })).toHaveAttribute(
+    "aria-activedescendant",
+    /.+/,
+  );
   await page.keyboard.press("Shift+Tab");
   await expect(page.getByRole("button", { name: "Close command palette" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -102,7 +118,10 @@ test("rendered light and dark shell states meet the text contrast threshold", as
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto("/");
-    const samples = await renderedContrastSamples(page, ".login-panel h2, .login-panel .mantine-Text-root, .login-panel button, .login-panel input");
+    const samples = await renderedContrastSamples(
+      page,
+      ".login-panel h2, .login-panel .mantine-Text-root, .login-panel button, .login-panel input",
+    );
     expect(samples.length).toBeGreaterThan(3);
     for (const sample of samples) {
       const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
@@ -111,16 +130,37 @@ test("rendered light and dark shell states meet the text contrast threshold", as
   }
 });
 
-test("authenticated policy workspace keeps rendered text and controls readable in both themes", async ({ page }) => {
-  await authenticatedApi(page, { ruleEditor: true, initialPolicyRules: [{ ordinal: 10, effect: "allow", principals: ["group:analysts"], columns: ["email"], masks: {}, row_filter: null, when: {} }] });
+test("authenticated policy workspace keeps rendered text and controls readable in both themes", async ({
+  page,
+}) => {
+  await authenticatedApi(page, {
+    ruleEditor: true,
+    initialPolicyRules: [
+      {
+        ordinal: 10,
+        effect: "allow",
+        principals: ["group:analysts"],
+        columns: ["email"],
+        masks: {},
+        row_filter: null,
+        when: {},
+      },
+    ],
+  });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   for (const theme of ["Light theme", "Dark theme"] as const) {
     await page.getByRole("combobox", { name: "Color theme" }).click();
     await page.getByRole("option", { name: theme, exact: true }).click();
-    await expect(page.locator(".policy-save-bar")).toHaveCSS("background-color", theme === "Dark theme" ? "rgb(23, 31, 44)" : "rgb(255, 255, 255)");
-    const samples = await renderedContrastSamples(page, ".policy-authoring h2, .policy-authoring h3, .policy-authoring p, .policy-authoring button, .policy-authoring input, .policy-authoring select, .policy-authoring textarea");
+    await expect(page.locator(".policy-save-bar")).toHaveCSS(
+      "background-color",
+      theme === "Dark theme" ? "rgb(23, 31, 44)" : "rgb(255, 255, 255)",
+    );
+    const samples = await renderedContrastSamples(
+      page,
+      ".policy-authoring h2, .policy-authoring h3, .policy-authoring p, .policy-authoring button, .policy-authoring input, .policy-authoring select, .policy-authoring textarea",
+    );
     expect(samples.length).toBeGreaterThan(5);
     for (const sample of samples) {
       const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
@@ -129,7 +169,9 @@ test("authenticated policy workspace keeps rendered text and controls readable i
   }
 });
 
-test("authenticated management screens keep rendered text and controls readable in both themes", async ({ page }) => {
+test("authenticated management screens keep rendered text and controls readable in both themes", async ({
+  page,
+}) => {
   await authenticatedApi(page, {
     admin: true,
     configuredSettings: true,
@@ -148,14 +190,19 @@ test("authenticated management screens keep rendered text and controls readable 
       await expect(page.getByRole("heading", { name: heading })).toBeVisible();
       await page.getByRole("combobox", { name: "Color theme" }).click();
       await page.getByRole("option", { name: theme, exact: true }).click();
-      const samples = await renderedContrastSamples(page, ".management-view h2, .management-view h3, .management-view p, .management-view button, .management-view input, .management-view select, .management-view textarea");
+      const samples = await renderedContrastSamples(
+        page,
+        ".management-view h2, .management-view h3, .management-view p, .management-view button, .management-view input, .management-view select, .management-view textarea",
+      );
       expect(samples.length).toBeGreaterThan(3);
       for (const sample of samples) {
         const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
         expect(ratio, `${theme} ${hash} ${sample.role} contrast`).toBeGreaterThanOrEqual(4.5);
       }
       const results = await new AxeBuilder({ page }).analyze();
-      const blockingViolations = results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
+      const blockingViolations = results.violations.filter(
+        (violation) => violation.impact === "serious" || violation.impact === "critical",
+      );
       expect(blockingViolations, `${theme} ${hash} accessibility`).toEqual([]);
     }
   }
@@ -165,12 +212,18 @@ test("forced-colors mode keeps the signed-out controls discoverable", async ({ p
   await page.emulateMedia({ forcedColors: "active" });
   await page.goto("/");
 
-  await expect.poll(() => page.evaluate(() => window.matchMedia("(forced-colors: active)").matches)).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => window.matchMedia("(forced-colors: active)").matches))
+    .toBe(true);
   const token = page.getByLabel("Local control-plane token");
   await token.focus();
   await expect(token).toBeFocused();
-  await expect.poll(() => token.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
-  await expect.poll(() => token.evaluate((element) => getComputedStyle(element).outlineWidth)).toBe("2px");
+  await expect
+    .poll(() => token.evaluate((element) => getComputedStyle(element).outlineStyle))
+    .toBe("solid");
+  await expect
+    .poll(() => token.evaluate((element) => getComputedStyle(element).outlineWidth))
+    .toBe("2px");
   await expect(page.getByRole("button", { name: "Sign in locally" })).toBeVisible();
 });
 
@@ -189,17 +242,27 @@ test("forced-colors mode keeps authenticated workflows discoverable", async ({ p
   const policyControl = page.getByRole("button", { name: "Test Policy", exact: true });
   await policyControl.focus();
   await expect(policyControl).toBeFocused();
-  await expect.poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
-  await expect.poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineWidth)).toBe("2px");
+  await expect
+    .poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineStyle))
+    .toBe("solid");
+  await expect
+    .poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineWidth))
+    .toBe("2px");
 
-  for (const [hash, heading] of [["#activity", "Workspace status"], ["#connections", "Catalog connections"], ["#settings", "Runtime and identity"]] as const) {
+  for (const [hash, heading] of [
+    ["#activity", "Workspace status"],
+    ["#connections", "Catalog connections"],
+    ["#settings", "Runtime and identity"],
+  ] as const) {
     await page.goto(`/${hash}`);
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     const dimensions = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: document.documentElement.clientWidth,
     }));
-    expect(dimensions.documentWidth, `${hash} forced-colors page overflow`).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+    expect(dimensions.documentWidth, `${hash} forced-colors page overflow`).toBeLessThanOrEqual(
+      dimensions.viewportWidth + 1,
+    );
   }
 });
 
@@ -207,10 +270,15 @@ test("reduced-motion preference disables shell motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 
-  await expect.poll(() => page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches))
+    .toBe(true);
   const motion = await page.locator(".login-panel").evaluate((element) => {
     const style = getComputedStyle(element);
-    return { animationDuration: style.animationDuration, transitionDuration: style.transitionDuration };
+    return {
+      animationDuration: style.animationDuration,
+      transitionDuration: style.transitionDuration,
+    };
   });
   expect(motion.animationDuration).toMatch(/^(0s|0\.01ms)$/);
   expect(motion.transitionDuration).toMatch(/^(0s|0\.01ms)$/);
@@ -232,7 +300,9 @@ test("CSP rejects missing and wrong style nonces", async ({ page }) => {
     };
     const absent = insert();
     const wrong = insert("00000000000000000000000000000000");
-    const accepted = insert(document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')!.content);
+    const accepted = insert(
+      document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')!.content,
+    );
     return { before, absent, wrong, accepted };
   });
   expect(result.absent).toBe(result.before);
@@ -240,11 +310,23 @@ test("CSP rejects missing and wrong style nonces", async ({ page }) => {
   expect(result.accepted).toBe("rgb(1, 2, 3)");
 });
 
-test("late pre-logout asset responses cannot repopulate a reauthenticated workspace", async ({ page }) => {
+test("late pre-logout asset responses cannot repopulate a reauthenticated workspace", async ({
+  page,
+}) => {
   const assetA = "00000000-0000-4000-8000-000000000001";
   const assetB = "00000000-0000-4000-8000-000000000002";
-  const identityA = { principal: "alice", groups: ["analysts"], platform_admin: false, capabilities: ["asset:read", "asset:edit"] };
-  const identityB = { principal: "alice", groups: ["reviewers"], platform_admin: false, capabilities: ["asset:read"] };
+  const identityA = {
+    principal: "alice",
+    groups: ["analysts"],
+    platform_admin: false,
+    capabilities: ["asset:read", "asset:edit"],
+  };
+  const identityB = {
+    principal: "alice",
+    groups: ["reviewers"],
+    platform_admin: false,
+    capabilities: ["asset:read"],
+  };
   const inventory = (id: string, name: string) => ({
     id,
     catalog: "demo",
@@ -270,7 +352,17 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
     schema_fingerprint: id,
     stable_field_ids: true,
     supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
-    fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
+    fields: [
+      {
+        field_id: 1,
+        name: "order_id",
+        human_path: "order_id",
+        type: "string",
+        nullable: false,
+        kind: "scalar",
+        path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] },
+      },
+    ],
   });
   let sessionCalls = 0;
   const staleSchema = deferredResponse();
@@ -284,7 +376,8 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       return route.fulfill({ json: sessionCalls === 1 ? identityA : identityB });
     }
     if (path === "/v1/assets/page") {
-      const current = sessionCalls === 1 ? inventory(assetA, "alpha-orders") : inventory(assetB, "beta-orders");
+      const current =
+        sessionCalls === 1 ? inventory(assetA, "alpha-orders") : inventory(assetB, "beta-orders");
       return route.fulfill({ json: { items: [current], next_cursor: null } });
     }
     const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
@@ -292,7 +385,8 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       const id = match[1];
       const name = id === assetA ? "alpha-orders" : "beta-orders";
       const suffix = match[2] ?? "";
-      if (sessionCalls > 1 && id === assetA) return route.fulfill({ status: 403, json: { detail: "Asset access revoked" } });
+      if (sessionCalls > 1 && id === assetA)
+        return route.fulfill({ status: 403, json: { detail: "Asset access revoked" } });
       if (id === assetA && suffix === "schema" && !schemaDeferred) {
         schemaDeferred = true;
         staleSchema.markStarted(page, request);
@@ -300,13 +394,33 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       }
       if (suffix === "schema") return route.fulfill({ json: schema(id, name) });
       if (suffix === "grants") return route.fulfill({ json: [] });
-      if (suffix === "access") return route.fulfill({ json: { asset_id: id, principal: "alice", issuer: null, can_revoke_tokens: id === assetA, capabilities: [{ capability: "read", allowed: true, reasons: ["Asset owner"] }, { capability: "edit", allowed: id === assetA, reasons: id === assetA ? ["Asset owner"] : [] }, { capability: "grant", allowed: false, reasons: [] }] } });
+      if (suffix === "access")
+        return route.fulfill({
+          json: {
+            asset_id: id,
+            principal: "alice",
+            issuer: null,
+            can_revoke_tokens: id === assetA,
+            capabilities: [
+              { capability: "read", allowed: true, reasons: ["Asset owner"] },
+              {
+                capability: "edit",
+                allowed: id === assetA,
+                reasons: id === assetA ? ["Asset owner"] : [],
+              },
+              { capability: "grant", allowed: false, reasons: [] },
+            ],
+          },
+        });
       return route.fulfill({ json: detail(id, name) });
     }
-    if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: true, oidc: null } });
+    if (path === "/v1/session/options")
+      return route.fulfill({ json: { bootstrap_enabled: true, oidc: null } });
     if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
-    if (path === "/v1/session/bootstrap" && request.method() === "POST") return route.fulfill({ json: { authenticated: true } });
-    if (path === "/v1/logout" && request.method() === "POST") return route.fulfill({ json: { authenticated: false } });
+    if (path === "/v1/session/bootstrap" && request.method() === "POST")
+      return route.fulfill({ json: { authenticated: true } });
+    if (path === "/v1/logout" && request.method() === "POST")
+      return route.fulfill({ json: { authenticated: false } });
     return route.fulfill({ status: 404, json: { detail: "fixture route missing" } });
   });
 

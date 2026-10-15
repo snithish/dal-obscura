@@ -18,15 +18,23 @@ const statusMessages: Record<number, string> = {
 
 export function recoveryMessage(error: unknown, fallback: string): string {
   const failure = error as RecoveryFailure | null;
-  const message = failure?.code === "auth_challenge"
-    ? "The browser or edge session expired. Sign in again to continue."
-    : failure?.status !== undefined ? statusMessages[failure.status] : undefined;
-  const result = message ?? (failure?.code === "validation_error" ? failure.message : undefined) ?? fallback;
-  const fields = failure?.fieldErrors?.map((item) => `${displayErrorField(item.field)}: ${item.message}`) ?? [];
+  const message =
+    failure?.code === "auth_challenge"
+      ? "The browser or edge session expired. Sign in again to continue."
+      : failure?.status !== undefined
+        ? statusMessages[failure.status]
+        : undefined;
+  const result =
+    message ?? (failure?.code === "validation_error" ? failure.message : undefined) ?? fallback;
+  const fields =
+    failure?.fieldErrors?.map((item) => `${displayErrorField(item.field)}: ${item.message}`) ?? [];
   const withFields = fields.length ? `${result} ${fields.join(" ")}` : result;
   return failure?.requestId ? `${withFields} Request ID: ${failure.requestId}` : withFields;
 }
 
 export function displayErrorField(field: string): string {
-  return field.replace(/^rules\.(\d+)(\.|$)/, (_, index, separator) => `Rule ${Number(index) + 1}${separator ? " · " : ""}`);
+  return field.replace(
+    /^rules\.(\d+)(\.|$)/,
+    (_, index, separator) => `Rule ${Number(index) + 1}${separator ? " · " : ""}`,
+  );
 }

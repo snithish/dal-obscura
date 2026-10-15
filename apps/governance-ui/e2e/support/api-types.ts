@@ -1,3 +1,7 @@
+import type { components } from "../../src/generated/control_plane";
+export type ApiSchemas = components["schemas"];
+export type FixtureRule = Omit<ApiSchemas["PolicyRuleSchema"], "name" | "description"> &
+  Partial<Pick<ApiSchemas["PolicyRuleSchema"], "name" | "description">>;
 import type { DeferredResponse } from "./async";
 
 export type AuthenticatedApiOptions = {
@@ -9,7 +13,7 @@ export type AuthenticatedApiOptions = {
   configuredLifecycle?: boolean;
   configuredAudit?: boolean;
   multipleFormats?: boolean;
-  initialPolicyRules?: Array<Record<string, unknown>>;
+  initialPolicyRules?: FixtureRule[];
   ruleEditor?: boolean;
   deferredAudit?: DeferredResponse;
   deferredSettings?: DeferredResponse;

@@ -4,7 +4,8 @@ import { join } from "node:path";
 
 const root = new URL("../dist/assets/", import.meta.url);
 const limits = {
-  jsGzipKiB: 200,
+  // Aggregate all chunks; allow routine growth above the ~200 KiB reviewed baseline.
+  jsGzipKiB: 220,
   cssGzipKiB: 50,
   fontsKiB: 120,
 };

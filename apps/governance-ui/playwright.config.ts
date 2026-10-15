@@ -21,7 +21,8 @@ export default defineConfig({
   webServer: useExternalServer
     ? undefined
     : {
-        command: "node node_modules/vite/bin/vite.js build && node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 --strictPort",
+        command:
+          "node node_modules/vite/bin/vite.js build && node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 --strictPort",
         url: baseURL,
         reuseExistingServer: false,
       },

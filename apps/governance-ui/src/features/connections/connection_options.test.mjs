@@ -7,6 +7,9 @@ test("preserveSecretReference round-trips only a scoped reference", () => {
     preserveSecretReference({ secret: "catalog/token", scope: "catalog:analytics" }),
     { secret: "catalog/token", scope: "catalog:analytics" },
   );
-  assert.equal(preserveSecretReference({ secret: "[redacted]", scope: "catalog:analytics", extra: true }), undefined);
+  assert.equal(
+    preserveSecretReference({ secret: "[redacted]", scope: "catalog:analytics", extra: true }),
+    undefined,
+  );
   assert.equal(preserveSecretReference("token-value"), undefined);
 });

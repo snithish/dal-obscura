@@ -7,7 +7,8 @@ function requestUrl(input: StoryRequest): URL {
 
 function assertStoryRequest(input: StoryRequest): void {
   const url = requestUrl(input);
-  const sameOriginApi = url.origin === window.location.origin &&
+  const sameOriginApi =
+    url.origin === window.location.origin &&
     (url.pathname.startsWith("/v1/") || url.pathname.startsWith("/auth/"));
   if (url.origin !== window.location.origin || sameOriginApi) {
     throw new Error(`Unexpected story network request: ${url.href}`);

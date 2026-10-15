@@ -5,7 +5,9 @@ export function sessionQueryScope(
   session: Pick<Session, "issuer" | "principal"> | null,
   generation: number,
 ): string {
-  return session ? JSON.stringify([session.issuer ?? null, session.principal, generation]) : "anonymous";
+  return session
+    ? JSON.stringify([session.issuer ?? null, session.principal, generation])
+    : "anonymous";
 }
 
 /** One infinite query owns all pages for an actor scope and search. */

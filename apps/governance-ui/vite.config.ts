@@ -10,10 +10,19 @@ export default defineConfig({
         onlyExplicitManualChunks: true,
         manualChunks(id) {
           // Keep the existing lazy management payload together while features own its code.
-          if (["activity", "connections", "settings"].some((feature) => id.includes(`/src/features/${feature}/`))
-            || id.endsWith("/src/features/identity/AttributeMappings.tsx")) return "management";
+          if (
+            ["activity", "connections", "settings"].some((feature) =>
+              id.includes(`/src/features/${feature}/`),
+            ) ||
+            id.endsWith("/src/features/identity/AttributeMappings.tsx")
+          )
+            return "management";
           if (id.includes("/node_modules/@mantine/")) return "mantine";
-          if (["react", "react-dom", "scheduler"].some((name) => id.includes(`/node_modules/${name}/`))) {
+          if (
+            ["react", "react-dom", "scheduler"].some((name) =>
+              id.includes(`/node_modules/${name}/`),
+            )
+          ) {
             return "react";
           }
         },

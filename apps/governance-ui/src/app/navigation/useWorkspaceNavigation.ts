@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  locationFromUrl,
-  type AssetTab,
-  type UiLocation,
-  type UiPage,
-} from "./routes";
+import { locationFromUrl, type AssetTab, type UiLocation, type UiPage } from "./routes";
 
 type NavigationOptions = {
   isDirty: () => boolean;
@@ -37,16 +32,13 @@ export function useWorkspaceNavigation(options: NavigationOptions) {
   async function change(next: UiLocation, fromHistory = false) {
     if (pending.current) return;
     const previous = current.current;
-    const leaving =
-      next.page !== previous.page || next.assetId !== previous.assetId;
+    const leaving = next.page !== previous.page || next.assetId !== previous.assetId;
     if (!leaving && next.tab === previous.tab) return;
     pending.current = true;
-    const approved =
-      !callbacks.current.isDirty() || (await callbacks.current.confirmLeaving());
+    const approved = !callbacks.current.isDirty() || (await callbacks.current.confirmLeaving());
     pending.current = false;
     if (!approved) {
-      if (fromHistory)
-        window.history.pushState(null, "", locationUrl(previous));
+      if (fromHistory) window.history.pushState(null, "", locationUrl(previous));
       return;
     }
     if (leaving) {
@@ -55,15 +47,11 @@ export function useWorkspaceNavigation(options: NavigationOptions) {
     }
     commit(next);
     if (!fromHistory) window.history.pushState(null, "", locationUrl(next));
-
   }
 
   useEffect(() => {
     const sync = () =>
-      void change(
-        locationFromUrl(window.location.hash, window.location.search),
-        true,
-      );
+      void change(locationFromUrl(window.location.hash, window.location.search), true);
     window.addEventListener("hashchange", sync);
     window.addEventListener("popstate", sync);
     return () => {

@@ -8,22 +8,53 @@ function StatefulShell(args: AppShellProps) {
   const mobileNavTrigger = useRef<HTMLButtonElement>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
-  return <AppShell {...args} mobileNavTrigger={mobileNavTrigger} mobileNavOpen={mobileNavOpen}
-    onMobileNavOpen={() => setMobileNavOpen(true)} onMobileNavClose={() => setMobileNavOpen(false)}
-    theme={colorScheme === "auto" ? "system" : colorScheme}
-    onThemeChange={(value) => setColorScheme(value === "system" ? "auto" : value)} />;
+  return (
+    <AppShell
+      {...args}
+      mobileNavTrigger={mobileNavTrigger}
+      mobileNavOpen={mobileNavOpen}
+      onMobileNavOpen={() => setMobileNavOpen(true)}
+      onMobileNavClose={() => setMobileNavOpen(false)}
+      theme={colorScheme === "auto" ? "system" : colorScheme}
+      onThemeChange={(value) => setColorScheme(value === "system" ? "auto" : value)}
+    />
+  );
 }
 
 const meta = {
-  title: "Components/Workbench shell", component: AppShell, tags: ["autodocs"],
+  title: "Components/Workbench shell",
+  component: AppShell,
+  tags: ["autodocs"],
   render: StatefulShell,
-  parameters: { layout: "fullscreen", docs: { description: { component: "Real workbench shell with synthetic identity. Primary navigation exposes unavailable destinations with an explanation; server authorization remains authoritative. Tab visits enabled controls; mobile navigation uses Mantine Drawer focus handling and Escape. Theme controls share production tokens and fonts. Admin capability changes which destinations can be selected, never backend grants." } } },
+  parameters: {
+    layout: "fullscreen",
+    docs: {
+      description: {
+        component:
+          "Real workbench shell with synthetic identity. Primary navigation exposes unavailable destinations with an explanation; server authorization remains authoritative. Tab visits enabled controls; mobile navigation uses Mantine Drawer focus handling and Escape. Theme controls share production tokens and fonts. Admin capability changes which destinations can be selected, never backend grants.",
+      },
+    },
+  },
   args: {
-    page: "assets", workspace: "ready", logoutPending: false,
-    mobileNavOpen: false, mobileNavTrigger: { current: null }, theme: "system",
-    onMobileNavOpen: fn(), onMobileNavClose: fn(), onThemeChange: fn(),
-    session: { principal: "alex@example.invalid", groups: [], platform_admin: false, capabilities: [] },
-    onNavigate: fn(), onLogout: fn(), onSearch: fn(), children: <Text>Choose an asset to inspect its access policy.</Text>,
+    page: "assets",
+    workspace: "ready",
+    logoutPending: false,
+    mobileNavOpen: false,
+    mobileNavTrigger: { current: null },
+    theme: "system",
+    onMobileNavOpen: fn(),
+    onMobileNavClose: fn(),
+    onThemeChange: fn(),
+    session: {
+      principal: "alex@example.invalid",
+      groups: [],
+      platform_admin: false,
+      capabilities: [],
+    },
+    onNavigate: fn(),
+    onLogout: fn(),
+    onSearch: fn(),
+    children: <Text>Choose an asset to inspect its access policy.</Text>,
   },
 } satisfies Meta<typeof AppShell>;
 export default meta;
@@ -40,7 +71,14 @@ export const Reader: Story = {
   },
 };
 export const Administrator: Story = {
-  args: { session: { principal: "admin@example.invalid", groups: [], platform_admin: true, capabilities: ["workspace:admin"] } },
+  args: {
+    session: {
+      principal: "admin@example.invalid",
+      groups: [],
+      platform_admin: true,
+      capabilities: ["workspace:admin"],
+    },
+  },
 };
 export const DarkReader: Story = { ...Reader, globals: { theme: "dark" } };
 
@@ -48,7 +86,9 @@ export const DiscoverableHeader: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("button", { name: "Search workspace" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Account menu" }));
-    await expect(await within(document.body).findByRole("menu")).toHaveTextContent("alex@example.invalid");
+    await expect(await within(document.body).findByRole("menu")).toHaveTextContent(
+      "alex@example.invalid",
+    );
     await expect(canvas.getByRole("navigation", { name: "Breadcrumbs" })).toBeVisible();
   },
 };

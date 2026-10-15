@@ -3,27 +3,95 @@ import test from "node:test";
 import { assetPath, controlPlane } from "./api.ts";
 
 for (const [name, id, expected] of [
-  ['ordinary ID', 'asset-42', '/v1/assets/asset-42'],
-  ['query and URL delimiters', 'catalog/orders?redirect=https://evil.example', '/v1/assets/catalog%2Forders%3Fredirect%3Dhttps%3A%2F%2Fevil.example'],
-  ['parent path', '../private', '/v1/assets/..%2Fprivate'],
+  ["ordinary ID", "asset-42", "/v1/assets/asset-42"],
+  [
+    "query and URL delimiters",
+    "catalog/orders?redirect=https://evil.example",
+    "/v1/assets/catalog%2Forders%3Fredirect%3Dhttps%3A%2F%2Fevil.example",
+  ],
+  ["parent path", "../private", "/v1/assets/..%2Fprivate"],
 ]) {
-  test('asset path encodes ' + name + ' as one segment', () => assert.equal(assetPath(id), expected));
+  test("asset path encodes " + name + " as one segment", () =>
+    assert.equal(assetPath(id), expected),
+  );
 }
 
-test("asset policy normalization preserves mask exemption metadata", async () => {
+test("asset detail preserves mask exemption metadata", async () => {
   const originalFetch = globalThis.fetch;
   const originalDocument = globalThis.document;
   globalThis.document = { cookie: "" };
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    id: "asset-42", revision: 1, policy_revision: 2, catalog: "analytics", name: "orders", backend: "iceberg", table_identifier: "orders",
-    owners: [], owner_count: 0, policy_status: "configured", options: {}, schema_fields: [],
-    policy_rules: [{ ordinal: 0, effect: "allow", principals: ["group:analysts"], columns: ["email"], masks: { email: { type: "hash", exempt_principals: ["group:privacy-reviewers"] } }, row_filter: null, when: {} }],
-  }), { headers: { "content-type": "application/json" } });
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        id: "asset-42",
+        revision: 1,
+        policy_revision: 2,
+        catalog: "analytics",
+        name: "orders",
+        backend: "iceberg",
+        table_identifier: "orders",
+        owners: [],
+        owner_count: 0,
+        policy_status: "configured",
+        options: {},
+        schema_fields: [],
+        policy_rules: [
+          {
+            name: "Analysts",
+            description: "Email access",
+            ordinal: 0,
+            effect: "allow",
+            principals: ["group:analysts"],
+            columns: ["email"],
+            masks: { email: { type: "hash", exempt_principals: ["group:privacy-reviewers"] } },
+            row_filter: null,
+            when: {},
+          },
+        ],
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
   try {
     const asset = await controlPlane.getAsset("asset-42");
-    assert.deepEqual(asset.policy_rules[0].masks.email.exempt_principals, ["group:privacy-reviewers"]);
+    assert.deepEqual(asset.policy_rules[0].masks.email.exempt_principals, [
+      "group:privacy-reviewers",
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalDocument === undefined) delete globalThis.document; else globalThis.document = originalDocument;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test("asset detail adapts optional wire selections into an editable rule", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalDocument = globalThis.document;
+  globalThis.document = { cookie: "" };
+  const rule = { effect: "allow", name: "Readers", description: "Default selections" };
+  globalThis.fetch = async () =>
+    Response.json({
+      id: "asset-42",
+      name: "orders",
+      catalog: "analytics",
+      backend: "iceberg",
+      table_identifier: "orders",
+      owner_count: 0,
+      policy_status: "configured",
+      revision: 1,
+      policy_revision: 1,
+      options: {},
+      owners: [],
+      schema_fields: [],
+      policy_rules: [rule],
+    });
+  try {
+    const asset = await controlPlane.getAsset("asset-42");
+    assert.deepEqual(asset.policy_rules, [
+      { ...rule, ordinal: 0, principals: [], columns: [], masks: {}, row_filter: null, when: {} },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
   }
 });

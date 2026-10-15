@@ -33,7 +33,13 @@ try {
     cls: window.__dalObscuraWebVitals.cls,
     navigationMs: performance.getEntriesByType("navigation")[0]?.duration ?? null,
   }));
-  console.log(JSON.stringify({ url, viewport: { width, height }, limits: WEB_VITALS_LIMITS, metrics }, null, 2));
+  console.log(
+    JSON.stringify(
+      { url, viewport: { width, height }, limits: WEB_VITALS_LIMITS, metrics },
+      null,
+      2,
+    ),
+  );
   assertWebVitals(metrics);
 } finally {
   await browser.close();

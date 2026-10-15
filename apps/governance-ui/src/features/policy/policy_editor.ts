@@ -11,23 +11,38 @@ export type ColumnOption = {
 export type MaskGroup = { mask?: Mask; columns: string[] };
 
 /** Missing or removed fields remain visible without fabricating schema paths. */
-export function authoritativeColumnOptions(fields: SchemaNode[] | undefined, selected: string[] = []): ColumnOption[] {
-  if (!fields) return selected.map((value) => ({ value, label: value, type: "Unavailable", valid: false }));
+export function authoritativeColumnOptions(
+  fields: SchemaNode[] | undefined,
+  selected: string[] = [],
+): ColumnOption[] {
+  if (!fields)
+    return selected.map((value) => ({ value, label: value, type: "Unavailable", valid: false }));
   const options: ColumnOption[] = [];
   const pending = [...fields].reverse();
   while (pending.length) {
     const node = pending.pop()!;
-    options.push({ value: node.human_path, label: node.human_path, type: node.type, path: node.path, valid: true });
-    for (let index = (node.children?.length ?? 0) - 1; index >= 0; index -= 1) pending.push(node.children![index]);
+    options.push({
+      value: node.human_path,
+      label: node.human_path,
+      type: node.type,
+      path: node.path,
+      valid: true,
+    });
+    for (let index = (node.children?.length ?? 0) - 1; index >= 0; index -= 1)
+      pending.push(node.children![index]);
   }
   const known = new Set(options.map((option) => option.value));
-  for (const value of selected) if (!known.has(value)) options.push({ value, label: value, type: "Removed from schema", valid: false });
+  for (const value of selected)
+    if (!known.has(value))
+      options.push({ value, label: value, type: "Removed from schema", valid: false });
   return options;
 }
 
 function pathSegments(path: SchemaPath | undefined): string[] | undefined {
   if (!path || !path.segments.length) return undefined;
-  return path.segments.map((segment) => JSON.stringify([segment.kind, segment.name ?? null, segment.field_id ?? null]));
+  return path.segments.map((segment) =>
+    JSON.stringify([segment.kind, segment.name ?? null, segment.field_id ?? null]),
+  );
 }
 
 /** Typed schema ancestry; display strings are never split on dots. */
@@ -38,17 +53,29 @@ export function schemaPathCovers(parent: string, child: string, options: ColumnO
 }
 
 /** Typed ancestry without rebuilding lookup maps for every rendered row. */
-export function columnOptionCovers(parent: ColumnOption | undefined, child: ColumnOption | undefined): boolean {
+export function columnOptionCovers(
+  parent: ColumnOption | undefined,
+  child: ColumnOption | undefined,
+): boolean {
   if (!parent || !child) return false;
   if (parent.value === child.value) return true;
   const parentSegments = pathSegments(parent.path);
   const childSegments = pathSegments(child.path);
-  return Boolean(parentSegments && childSegments && parentSegments.length < childSegments.length && parentSegments.every((part, index) => part === childSegments[index]));
+  return Boolean(
+    parentSegments &&
+      childSegments &&
+      parentSegments.length < childSegments.length &&
+      parentSegments.every((part, index) => part === childSegments[index]),
+  );
 }
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`).join(",")}}`;
+  if (value && typeof value === "object")
+    return `{${Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`)
+      .join(",")}}`;
   return JSON.stringify(value);
 }
 
@@ -66,7 +93,8 @@ function selectionCoverage(values: string[], options: ColumnOption[]) {
     const segments = paths.get(value);
     if (!segments) continue;
     selectedPaths.add(JSON.stringify(segments));
-    for (let depth = 1; depth < segments.length; depth += 1) selectedAncestors.add(JSON.stringify(segments.slice(0, depth)));
+    for (let depth = 1; depth < segments.length; depth += 1)
+      selectedAncestors.add(JSON.stringify(segments.slice(0, depth)));
   }
   return (value: string, includeDescendants = false): boolean => {
     if (exact.has(value)) return true;
@@ -112,7 +140,11 @@ export function applyMaskToTargets(
 }
 
 /** Removes explicit grants and masks no longer covered by any remaining grant. */
-export function removeColumnSelections(rule: PolicyRule, removed: string[], options: ColumnOption[]): PolicyRule {
+export function removeColumnSelections(
+  rule: PolicyRule,
+  removed: string[],
+  options: ColumnOption[],
+): PolicyRule {
   const removedSet = new Set(removed);
   const remaining = rule.columns.filter((column) => !removedSet.has(column));
   const masks = { ...rule.masks };
@@ -130,9 +162,12 @@ export function leafColumnOptions(options: ColumnOption[]): ColumnOption[] {
   for (const option of options) {
     if (!option.valid) continue;
     const segments = pathSegments(option.path) ?? [];
-    for (let depth = 1; depth < segments.length; depth += 1) parents.add(JSON.stringify(segments.slice(0, depth)));
+    for (let depth = 1; depth < segments.length; depth += 1)
+      parents.add(JSON.stringify(segments.slice(0, depth)));
   }
-  return options.filter((option) => option.valid && !parents.has(JSON.stringify(pathSegments(option.path) ?? [])));
+  return options.filter(
+    (option) => option.valid && !parents.has(JSON.stringify(pathSegments(option.path) ?? [])),
+  );
 }
 
 /** Index descendants once so wide pickers do not compare every pair of fields. */
@@ -149,21 +184,38 @@ export function columnLeafPaths(options: ColumnOption[]): Map<string, string[]> 
     result.get(leaf.value)!.push(leaf.value);
     const segments = pathSegments(leaf.path) ?? [];
     for (let depth = 1; depth < segments.length; depth += 1) {
-      for (const parent of byTypedPath.get(JSON.stringify(segments.slice(0, depth))) ?? []) result.get(parent.value)!.push(leaf.value);
+      for (const parent of byTypedPath.get(JSON.stringify(segments.slice(0, depth))) ?? [])
+        result.get(parent.value)!.push(leaf.value);
     }
   }
   return result;
 }
 
-export function selectColumnsShortcut(options: ColumnOption[], mode: "all" | "except" | "prefix", value = ""): string[] {
+export function selectColumnsShortcut(
+  options: ColumnOption[],
+  mode: "all" | "except" | "prefix",
+  value = "",
+): string[] {
   const excluded = options.find((option) => option.value === value);
-  return leafColumnOptions(options).filter((option) => mode === "all" || (mode === "except" ? !columnOptionCovers(excluded, option) : option.value.startsWith(value))).map((option) => option.value);
+  return leafColumnOptions(options)
+    .filter(
+      (option) =>
+        mode === "all" ||
+        (mode === "except"
+          ? !columnOptionCovers(excluded, option)
+          : option.value.startsWith(value)),
+    )
+    .map((option) => option.value);
 }
 
 export function expandColumnSelections(options: ColumnOption[], values: string[]): string[] {
   const leaves = columnLeafPaths(options);
-  return [...new Set(values.flatMap((value) => {
-    const matches = leaves.get(value) ?? [];
-    return matches.length ? matches : [value];
-  }))];
+  return [
+    ...new Set(
+      values.flatMap((value) => {
+        const matches = leaves.get(value) ?? [];
+        return matches.length ? matches : [value];
+      }),
+    ),
+  ];
 }

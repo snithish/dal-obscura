@@ -41,7 +41,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "The production command palette searches authorized destinations and asset identity fields using deterministic fixtures. It never loads inventory or calls an API from Storybook.",
+        component:
+          "The production command palette searches authorized destinations and asset identity fields using deterministic fixtures. It never loads inventory or calls an API from Storybook.",
       },
     },
   },
@@ -54,7 +55,9 @@ export const SearchScopesAssets: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await expect(body.getByRole("option", { name: "orders · analytics" })).toBeVisible();
-    await expect(body.queryByRole("option", { name: "customers · analytics" })).not.toBeInTheDocument();
+    await expect(
+      body.queryByRole("option", { name: "customers · analytics" }),
+    ).not.toBeInTheDocument();
   },
 };
 

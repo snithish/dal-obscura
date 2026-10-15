@@ -9,7 +9,9 @@ declare global {
 
 type LayoutShift = PerformanceEntry & { hadRecentInput: boolean; value: number };
 
-test("schema reference and column picker virtualize 10k fields and keep search responsive", async ({ page }) => {
+test("schema reference and column picker virtualize 10k fields and keep search responsive", async ({
+  page,
+}) => {
   await authenticatedApi(page);
   const fields = Array.from({ length: 10_000 }, (_, index) => ({
     field_id: index + 1,
@@ -18,20 +20,25 @@ test("schema reference and column picker virtualize 10k fields and keep search r
     type: "string",
     nullable: true,
     kind: "scalar",
-    path: { version: 1, segments: [{ kind: "field", name: `field_${index}`, field_id: index + 1 }] },
-  }));
-  await page.route("**/v1/assets/00000000-0000-4000-8000-000000000001/schema", async (route) => route.fulfill({
-    json: {
-      asset_id: "00000000-0000-4000-8000-000000000001",
-      catalog: "demo",
-      target: "demo.orders",
-      schema_version: 1,
-      schema_fingerprint: "large-schema",
-      stable_field_ids: true,
-      supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
-      fields,
+    path: {
+      version: 1,
+      segments: [{ kind: "field", name: `field_${index}`, field_id: index + 1 }],
     },
   }));
+  await page.route("**/v1/assets/00000000-0000-4000-8000-000000000001/schema", async (route) =>
+    route.fulfill({
+      json: {
+        asset_id: "00000000-0000-4000-8000-000000000001",
+        catalog: "demo",
+        target: "demo.orders",
+        schema_version: 1,
+        schema_fingerprint: "large-schema",
+        stable_field_ids: true,
+        supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
+        fields,
+      },
+    }),
+  );
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
@@ -58,12 +65,17 @@ test("schema reference and column picker virtualize 10k fields and keep search r
   for (let index = 0; index < 20; index += 1) {
     const started = await page.evaluate(() => performance.now());
     await search.press("ArrowDown");
-    await expect(picker.getByRole("option", { name: new RegExp(`^field_${index + 1}\\b`) })).toHaveClass(/active/);
+    await expect(
+      picker.getByRole("option", { name: new RegExp(`^field_${index + 1}\\b`) }),
+    ).toHaveClass(/active/);
     const finished = await page.evaluate(() => performance.now());
     durations.push(finished - started);
   }
   durations.sort((left, right) => left - right);
-  expect(durations[Math.floor(durations.length * 0.95)], "95th percentile picker key latency").toBeLessThan(200);
+  expect(
+    durations[Math.floor(durations.length * 0.95)],
+    "95th percentile picker key latency",
+  ).toBeLessThan(200);
 });
 
 test("authenticated policy workspace meets local web-vitals thresholds", async ({ page }) => {
@@ -81,7 +93,9 @@ test("authenticated policy workspace meets local web-vitals thresholds", async (
       }
     }).observe({ type: "layout-shift", buffered: true });
   });
-  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets", { waitUntil: "networkidle" });
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets", {
+    waitUntil: "networkidle",
+  });
   await expect(page.getByRole("heading", { name: "orders", exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => window.__dalObscuraWebVitals);

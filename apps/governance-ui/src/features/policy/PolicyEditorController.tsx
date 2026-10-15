@@ -2,7 +2,16 @@ import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { AssetWorkspace } from "../assets/AssetWorkspace";
 import { useSessionScope } from "../identity/SessionBoundary";
 import { sessionQueryScope } from "../../data/query_scope";
-import { controlPlane, type ApiFailure, type Asset, type AssetAccess, type AssetGrant, type AssetPage, type PolicyRule, type Preview } from "../../data/api";
+import {
+  controlPlane,
+  type ApiFailure,
+  type Asset,
+  type AssetAccess,
+  type AssetGrant,
+  type AssetPage,
+  type PolicyRule,
+  type Preview,
+} from "../../data/api";
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type { AssetTab } from "../../app/navigation/routes";
 import { useConfirmation } from "../../shared/ConfirmationProvider";
@@ -11,15 +20,33 @@ import { isAbortError } from "../../data/async";
 import { usePolicyDraft } from "./usePolicyDraft";
 import { parseTestClaims } from "./policy_test";
 
-export function PolicyEditorController({ asset, access, grants, initialTab, onTabChange,
-  onBack, onReloadAccess, onDirtyChange }: {
-  asset: Asset; access: AssetAccess; grants: AssetGrant[]; initialTab?: AssetTab;
-  onTabChange: (tab: AssetTab) => void; onBack: () => void;
-  onReloadAccess: () => void; onDirtyChange: (dirty: boolean) => void;
+export function PolicyEditorController({
+  asset,
+  access,
+  grants,
+  initialTab,
+  onTabChange,
+  onBack,
+  onReloadAccess,
+  onDirtyChange,
+}: {
+  asset: Asset;
+  access: AssetAccess;
+  grants: AssetGrant[];
+  initialTab?: AssetTab;
+  onTabChange: (tab: AssetTab) => void;
+  onBack: () => void;
+  onReloadAccess: () => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const { confirm } = useConfirmation();
-  const { session, generation: sessionGeneration, queryClient, registerRequest,
-    isCurrent: sessionIsCurrent } = useSessionScope();
+  const {
+    session,
+    generation: sessionGeneration,
+    queryClient,
+    registerRequest,
+    isCurrent: sessionIsCurrent,
+  } = useSessionScope();
   const active = useRef(true);
   const isCurrent = (captured: number) => active.current && sessionIsCurrent(captured);
   const sessionCacheKey = sessionQueryScope(session, sessionGeneration);
@@ -27,13 +54,11 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
   const [formDirty, setFormDirty] = useState(false);
   const [revokingTokens, setRevokingTokens] = useState(false);
   const revokePending = useRef(false);
-  const draft = usePolicyDraft({ rules: asset.policy_rules ?? [], revision: asset.policy_revision ?? 0 });
-  const {
-    rules,
-    revision: policyRevision,
-    status: saveState,
-    errors: fieldErrors,
-  } = draft;
+  const draft = usePolicyDraft({
+    rules: asset.policy_rules ?? [],
+    revision: asset.policy_revision ?? 0,
+  });
+  const { rules, revision: policyRevision, status: saveState, errors: fieldErrors } = draft;
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const previewInputEpoch = useRef(0);
@@ -42,14 +67,21 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
   const [previewGroups, setPreviewGroups] = useState("us-analysts");
   const [previewProvider, setPreviewProvider] = useState("");
   const [previewClaims, setPreviewClaims] = useState("{}");
-  const [notice, setNotice] = useState(asset.policy_rules?.length ? "Loaded the current live policy." : "No policy rules are configured. All columns return NULL until a rule overrides their masks.");
+  const [notice, setNotice] = useState(
+    asset.policy_rules?.length
+      ? "Loaded the current live policy."
+      : "No policy rules are configured. All columns return NULL until a rule overrides their masks.",
+  );
 
   useLayoutEffect(() => {
     onDirtyChange(formDirty || saveState === "unsaved" || saveState === "failed");
   }, [formDirty, saveState, onDirtyChange]);
   useEffect(() => {
     active.current = true;
-    return () => { active.current = false; onDirtyChange(false); };
+    return () => {
+      active.current = false;
+      onDirtyChange(false);
+    };
   }, [onDirtyChange]);
   function reportFormDirty(value: boolean) {
     setFormDirty(value);
@@ -82,29 +114,20 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
       "Allow all is staged. Save policy to bypass all masks and row filters for authenticated readers.",
     );
   }
-  function updateRule(
-    change: (rule: PolicyRule) => PolicyRule,
-    targetIndex: number,
-  ) {
+  function updateRule(change: (rule: PolicyRule) => PolicyRule, targetIndex: number) {
     draft.update(targetIndex, change);
     setPreview(null);
-    setNotice(
-      "Policy changed locally. Test saved policy to evaluate the last saved version.",
-    );
+    setNotice("Policy changed locally. Test saved policy to evaluate the last saved version.");
   }
   function addRule() {
     draft.dispatch({ type: "add" });
     setPreview(null);
-    setNotice(
-      "New rule added locally. Add at least one principal before saving.",
-    );
+    setNotice("New rule added locally. Add at least one principal before saving.");
   }
   function duplicateRule(index: number) {
     draft.dispatch({ type: "duplicate", index });
     setPreview(null);
-    setNotice(
-      "Rule duplicated locally. Check its principals and fields before saving.",
-    );
+    setNotice("Rule duplicated locally. Check its principals and fields before saving.");
   }
   function removeRule(index: number) {
     draft.dispatch({ type: "remove", index });
@@ -131,7 +154,9 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
       );
       if (!isCurrent(sessionGeneration) || !draft.saved(submission, saved.policy_revision)) return;
       markInventoryPolicySaved(
-        queryClient, sessionCacheKey, assetId,
+        queryClient,
+        sessionCacheKey,
+        assetId,
         saved.policy_revision,
         Boolean(submission.rules.length),
       );
@@ -145,10 +170,7 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
       if (isAbortError(error) || !isCurrent(sessionGeneration)) return;
       if (draft.failed(submission, (error as ApiFailure).fieldErrors ?? [])) {
         setNotice(
-          recoveryMessage(
-            error,
-            "Save failed. Your unsaved changes remain in this browser.",
-          ),
+          recoveryMessage(error, "Save failed. Your unsaved changes remain in this browser."),
         );
       }
     } finally {
@@ -165,9 +187,7 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
 
   async function runPreview() {
     if (saveState === "saving") {
-      setNotice(
-        "Policy save is in progress. Try the saved-policy test again when it completes.",
-      );
+      setNotice("Policy save is in progress. Try the saved-policy test again when it completes.");
       return;
     }
     if (previewPendingRef.current) return;
@@ -190,9 +210,7 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
         asset.id,
         {
           principal: previewPrincipal.trim() || "synthetic",
-          ...(previewProvider
-            ? { provider_ordinal: Number(previewProvider) }
-            : {}),
+          ...(previewProvider ? { provider_ordinal: Number(previewProvider) } : {}),
           groups: previewGroups
             .split(",")
             .map((value) => value.trim())
@@ -222,9 +240,7 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
       )
         return;
       setPreview(null);
-      setPreviewError(
-        recoveryMessage(error, "Policy test could not run. Try again."),
-      );
+      setPreviewError(recoveryMessage(error, "Policy test could not run. Try again."));
     } finally {
       request.finish();
       if (isCurrent(sessionGeneration)) {
@@ -250,18 +266,13 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
     setRevokingTokens(true);
     const request = registerRequest();
     try {
-      const result = await controlPlane.revokeAssetTokens(
-        asset.id,
-        request.signal,
-      );
+      const result = await controlPlane.revokeAssetTokens(asset.id, request.signal);
       if (!isCurrent(sessionGeneration) || request.signal.aborted) return;
       setNotice(`Revoked ${result.revoked_token_count} active token(s).`);
       invalidateAssetQueries(asset.id);
     } catch (error) {
       if (isCurrent(sessionGeneration) && !isAbortError(error))
-        setNotice(
-          recoveryMessage(error, "Could not revoke this asset's tokens."),
-        );
+        setNotice(recoveryMessage(error, "Could not revoke this asset's tokens."));
     } finally {
       request.finish();
       if (isCurrent(sessionGeneration)) {
@@ -272,77 +283,72 @@ export function PolicyEditorController({ asset, access, grants, initialTab, onTa
   }
 
   return (
-        <AssetWorkspace
-          initialTab={initialTab}
-          onTabChange={onTabChange}
-          asset={asset}
-          access={access}
-          grants={grants}
-          onBack={onBack}
-          rules={rules}
-          activeRevision={policyRevision}
-          saveState={saveState}
-          notice={notice}
-          fieldErrors={fieldErrors}
-          onUpdateRule={updateRule}
-          onAddRule={addRule}
-          onRemoveRule={removeRule}
-          onDuplicateRule={duplicateRule}
-          onDiscard={discardPolicyChanges}
-          onAllowAll={allowAllPolicy}
-          onSave={(revokeExistingTokens) =>
-            void savePolicy(revokeExistingTokens)
-          }
-          onPreview={() => void runPreview()}
-          previewProvider={previewProvider}
-          onPreviewProvider={(value) =>
-            changeTestPersona(setPreviewProvider, value)
-          }
-          previewPrincipal={previewPrincipal}
-          previewGroups={previewGroups}
-          previewClaims={previewClaims}
-          onPreviewPrincipal={(value) =>
-            changeTestPersona(setPreviewPrincipal, value)
-          }
-          onPreviewGroups={(value) =>
-            changeTestPersona(setPreviewGroups, value)
-          }
-          onPreviewClaims={(value) =>
-            changeTestPersona(setPreviewClaims, value)
-          }
-          preview={preview}
-          previewBusy={previewBusy}
-          previewError={previewError}
-          session={session}
-          onReloadAccess={onReloadAccess}
-          revokingTokens={revokingTokens}
-          onRevokeTokens={() => void revokeAssetTokens()}
-          onDirtyChange={reportFormDirty}
-          queryClient={queryClient}
-          sessionScope={sessionCacheKey}
-        />
+    <AssetWorkspace
+      initialTab={initialTab}
+      onTabChange={onTabChange}
+      asset={asset}
+      access={access}
+      grants={grants}
+      onBack={onBack}
+      rules={rules}
+      activeRevision={policyRevision}
+      saveState={saveState}
+      notice={notice}
+      fieldErrors={fieldErrors}
+      onUpdateRule={updateRule}
+      onAddRule={addRule}
+      onRemoveRule={removeRule}
+      onDuplicateRule={duplicateRule}
+      onDiscard={discardPolicyChanges}
+      onAllowAll={allowAllPolicy}
+      onSave={(revokeExistingTokens) => void savePolicy(revokeExistingTokens)}
+      onPreview={() => void runPreview()}
+      previewProvider={previewProvider}
+      onPreviewProvider={(value) => changeTestPersona(setPreviewProvider, value)}
+      previewPrincipal={previewPrincipal}
+      previewGroups={previewGroups}
+      previewClaims={previewClaims}
+      onPreviewPrincipal={(value) => changeTestPersona(setPreviewPrincipal, value)}
+      onPreviewGroups={(value) => changeTestPersona(setPreviewGroups, value)}
+      onPreviewClaims={(value) => changeTestPersona(setPreviewClaims, value)}
+      preview={preview}
+      previewBusy={previewBusy}
+      previewError={previewError}
+      session={session}
+      onReloadAccess={onReloadAccess}
+      revokingTokens={revokingTokens}
+      onRevokeTokens={() => void revokeAssetTokens()}
+      onDirtyChange={reportFormDirty}
+      queryClient={queryClient}
+      sessionScope={sessionCacheKey}
+    />
   );
 }
 
-function markInventoryPolicySaved(client: QueryClient, scope: string, assetId: string,
-  revision: number, configured: boolean) {
-      client.setQueriesData<InfiniteData<AssetPage>>(
-        { queryKey: ["asset-inventory", scope] },
-        (current) =>
-          current && {
-            ...current,
-            pages: current.pages.map((page) => ({
-              ...page,
-              items: page.items.map((asset) =>
-                asset.id === assetId
-                  ? {
-                      ...asset,
-                      policy_revision: revision,
-                      policy_status: configured ? "configured" : "missing",
-                    }
-                  : asset,
-              ),
-            })),
-          },
-      );
+function markInventoryPolicySaved(
+  client: QueryClient,
+  scope: string,
+  assetId: string,
+  revision: number,
+  configured: boolean,
+) {
+  client.setQueriesData<InfiniteData<AssetPage>>(
+    { queryKey: ["asset-inventory", scope] },
+    (current) =>
+      current && {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          items: page.items.map((asset) =>
+            asset.id === assetId
+              ? {
+                  ...asset,
+                  policy_revision: revision,
+                  policy_status: configured ? "configured" : "missing",
+                }
+              : asset,
+          ),
+        })),
+      },
+  );
 }

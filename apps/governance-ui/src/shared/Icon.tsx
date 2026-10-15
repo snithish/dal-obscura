@@ -92,7 +92,11 @@ const icons: Record<IconName, LucideIcon> = {
   x: X,
 };
 
-export function Icon({ name, size = 18, ...props }: { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, "name">) {
+export function Icon({
+  name,
+  size = 18,
+  ...props
+}: { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, "name">) {
   const Glyph = icons[name];
   return <Glyph size={size} aria-hidden="true" focusable="false" {...props} />;
 }

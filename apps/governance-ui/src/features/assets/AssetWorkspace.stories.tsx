@@ -9,7 +9,13 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 const emailNode: SchemaNode = {
   field_id: 2,
   name: "email",
-  path: { version: 1, segments: [{ kind: "field", name: "customer", field_id: 1 }, { kind: "field", name: "email", field_id: 2 }] },
+  path: {
+    version: 1,
+    segments: [
+      { kind: "field", name: "customer", field_id: 1 },
+      { kind: "field", name: "email", field_id: 2 },
+    ],
+  },
   human_path: "customer.email",
   type: "string",
   nullable: true,
@@ -134,7 +140,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a direct live policy editing with token revocation. It uses deterministic fixtures; mutations stay out of Storybook.",
+        component:
+          "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a direct live policy editing with token revocation. It uses deterministic fixtures; mutations stay out of Storybook.",
       },
     },
   },
@@ -145,7 +152,9 @@ type Story = StoryObj<typeof meta>;
 export const NestedLivePolicy: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Select allowed columns" })).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Allowed columns: 2 selected" })).toHaveTextContent("2 selected");
+    await expect(
+      canvas.getByRole("button", { name: "Allowed columns: 2 selected" }),
+    ).toHaveTextContent("2 selected");
     await expect(canvas.getByRole("heading", { name: "Protect sensitive values" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Edit Mask email mask" })).toBeVisible();
     await expect(canvas.getByLabelText("DuckDB SQL row filter")).toHaveValue("region = 'EU'");
@@ -154,7 +163,11 @@ export const NestedLivePolicy: Story = {
 };
 
 export const ReaderNavigationAndKeyboardTabs: Story = {
-  args: { onBack: fn(), access: undefined, session: { principal: "reader", groups: [], platform_admin: false, capabilities: [] } },
+  args: {
+    onBack: fn(),
+    access: undefined,
+    session: { principal: "reader", groups: [], platform_admin: false, capabilities: [] },
+  },
   play: async ({ canvas, args }) => {
     await expect(canvas.queryByLabelText("Find governed asset")).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Back to assets" }));
@@ -171,7 +184,9 @@ export const DarkNestedPolicy: Story = {
   globals: { theme: "dark" },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Select allowed columns" })).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Allowed columns: 2 selected" })).toHaveTextContent("2 selected");
+    await expect(
+      canvas.getByRole("button", { name: "Allowed columns: 2 selected" }),
+    ).toHaveTextContent("2 selected");
     await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
   },
 };
@@ -182,8 +197,12 @@ export const AccessAndGrants: Story = {
     grants: [{ principal: "group:analysts", capability: "read" }],
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Owners and delegated capabilities" })).toBeVisible();
-    await expect(canvas.getByRole("heading", { name: "Your effective capabilities" })).toBeVisible();
+    await expect(
+      canvas.getByRole("heading", { name: "Owners and delegated capabilities" }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole("heading", { name: "Your effective capabilities" }),
+    ).toBeVisible();
     await expect(canvas.getByLabelText("Owner principals")).toHaveValue("data-platform");
     await expect(canvas.getByLabelText("Grant principal 1")).toHaveValue("group:analysts");
     await expect(canvas.getByLabelText("Grant capability 1")).toHaveValue("read");
@@ -194,7 +213,12 @@ export const AccessAndGrants: Story = {
 export const OwnerCanRevokeTokens: Story = {
   args: {
     access: { ...access, principal: "user:owner@example.com", can_revoke_tokens: true },
-    session: { ...session, principal: "user:owner@example.com", platform_admin: false, capabilities: [] },
+    session: {
+      ...session,
+      principal: "user:owner@example.com",
+      platform_admin: false,
+      capabilities: [],
+    },
     onSave: fn(),
   },
   play: async ({ canvas, args }) => {
@@ -210,7 +234,12 @@ export const OwnerCanRevokeAllTokens: Story = {
   args: {
     initialTab: "access",
     access: { ...access, principal: "user:owner@example.com", can_revoke_tokens: true },
-    session: { ...session, principal: "user:owner@example.com", platform_admin: false, capabilities: [] },
+    session: {
+      ...session,
+      principal: "user:owner@example.com",
+      platform_admin: false,
+      capabilities: [],
+    },
     onRevokeTokens: fn(),
   },
   play: async ({ canvas, args }) => {
@@ -222,19 +251,28 @@ export const OwnerCanRevokeAllTokens: Story = {
 export const DelegatedEditorCannotRevokeTokens: Story = {
   args: {
     initialTab: "access",
-    session: { ...session, principal: "user:editor@example.com", platform_admin: false, capabilities: [] },
+    session: {
+      ...session,
+      principal: "user:editor@example.com",
+      platform_admin: false,
+      capabilities: [],
+    },
     access: {
       ...access,
       principal: "user:editor@example.com",
       can_revoke_tokens: false,
-      capabilities: access.capabilities.map((item) => item.capability === "edit"
-        ? { ...item, allowed: true, reasons: ["Delegated to user:editor@example.com"] }
-        : { ...item, allowed: false, reasons: [] }),
+      capabilities: access.capabilities.map((item) =>
+        item.capability === "edit"
+          ? { ...item, allowed: true, reasons: ["Delegated to user:editor@example.com"] }
+          : { ...item, allowed: false, reasons: [] },
+      ),
     },
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("button", { name: "Save capabilities" })).toBeDisabled();
-    await expect(canvas.queryByRole("button", { name: "Revoke all active tokens" })).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", { name: "Revoke all active tokens" }),
+    ).not.toBeInTheDocument();
   },
 };
 
@@ -255,7 +293,15 @@ export const DelegatedGrantActor: Story = {
     session: { ...session, platform_admin: false, capabilities: ["read"] },
     access: {
       ...access,
-      capabilities: access.capabilities.map((item) => item.capability === "grant" ? { ...item, allowed: true, reasons: ["delegated grant capability"] } : { ...item, allowed: item.capability === "read", reasons: item.capability === "read" ? ["delegated read capability"] : [] }),
+      capabilities: access.capabilities.map((item) =>
+        item.capability === "grant"
+          ? { ...item, allowed: true, reasons: ["delegated grant capability"] }
+          : {
+              ...item,
+              allowed: item.capability === "read",
+              reasons: item.capability === "read" ? ["delegated read capability"] : [],
+            },
+      ),
     },
     grants: [{ principal: "group:analysts", capability: "read" }],
   },
@@ -271,7 +317,9 @@ export const DelegatedGrantActor: Story = {
 export const SchemaUnavailable: Story = {
   args: { asset: { ...asset, schema: undefined }, rules: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("No overrides. Every column returns NULL for authenticated readers.")).toBeVisible();
+    await expect(
+      canvas.getByText("No overrides. Every column returns NULL for authenticated readers."),
+    ).toBeVisible();
     await expect(canvas.getByRole("button", { name: /^Test Policy$/ })).toBeVisible();
   },
 };
@@ -281,8 +329,14 @@ export const ConsumerCopyFailure: Story = {
   play: async ({ canvas }) => {
     const clipboard = navigator.clipboard;
     const originalWrite = clipboard?.writeText;
-    if (!clipboard || !originalWrite) throw new Error("Clipboard API is unavailable in the Storybook browser");
-    Object.defineProperty(clipboard, "writeText", { configurable: true, value: async () => { throw new Error("blocked"); } });
+    if (!clipboard || !originalWrite)
+      throw new Error("Clipboard API is unavailable in the Storybook browser");
+    Object.defineProperty(clipboard, "writeText", {
+      configurable: true,
+      value: async () => {
+        throw new Error("blocked");
+      },
+    });
     try {
       await userEvent.click(canvas.getAllByRole("button", { name: "Copy" })[0]);
       await expect(canvas.getByText(/Clipboard access is unavailable/)).toBeVisible();

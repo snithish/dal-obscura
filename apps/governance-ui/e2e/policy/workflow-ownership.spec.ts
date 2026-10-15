@@ -1,16 +1,28 @@
+import type { FixtureRule } from "../support/api-types";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi, deferredResponse } from "../support/fixtures";
 
-const rule = { ordinal: 10, name: "Original", effect: "allow", principals: ["group:analysts"],
-  columns: ["order_id"], masks: {}, row_filter: null, when: {} };
+const rule: FixtureRule = {
+  ordinal: 10,
+  name: "Original",
+  effect: "allow",
+  principals: ["group:analysts"],
+  columns: ["order_id"],
+  masks: {},
+  row_filter: null,
+  when: {},
+};
 const editorUrl = "/?asset=00000000-0000-4000-8000-000000000001#assets";
 
-test("duplicate saves keep one submission and a late success preserves exact newer edits", async ({ page }) => {
+test("duplicate saves keep one submission and a late success preserves exact newer edits", async ({
+  page,
+}) => {
   const pending = deferredResponse();
   await authenticatedApi(page, { initialPolicyRules: [rule], deferredSave: pending });
   const submissions: unknown[] = [];
-  page.on("request", request => {
-    if (request.method() === "PUT" && request.url().endsWith("/policy")) submissions.push(request.postDataJSON());
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().endsWith("/policy"))
+      submissions.push(request.postDataJSON());
   });
   await page.goto(editorUrl);
   await page.getByLabel("Rule name", { exact: true }).fill("Submitted name");
@@ -19,20 +31,28 @@ test("duplicate saves keep one submission and a late success preserves exact new
   await page.getByLabel("Rule name", { exact: true }).fill("Newer local name");
   await page.getByRole("button", { name: "Save policy", exact: true }).click();
   expect(submissions).toHaveLength(1);
-  expect(submissions[0]).toMatchObject({ expected_revision: 1,
-    rules: [{ ...rule, name: "Submitted name" }] });
+  expect(submissions[0]).toMatchObject({
+    expected_revision: 1,
+    rules: [{ ...rule, name: "Submitted name" }],
+  });
   pending.release();
   await pending.completed;
   await expect(page.getByText("Live revision 2", { exact: true })).toBeVisible();
   await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Rule name", { exact: true })).toHaveValue("Newer local name");
-  const next = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/policy"));
+  const next = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().endsWith("/policy"),
+  );
   await page.getByRole("button", { name: "Save policy", exact: true }).click();
-  expect((await next).postDataJSON()).toMatchObject({ expected_revision: 2,
-    rules: [{ ...rule, name: "Newer local name" }] });
+  expect((await next).postDataJSON()).toMatchObject({
+    expected_revision: 2,
+    rules: [{ ...rule, name: "Newer local name" }],
+  });
 });
 
-test("navigation during preview cannot publish the old asset's result on return", async ({ page }) => {
+test("navigation during preview cannot publish the old asset's result on return", async ({
+  page,
+}) => {
   const pending = deferredResponse();
   await authenticatedApi(page, { initialPolicyRules: [rule], deferredEvaluate: pending });
   await page.goto(editorUrl);

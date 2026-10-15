@@ -12,13 +12,19 @@ export function previewSecurity(): Plugin {
       if (!policy) throw new Error("Gateway CSP is missing");
       server.middlewares.use((req, res, next) => {
         const path = req.url?.split("?", 1)[0];
-        if ((req.method !== "GET" && req.method !== "HEAD") || (path !== "/" && path !== "/index.html")) return next();
+        if (
+          (req.method !== "GET" && req.method !== "HEAD") ||
+          (path !== "/" && path !== "/index.html")
+        )
+          return next();
         const nonce = randomBytes(16).toString("hex");
         const html = readFileSync(new URL("./dist/index.html", import.meta.url), "utf8");
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Content-Security-Policy", policy.replaceAll("$request_id", nonce));
-        res.end(req.method === "HEAD" ? undefined : html.replaceAll("__OBSCURA_STYLE_NONCE__", nonce));
+        res.end(
+          req.method === "HEAD" ? undefined : html.replaceAll("__OBSCURA_STYLE_NONCE__", nonce),
+        );
       });
     },
   };

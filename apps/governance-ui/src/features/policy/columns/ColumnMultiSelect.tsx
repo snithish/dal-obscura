@@ -8,8 +8,20 @@ import { Icon } from "../../../shared/Icon";
 const ROW_HEIGHT = 48;
 const VIEW_HEIGHT = 288;
 
-export function ColumnMultiSelect({ label, options, value, onChange, disabled = false, shortcuts = false }: {
-  label: string; options: ColumnOption[]; value: string[]; onChange: (value: string[]) => void; disabled?: boolean; shortcuts?: boolean;
+export function ColumnMultiSelect({
+  label,
+  options,
+  value,
+  onChange,
+  disabled = false,
+  shortcuts = false,
+}: {
+  label: string;
+  options: ColumnOption[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  disabled?: boolean;
+  shortcuts?: boolean;
 }) {
   const id = useId();
   const viewport = useRef<HTMLDivElement>(null);
@@ -31,11 +43,19 @@ export function ColumnMultiSelect({ label, options, value, onChange, disabled = 
   const leaves = useMemo(() => leafColumnOptions(options), [options]);
   const byPath = useMemo(() => new Map(options.map((option) => [option.value, option])), [options]);
   const leafPaths = useMemo(() => columnLeafPaths(options), [options]);
-  const covers = (parent: string, child: string) => parent === child || columnOptionCovers(byPath.get(parent), byPath.get(child));
-  const expand = useCallback((paths: string[]) => [...new Set(paths.flatMap((path) => {
-    const children = leafPaths.get(path) ?? [];
-    return children.length ? children : [path];
-  }))], [leafPaths]);
+  const covers = (parent: string, child: string) =>
+    parent === child || columnOptionCovers(byPath.get(parent), byPath.get(child));
+  const expand = useCallback(
+    (paths: string[]) => [
+      ...new Set(
+        paths.flatMap((path) => {
+          const children = leafPaths.get(path) ?? [];
+          return children.length ? children : [path];
+        }),
+      ),
+    ],
+    [leafPaths],
+  );
   const selected = mode === "except" ? excluded : value;
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedLeaves = useMemo(() => new Set(expand(selected)), [selected, expand]);
@@ -45,17 +65,49 @@ export function ColumnMultiSelect({ label, options, value, onChange, disabled = 
     const children = leafPaths.get(option.value) ?? [];
     return children.length > 0 && children.every((leaf) => selectedLeaves.has(leaf));
   };
-  const searchText = useMemo(() => new Map(options.map(option => [option.value, `${option.label} ${option.type}`.toLowerCase()])), [options]);
+  const searchText = useMemo(
+    () =>
+      new Map(
+        options.map((option) => [option.value, `${option.label} ${option.type}`.toLowerCase()]),
+      ),
+    [options],
+  );
   const query = search.trim().toLowerCase();
-  const filtered = useMemo(() => open ? options.filter(option => searchText.get(option.value)!.includes(query) && (!selectedOnly || isSelected(option))) : [], [open, options, searchText, query, selectedOnly, selectedSet, selectedLeaves, shortcuts, leafPaths]);
-  const prefixMatches = useMemo(() => mode === "prefix" ? leaves.filter(leaf => leaf.value.startsWith(prefix.trim())).map(leaf => leaf.value) : [], [mode, leaves, prefix]);
+  const filtered = useMemo(
+    () =>
+      open
+        ? options.filter(
+            (option) =>
+              searchText.get(option.value)!.includes(query) &&
+              (!selectedOnly || isSelected(option)),
+          )
+        : [],
+    [
+      open,
+      options,
+      searchText,
+      query,
+      selectedOnly,
+      selectedSet,
+      selectedLeaves,
+      shortcuts,
+      leafPaths,
+    ],
+  );
+  const prefixMatches = useMemo(
+    () =>
+      mode === "prefix"
+        ? leaves.filter((leaf) => leaf.value.startsWith(prefix.trim())).map((leaf) => leaf.value)
+        : [],
+    [mode, leaves, prefix],
+  );
   const exceptResult = useMemo(() => {
     if (mode !== "except") return [];
     const excludedLeaves = new Set(expand(excluded));
-    return leaves.filter(leaf => !excludedLeaves.has(leaf.value)).map(leaf => leaf.value);
+    return leaves.filter((leaf) => !excludedLeaves.has(leaf.value)).map((leaf) => leaf.value);
   }, [mode, excluded, expand, leaves]);
   const results = useMemo(() => {
-    const paths = filtered.filter(option => option.valid).map(option => option.value);
+    const paths = filtered.filter((option) => option.valid).map((option) => option.value);
     return shortcuts ? expand(paths) : paths;
   }, [filtered, shortcuts, expand]);
   const resultLeaves = useMemo(() => new Set(expand(results)), [results, expand]);
@@ -65,17 +117,23 @@ export function ColumnMultiSelect({ label, options, value, onChange, disabled = 
     const occupied = new Set(valueLeaves);
     for (const path of results) {
       const children = leafPaths.get(path) ?? [path];
-      if (!children.some(child => occupied.has(child))) {
+      if (!children.some((child) => occupied.has(child))) {
         eligible.push(path);
-        children.forEach(child => occupied.add(child));
+        children.forEach((child) => occupied.add(child));
       }
     }
     return eligible;
   }, [results, valueLeaves, leafPaths]);
   const reviewQuery = reviewSearch.trim().toLowerCase();
-  const reviewed = useMemo(() => selected.filter(column => column.toLowerCase().includes(reviewQuery)), [selected, reviewQuery]);
+  const reviewed = useMemo(
+    () => selected.filter((column) => column.toLowerCase().includes(reviewQuery)),
+    [selected, reviewQuery],
+  );
   const reviewStart = Math.max(0, Math.floor(reviewScroll / ROW_HEIGHT) - 2);
-  const reviewEnd = Math.min(reviewed.length, Math.ceil((reviewScroll + VIEW_HEIGHT) / ROW_HEIGHT) + 2);
+  const reviewEnd = Math.min(
+    reviewed.length,
+    Math.ceil((reviewScroll + VIEW_HEIGHT) / ROW_HEIGHT) + 2,
+  );
   useEffect(() => {
     if (reviewViewport.current) reviewViewport.current.scrollTop = 0;
     setReviewScroll(0);
@@ -85,14 +143,16 @@ export function ColumnMultiSelect({ label, options, value, onChange, disabled = 
   }, [open, reviewOpen]);
   useEffect(() => {
     if (viewport.current) viewport.current.scrollTop = 0;
-    setScrollTop(0); setActive(0);
+    setScrollTop(0);
+    setActive(0);
   }, [search, mode, selectedOnly]);
   const moveActive = (index: number) => {
     setActive(index);
     if (viewport.current) {
       const top = index * ROW_HEIGHT;
       if (top < viewport.current.scrollTop) viewport.current.scrollTop = top;
-      else if (top + ROW_HEIGHT > viewport.current.scrollTop + VIEW_HEIGHT) viewport.current.scrollTop = top + ROW_HEIGHT - VIEW_HEIGHT;
+      else if (top + ROW_HEIGHT > viewport.current.scrollTop + VIEW_HEIGHT)
+        viewport.current.scrollTop = top + ROW_HEIGHT - VIEW_HEIGHT;
     }
   };
   const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 2);
@@ -102,7 +162,8 @@ export function ColumnMultiSelect({ label, options, value, onChange, disabled = 
     setConflict("");
     if (mode === "except") {
       if (!option.valid) return;
-      if (isSelected(option)) setExcluded(expand(excluded).filter((path) => !covers(option.value, path)));
+      if (isSelected(option))
+        setExcluded(expand(excluded).filter((path) => !covers(option.value, path)));
       else setExcluded([...excluded.filter((path) => !covers(option.value, path)), option.value]);
       return;
     }
@@ -112,65 +173,427 @@ export function ColumnMultiSelect({ label, options, value, onChange, disabled = 
       else onChange([...new Set([...expand(value), ...paths])]);
       return;
     }
-    if (value.includes(option.value)) return onChange(value.filter((item) => item !== option.value));
+    if (value.includes(option.value))
+      return onChange(value.filter((item) => item !== option.value));
     if (!option.valid) return;
     const overlap = value.find((path) => covers(path, option.value) || covers(option.value, path));
-    if (overlap) return setConflict(`Remove ${overlap} before selecting an overlapping parent or child path.`);
+    if (overlap)
+      return setConflict(`Remove ${overlap} before selecting an overlapping parent or child path.`);
     onChange([...value, option.value]);
   };
-  const close = () => { setOpen(false); setSearch(""); setMode(null); setSelectedOnly(false); setConflict(""); setReviewOpen(false); setReviewSearch(""); };
-  const chooseMode = (next: "except" | "prefix") => { setMode(mode === next ? null : next); setSearch(""); setSelectedOnly(false); setExcluded([]); setConflict(""); setReviewOpen(false); setReviewSearch(""); };
+  const close = () => {
+    setOpen(false);
+    setSearch("");
+    setMode(null);
+    setSelectedOnly(false);
+    setConflict("");
+    setReviewOpen(false);
+    setReviewSearch("");
+  };
+  const chooseMode = (next: "except" | "prefix") => {
+    setMode(mode === next ? null : next);
+    setSearch("");
+    setSelectedOnly(false);
+    setExcluded([]);
+    setConflict("");
+    setReviewOpen(false);
+    setReviewSearch("");
+  };
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown") { event.preventDefault(); moveActive(Math.max(0, Math.min(filtered.length - 1, active + 1))); }
-    else if (event.key === "ArrowUp") { event.preventDefault(); moveActive(Math.max(0, active - 1)); }
-    else if (event.key === "Enter" && filtered[active]) { event.preventDefault(); toggle(filtered[active]); }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveActive(Math.max(0, Math.min(filtered.length - 1, active + 1)));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveActive(Math.max(0, active - 1));
+    } else if (event.key === "Enter" && filtered[active]) {
+      event.preventDefault();
+      toggle(filtered[active]);
+    }
   };
   const removeReviewed = (column: string) => {
-    if (mode === "except") setExcluded(excluded.filter(item => item !== column));
-    else onChange(value.filter(item => item !== column));
+    if (mode === "except") setExcluded(excluded.filter((item) => item !== column));
+    else onChange(value.filter((item) => item !== column));
     reviewInput.current?.focus();
   };
-  const chips = (columns: string[], remove: (column: string) => void) => columns.map((column) => <span className="column-chip" key={column}><span title={column}>{column}{!byPath.get(column)?.valid && " · unavailable"}</span><button type="button" aria-label={`Remove ${column}`} disabled={disabled} onClick={() => remove(column)}><Icon name="x" size={12} /></button></span>);
-  return <div className="column-multi-select">
-    <span id={`${id}-label`} className="field-label">{label}</span>
-    <button ref={trigger} type="button" className="column-select-trigger" aria-label={`${label}: ${value.length} selected`} aria-expanded={open} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}>
-      <span className="column-trigger-label"><Icon name="database" size={17} /><span>{value.length ? `${value.length} selected` : "Choose columns"}</span></span><span className="column-trigger-action">Browse columns <Icon name="plus" size={15} /></span>
-    </button>
-    <div className="column-chips" role="group" aria-label="Selected columns">{chips(value.slice(0, 5), (column) => onChange(value.filter((item) => item !== column)))}{value.length > 5 && <button type="button" className="text-action" disabled={disabled} onClick={() => { setOpen(true); setReviewOpen(true); }}>Review all {value.length} selected columns</button>}</div>
-    <Modal attributes={{ header: { role: "presentation" } }} opened={open} onClose={close} title={`Choose ${label.toLowerCase()}`} size={880} centered classNames={{ content: "column-picker-modal", body: "column-picker-body" }} closeButtonProps={{ "aria-label": "Close column picker" }} onExitTransitionEnd={() => trigger.current?.focus()}>
-      <p className="picker-description">{shortcuts ? "Choose fields to reveal. Select all uses the current schema, regardless of search; future and unselected fields keep the default NULL mask." : "Choose specific columns for this operation."}</p>
-      {shortcuts && <div className="picker-shortcuts" aria-label="Column selection tools"><Button variant="default" disabled={disabled} onClick={() => { onChange(leaves.map((leaf) => leaf.value)); setMode(null); }}>Select all</Button><Button variant={mode === "except" ? "light" : "default"} aria-pressed={mode === "except"} disabled={disabled} onClick={() => chooseMode("except")}>Select all except…</Button><Button variant={mode === "prefix" ? "light" : "default"} aria-pressed={mode === "prefix"} disabled={disabled} onClick={() => chooseMode("prefix")}>Add by prefix</Button></div>}
-      {mode === "prefix" && <div className="picker-mode-panel"><TextInput label="Column path prefix" value={prefix} disabled={disabled} onChange={(event) => setPrefix(event.currentTarget.value)} placeholder="customer." description="Matches the start of a column path. Existing selections are kept." /><div className="prefix-preview"><span role="status">{prefix.trim() ? prefixMatches.length : 0} matching columns</span><Button disabled={disabled || !prefix.trim() || !prefixMatches.length} onClick={() => { onChange([...value, ...prefixMatches.filter((path) => !valueLeaves.has(path))]); setMode(null); }}>Add matching columns</Button></div></div>}
-      {mode === "except" && <div className="picker-mode-panel"><strong>Choose columns to exclude</strong><p>Choose fields or subtrees to leave NULL. Applies to the current schema only; future fields stay NULL. Review exclusions before applying.</p></div>}
-      <button type="button" className="text-action picker-review-toggle" aria-pressed={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}>{reviewOpen ? "Browse columns" : "Review selection"}</button>
-      <div className="picker-workspace" data-review={reviewOpen}>
-        <div className="picker-available">
-          <TextInput data-autofocus={reviewOpen ? undefined : true} type="search" role="combobox" aria-expanded={open} aria-controls={`${id}-options`} aria-activedescendant={filtered[active] ? `${id}-option-${active}` : undefined} aria-label={`Search ${label.toLowerCase()}`} placeholder="Search by column name or type" leftSection={<Icon name="search" size={17} />} value={search} onChange={(event) => setSearch(event.currentTarget.value)} onKeyDown={onSearchKeyDown} />
-          <div className="picker-results-bar"><span role="status">{filtered.length} {filtered.length === 1 ? "result" : "results"}</span>{mode !== "except" && <button className="text-action" type="button" aria-pressed={selectedOnly} onClick={() => setSelectedOnly(!selectedOnly)}>{selectedOnly ? "Show all columns" : "Show selected"}</button>}</div>
-          <div className="picker-list-container"><div ref={viewport} id={`${id}-options`} hidden={!filtered.length} className="column-select-list" role="listbox" aria-label={mode === "except" ? "Columns to exclude" : label} aria-multiselectable="true" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)} style={{ height: VIEW_HEIGHT }}>
-            <div style={{ height: filtered.length * ROW_HEIGHT, position: "relative" }}>{filtered.slice(start, end).map((option, offset) => {
-              const index = start + offset;
-              const checked = isSelected(option);
-              const nestedCount = (leafPaths.get(option.value) ?? []).filter((leaf) => leaf !== option.value).length;
-              return <button id={`${id}-option-${index}`} key={option.value} type="button" role="option" tabIndex={0} aria-disabled={disabled || (!option.valid && !value.includes(option.value))} aria-selected={checked} aria-posinset={index + 1} aria-setsize={filtered.length} className={`column-select-option ${index === active ? "active" : ""}`} style={{ position: "absolute", top: index * ROW_HEIGHT, height: ROW_HEIGHT }} onMouseEnter={() => setActive(index)} onClick={() => toggle(option)}>
-                <span className="column-check" aria-hidden="true">{checked && <Icon name="check" size={13} />}</span><span className="column-option-name" title={option.label}>{option.label}<small>{nestedCount ? `${nestedCount} nested fields` : option.valid ? "" : "Unavailable in current schema"}</small></span><span className="column-type-tag" title={option.type}>{option.type}</span>
-              </button>;
-            })}</div>
-            </div>
-          {!filtered.length && <div className="column-empty" role="status" style={{ height: VIEW_HEIGHT }}><Icon name="search" size={24} /><strong>No matching columns</strong><p>Try a different name or type.</p><Button variant="subtle" onClick={() => { setSearch(""); setSelectedOnly(false); }}>Reset search</Button></div>}</div>
-          {mode !== "except" && <div className="picker-result-actions"><Button variant="subtle" disabled={disabled || !eligibleResults.length} onClick={() => onChange([...value, ...eligibleResults])}>Select search results ({eligibleResults.length})</Button><Button variant="subtle" disabled={disabled || ![...valueLeaves].some((path) => resultLeaves.has(path))} onClick={() => onChange((shortcuts ? expand(value) : value).filter((path) => !(leafPaths.get(path) ?? [path]).some((leaf) => resultLeaves.has(leaf))))}>Deselect results</Button></div>}
-        </div>
-        <aside className="picker-selection" aria-label="Selection review"><div className="picker-selection-heading"><strong>{mode === "except" ? "Excluded fields" : "Your selection"}</strong><span className="context-tag">{selected.length}</span></div><p>{mode === "except" ? "These fields will keep the NULL mask." : "Review selected paths before returning to your rule."}</p><TextInput ref={reviewInput} data-autofocus={reviewOpen ? true : undefined} type="search" label={mode === "except" ? "Search excluded columns" : "Search selected columns"} value={reviewSearch} onChange={event => setReviewSearch(event.currentTarget.value)} />
-          <span className="picker-review-count" role="status">{reviewed.length} of {selected.length} {mode === "except" ? "excluded" : "selected"} fields</span>
-          <div ref={reviewViewport} className="picker-selected-list" onScroll={event => setReviewScroll(event.currentTarget.scrollTop)} style={{ height: VIEW_HEIGHT }}>
-            <div style={{ height: reviewed.length * ROW_HEIGHT, position: "relative" }}>{reviewed.slice(reviewStart, reviewEnd).map((column, offset) => <div className="picker-selected-row" key={column} style={{ position: "absolute", top: (reviewStart + offset) * ROW_HEIGHT, height: ROW_HEIGHT }}>
-              <span title={column}>{column}{!byPath.get(column)?.valid && " · unavailable"}</span><button type="button" aria-label={`Remove ${column}`} disabled={disabled} onClick={() => removeReviewed(column)}><Icon name="x" size={14} /></button>
-            </div>)}</div>
-            {Boolean(selected.length) && !reviewed.length && <p className="help">No selected fields match this search.</p>}
-          </div>{!selected.length && <div className="picker-selection-empty"><Icon name="database" size={24} /><span>{mode === "except" ? "No exclusions yet" : "No columns selected"}</span></div>}{mode !== "except" && <Button variant="subtle" disabled={disabled || !value.length} onClick={() => onChange([])}>Clear selection</Button>}</aside>
+  const chips = (columns: string[], remove: (column: string) => void) =>
+    columns.map((column) => (
+      <span className="column-chip" key={column}>
+        <span title={column}>
+          {column}
+          {!byPath.get(column)?.valid && " · unavailable"}
+        </span>
+        <button
+          type="button"
+          aria-label={`Remove ${column}`}
+          disabled={disabled}
+          onClick={() => remove(column)}
+        >
+          <Icon name="x" size={12} />
+        </button>
+      </span>
+    ));
+  return (
+    <div className="column-multi-select">
+      <span id={`${id}-label`} className="field-label">
+        {label}
+      </span>
+      <button
+        ref={trigger}
+        type="button"
+        className="column-select-trigger"
+        aria-label={`${label}: ${value.length} selected`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        <span className="column-trigger-label">
+          <Icon name="database" size={17} />
+          <span>{value.length ? `${value.length} selected` : "Choose columns"}</span>
+        </span>
+        <span className="column-trigger-action">
+          Browse columns <Icon name="plus" size={15} />
+        </span>
+      </button>
+      <div className="column-chips" role="group" aria-label="Selected columns">
+        {chips(value.slice(0, 5), (column) => onChange(value.filter((item) => item !== column)))}
+        {value.length > 5 && (
+          <button
+            type="button"
+            className="text-action"
+            disabled={disabled}
+            onClick={() => {
+              setOpen(true);
+              setReviewOpen(true);
+            }}
+          >
+            Review all {value.length} selected columns
+          </button>
+        )}
       </div>
-      {conflict && <p className="field-error" role="alert">{conflict}</p>}
-      <div className="picker-footer"><span role="status">{mode === "except" ? `${excluded.length} excluded · ${exceptResult.length} columns will be allowed` : `${value.length} selected`}</span>{mode === "except" ? <Button disabled={disabled} onClick={() => { onChange(exceptResult); setMode(null); }}>Apply exclusions ({exceptResult.length} allowed)</Button> : <Button onClick={close}>Done</Button>}</div>
-    </Modal>
-  </div>;
+      <Modal
+        attributes={{ header: { role: "presentation" } }}
+        opened={open}
+        onClose={close}
+        title={`Choose ${label.toLowerCase()}`}
+        size={880}
+        centered
+        classNames={{ content: "column-picker-modal", body: "column-picker-body" }}
+        closeButtonProps={{ "aria-label": "Close column picker" }}
+        onExitTransitionEnd={() => trigger.current?.focus()}
+      >
+        <p className="picker-description">
+          {shortcuts
+            ? "Choose fields to reveal. Select all uses the current schema, regardless of search; future and unselected fields keep the default NULL mask."
+            : "Choose specific columns for this operation."}
+        </p>
+        {shortcuts && (
+          <div className="picker-shortcuts" aria-label="Column selection tools">
+            <Button
+              variant="default"
+              disabled={disabled}
+              onClick={() => {
+                onChange(leaves.map((leaf) => leaf.value));
+                setMode(null);
+              }}
+            >
+              Select all
+            </Button>
+            <Button
+              variant={mode === "except" ? "light" : "default"}
+              aria-pressed={mode === "except"}
+              disabled={disabled}
+              onClick={() => chooseMode("except")}
+            >
+              Select all except…
+            </Button>
+            <Button
+              variant={mode === "prefix" ? "light" : "default"}
+              aria-pressed={mode === "prefix"}
+              disabled={disabled}
+              onClick={() => chooseMode("prefix")}
+            >
+              Add by prefix
+            </Button>
+          </div>
+        )}
+        {mode === "prefix" && (
+          <div className="picker-mode-panel">
+            <TextInput
+              label="Column path prefix"
+              value={prefix}
+              disabled={disabled}
+              onChange={(event) => setPrefix(event.currentTarget.value)}
+              placeholder="customer."
+              description="Matches the start of a column path. Existing selections are kept."
+            />
+            <div className="prefix-preview">
+              <span role="status">{prefix.trim() ? prefixMatches.length : 0} matching columns</span>
+              <Button
+                disabled={disabled || !prefix.trim() || !prefixMatches.length}
+                onClick={() => {
+                  onChange([...value, ...prefixMatches.filter((path) => !valueLeaves.has(path))]);
+                  setMode(null);
+                }}
+              >
+                Add matching columns
+              </Button>
+            </div>
+          </div>
+        )}
+        {mode === "except" && (
+          <div className="picker-mode-panel">
+            <strong>Choose columns to exclude</strong>
+            <p>
+              Choose fields or subtrees to leave NULL. Applies to the current schema only; future
+              fields stay NULL. Review exclusions before applying.
+            </p>
+          </div>
+        )}
+        <button
+          type="button"
+          className="text-action picker-review-toggle"
+          aria-pressed={reviewOpen}
+          onClick={() => setReviewOpen(!reviewOpen)}
+        >
+          {reviewOpen ? "Browse columns" : "Review selection"}
+        </button>
+        <div className="picker-workspace" data-review={reviewOpen}>
+          <div className="picker-available">
+            <TextInput
+              data-autofocus={reviewOpen ? undefined : true}
+              type="search"
+              role="combobox"
+              aria-expanded={open}
+              aria-controls={`${id}-options`}
+              aria-activedescendant={filtered[active] ? `${id}-option-${active}` : undefined}
+              aria-label={`Search ${label.toLowerCase()}`}
+              placeholder="Search by column name or type"
+              leftSection={<Icon name="search" size={17} />}
+              value={search}
+              onChange={(event) => setSearch(event.currentTarget.value)}
+              onKeyDown={onSearchKeyDown}
+            />
+            <div className="picker-results-bar">
+              <span role="status">
+                {filtered.length} {filtered.length === 1 ? "result" : "results"}
+              </span>
+              {mode !== "except" && (
+                <button
+                  className="text-action"
+                  type="button"
+                  aria-pressed={selectedOnly}
+                  onClick={() => setSelectedOnly(!selectedOnly)}
+                >
+                  {selectedOnly ? "Show all columns" : "Show selected"}
+                </button>
+              )}
+            </div>
+            <div className="picker-list-container">
+              <div
+                ref={viewport}
+                id={`${id}-options`}
+                hidden={!filtered.length}
+                className="column-select-list"
+                role="listbox"
+                aria-label={mode === "except" ? "Columns to exclude" : label}
+                aria-multiselectable="true"
+                onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+                style={{ height: VIEW_HEIGHT }}
+              >
+                <div style={{ height: filtered.length * ROW_HEIGHT, position: "relative" }}>
+                  {filtered.slice(start, end).map((option, offset) => {
+                    const index = start + offset;
+                    const checked = isSelected(option);
+                    const nestedCount = (leafPaths.get(option.value) ?? []).filter(
+                      (leaf) => leaf !== option.value,
+                    ).length;
+                    return (
+                      <button
+                        id={`${id}-option-${index}`}
+                        key={option.value}
+                        type="button"
+                        role="option"
+                        tabIndex={0}
+                        aria-disabled={disabled || (!option.valid && !value.includes(option.value))}
+                        aria-selected={checked}
+                        aria-posinset={index + 1}
+                        aria-setsize={filtered.length}
+                        className={`column-select-option ${index === active ? "active" : ""}`}
+                        style={{
+                          position: "absolute",
+                          top: index * ROW_HEIGHT,
+                          height: ROW_HEIGHT,
+                        }}
+                        onMouseEnter={() => setActive(index)}
+                        onClick={() => toggle(option)}
+                      >
+                        <span className="column-check" aria-hidden="true">
+                          {checked && <Icon name="check" size={13} />}
+                        </span>
+                        <span className="column-option-name" title={option.label}>
+                          {option.label}
+                          <small>
+                            {nestedCount
+                              ? `${nestedCount} nested fields`
+                              : option.valid
+                                ? ""
+                                : "Unavailable in current schema"}
+                          </small>
+                        </span>
+                        <span className="column-type-tag" title={option.type}>
+                          {option.type}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {!filtered.length && (
+                <div className="column-empty" role="status" style={{ height: VIEW_HEIGHT }}>
+                  <Icon name="search" size={24} />
+                  <strong>No matching columns</strong>
+                  <p>Try a different name or type.</p>
+                  <Button
+                    variant="subtle"
+                    onClick={() => {
+                      setSearch("");
+                      setSelectedOnly(false);
+                    }}
+                  >
+                    Reset search
+                  </Button>
+                </div>
+              )}
+            </div>
+            {mode !== "except" && (
+              <div className="picker-result-actions">
+                <Button
+                  variant="subtle"
+                  disabled={disabled || !eligibleResults.length}
+                  onClick={() => onChange([...value, ...eligibleResults])}
+                >
+                  Select search results ({eligibleResults.length})
+                </Button>
+                <Button
+                  variant="subtle"
+                  disabled={disabled || ![...valueLeaves].some((path) => resultLeaves.has(path))}
+                  onClick={() =>
+                    onChange(
+                      (shortcuts ? expand(value) : value).filter(
+                        (path) =>
+                          !(leafPaths.get(path) ?? [path]).some((leaf) => resultLeaves.has(leaf)),
+                      ),
+                    )
+                  }
+                >
+                  Deselect results
+                </Button>
+              </div>
+            )}
+          </div>
+          <aside className="picker-selection" aria-label="Selection review">
+            <div className="picker-selection-heading">
+              <strong>{mode === "except" ? "Excluded fields" : "Your selection"}</strong>
+              <span className="context-tag">{selected.length}</span>
+            </div>
+            <p>
+              {mode === "except"
+                ? "These fields will keep the NULL mask."
+                : "Review selected paths before returning to your rule."}
+            </p>
+            <TextInput
+              ref={reviewInput}
+              data-autofocus={reviewOpen ? true : undefined}
+              type="search"
+              label={mode === "except" ? "Search excluded columns" : "Search selected columns"}
+              value={reviewSearch}
+              onChange={(event) => setReviewSearch(event.currentTarget.value)}
+            />
+            <span className="picker-review-count" role="status">
+              {reviewed.length} of {selected.length} {mode === "except" ? "excluded" : "selected"}{" "}
+              fields
+            </span>
+            <div
+              ref={reviewViewport}
+              className="picker-selected-list"
+              onScroll={(event) => setReviewScroll(event.currentTarget.scrollTop)}
+              style={{ height: VIEW_HEIGHT }}
+            >
+              <div style={{ height: reviewed.length * ROW_HEIGHT, position: "relative" }}>
+                {reviewed.slice(reviewStart, reviewEnd).map((column, offset) => (
+                  <div
+                    className="picker-selected-row"
+                    key={column}
+                    style={{
+                      position: "absolute",
+                      top: (reviewStart + offset) * ROW_HEIGHT,
+                      height: ROW_HEIGHT,
+                    }}
+                  >
+                    <span title={column}>
+                      {column}
+                      {!byPath.get(column)?.valid && " · unavailable"}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${column}`}
+                      disabled={disabled}
+                      onClick={() => removeReviewed(column)}
+                    >
+                      <Icon name="x" size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {Boolean(selected.length) && !reviewed.length && (
+                <p className="help">No selected fields match this search.</p>
+              )}
+            </div>
+            {!selected.length && (
+              <div className="picker-selection-empty">
+                <Icon name="database" size={24} />
+                <span>{mode === "except" ? "No exclusions yet" : "No columns selected"}</span>
+              </div>
+            )}
+            {mode !== "except" && (
+              <Button
+                variant="subtle"
+                disabled={disabled || !value.length}
+                onClick={() => onChange([])}
+              >
+                Clear selection
+              </Button>
+            )}
+          </aside>
+        </div>
+        {conflict && (
+          <p className="field-error" role="alert">
+            {conflict}
+          </p>
+        )}
+        <div className="picker-footer">
+          <span role="status">
+            {mode === "except"
+              ? `${excluded.length} excluded · ${exceptResult.length} columns will be allowed`
+              : `${value.length} selected`}
+          </span>
+          {mode === "except" ? (
+            <Button
+              disabled={disabled}
+              onClick={() => {
+                onChange(exceptResult);
+                setMode(null);
+              }}
+            >
+              Apply exclusions ({exceptResult.length} allowed)
+            </Button>
+          ) : (
+            <Button onClick={close}>Done</Button>
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
 }

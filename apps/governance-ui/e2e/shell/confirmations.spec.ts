@@ -2,10 +2,14 @@ import { expect, test } from "@playwright/test";
 import { authenticatedApi, deferredResponse } from "../support/fixtures";
 
 test.beforeEach(async ({ page }) => {
-  page.on("dialog", (dialog) => { throw new Error(`Unexpected native dialog: ${dialog.message()}`); });
+  page.on("dialog", (dialog) => {
+    throw new Error(`Unexpected native dialog: ${dialog.message()}`);
+  });
 });
 
-test("discard dialog preserves edits, traps focus, and defaults to keep editing", async ({ page }, testInfo) => {
+test("discard dialog preserves edits, traps focus, and defaults to keep editing", async ({
+  page,
+}, testInfo) => {
   await authenticatedApi(page, { ruleEditor: true });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await page.getByRole("button", { name: "New rule", exact: true }).click();
@@ -25,24 +29,34 @@ test("discard dialog preserves edits, traps focus, and defaults to keep editing"
   }
   const { default: AxeBuilder } = await import("@axe-core/playwright");
   const result = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
-  expect(result.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
+  expect(
+    result.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? "")),
+  ).toEqual([]);
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "dark");
   const darkResult = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
-  expect(darkResult.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
+  expect(
+    darkResult.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? "")),
+  ).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true);
   await page.screenshot({ path: testInfo.outputPath("discard-mobile.png") });
   await dialog.getByRole("button", { name: "Discard changes" }).click();
   await expect(page.getByLabel("Find governed asset")).toBeVisible();
 });
 
-test("revocation requires explicit confirmation and prevents repeated submission", async ({ page }) => {
+test("revocation requires explicit confirmation and prevents repeated submission", async ({
+  page,
+}) => {
   await authenticatedApi(page, { admin: true });
   const deferred = deferredResponse();
   let requests = 0;
   await page.route("**/tickets/revoke", async (route) => {
-    requests += 1; deferred.markStarted(page, route.request()); await deferred.wait();
+    requests += 1;
+    deferred.markStarted(page, route.request());
+    await deferred.wait();
     await route.fulfill({ json: { revoked_token_count: 2 } });
   });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001&tab=access#assets");
@@ -62,7 +76,9 @@ test("revocation requires explicit confirmation and prevents repeated submission
   await expect(revoke).toBeEnabled();
 });
 
-test("access principal typing keeps focus and refresh cancellation keeps input", async ({ page }) => {
+test("access principal typing keeps focus and refresh cancellation keeps input", async ({
+  page,
+}) => {
   await authenticatedApi(page, { admin: true });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001&tab=access#assets");
   await page.getByRole("button", { name: "Add capability" }).click();
@@ -75,7 +91,9 @@ test("access principal typing keeps focus and refresh cancellation keeps input",
   await expect(principal).toHaveValue("group:data-stewards");
 });
 
-test("storage paths keep typing focus and active navigation preserves settings", async ({ page }) => {
+test("storage paths keep typing focus and active navigation preserves settings", async ({
+  page,
+}) => {
   await authenticatedApi(page, { admin: true, configuredSettings: true });
   await page.goto("/#settings");
   await page.getByRole("button", { name: "Add storage root" }).click();

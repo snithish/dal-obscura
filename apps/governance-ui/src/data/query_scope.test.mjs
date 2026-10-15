@@ -13,8 +13,14 @@ test("session query scope separates anonymous and exact authenticated identities
 
 test("delimiter-containing identities cannot read each other's cached inventory", () => {
   const client = new QueryClient();
-  const first = sessionQueryScope({ issuer: "https://issuer.example/|team", principal: "alice" }, 1);
-  const second = sessionQueryScope({ issuer: "https://issuer.example/", principal: "team|alice" }, 1);
+  const first = sessionQueryScope(
+    { issuer: "https://issuer.example/|team", principal: "alice" },
+    1,
+  );
+  const second = sessionQueryScope(
+    { issuer: "https://issuer.example/", principal: "team|alice" },
+    1,
+  );
   const firstKey = assetInventoryQueryKey(first, "");
   const secondKey = assetInventoryQueryKey(second, "");
   client.setQueryData(firstKey, { items: ["private-asset"] });

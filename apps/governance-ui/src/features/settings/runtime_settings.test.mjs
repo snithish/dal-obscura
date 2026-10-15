@@ -3,9 +3,14 @@ import test from "node:test";
 import { serializePathRules } from "./runtime_settings.ts";
 
 for (const [name, roots, expected] of [
-  ["trimmed roots", [" s3://warehouse/curated ", "file:///tmp/data"], [{ root: "s3://warehouse/curated" }, { root: "file:///tmp/data" }]],
+  [
+    "trimmed roots",
+    [" s3://warehouse/curated ", "file:///tmp/data"],
+    [{ root: "s3://warehouse/curated" }, { root: "file:///tmp/data" }],
+  ],
   ["empty rules", [], []],
   ["blank root", ["  "], undefined],
 ]) {
-  test(`runtime path rules handle ${name}`, () => assert.deepEqual(serializePathRules(roots), expected));
+  test(`runtime path rules handle ${name}`, () =>
+    assert.deepEqual(serializePathRules(roots), expected));
 }

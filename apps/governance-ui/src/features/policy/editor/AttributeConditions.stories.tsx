@@ -3,17 +3,58 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 import { AttributeConditions } from "./AttributeConditions";
 
-const providers = [{ ordinal: 1, issuer: "https://sso.example.com", revision: 4, attributes: [
-  { key: "department", claim_path: "employee.department", label: "Department", description: "Employee business unit", allowed_values: ["Engineering", "Finance", "Research, EU"] },
-  { key: "region", claim_path: "employee.region", label: "Region", description: "Operating region", allowed_values: ["US", "EU"] },
-  { key: "project", claim_path: "project", label: "Project", description: "Assigned project", allowed_values: [] },
-] }];
+const providers = [
+  {
+    ordinal: 1,
+    issuer: "https://sso.example.com",
+    revision: 4,
+    attributes: [
+      {
+        key: "department",
+        claim_path: "employee.department",
+        label: "Department",
+        description: "Employee business unit",
+        allowed_values: ["Engineering", "Finance", "Research, EU"],
+      },
+      {
+        key: "region",
+        claim_path: "employee.region",
+        label: "Region",
+        description: "Operating region",
+        allowed_values: ["US", "EU"],
+      },
+      {
+        key: "project",
+        claim_path: "project",
+        label: "Project",
+        description: "Assigned project",
+        allowed_values: [],
+      },
+    ],
+  },
+];
 const meta = {
-  title: "Policy/Identity attribute conditions", component: AttributeConditions,
-  args: { providers, disabled: false, value: { department: ["Engineering", "Finance"] }, onChange: fn(), onInvalid: fn() },
+  title: "Policy/Identity attribute conditions",
+  component: AttributeConditions,
+  args: {
+    providers,
+    disabled: false,
+    value: { department: ["Engineering", "Finance"] },
+    onChange: fn(),
+    onInvalid: fn(),
+  },
   render: (args) => {
     const [value, setValue] = useState(args.value);
-    return <AttributeConditions {...args} value={value} onChange={(value) => { setValue(value); args.onChange(value); }} />;
+    return (
+      <AttributeConditions
+        {...args}
+        value={value}
+        onChange={(value) => {
+          setValue(value);
+          args.onChange(value);
+        }}
+      />
+    );
   },
 } satisfies Meta<typeof AttributeConditions>;
 export default meta;

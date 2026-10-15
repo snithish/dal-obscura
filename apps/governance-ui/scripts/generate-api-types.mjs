@@ -4,8 +4,15 @@ import { fileURLToPath } from "node:url";
 import openapiTS, { astToString } from "openapi-typescript";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const inputPath = process.argv.find((arg) => !arg.startsWith("--") && arg !== process.argv[0] && arg !== process.argv[1])
-  ? resolve(process.cwd(), process.argv.find((arg) => !arg.startsWith("--") && arg !== process.argv[0] && arg !== process.argv[1]))
+const inputPath = process.argv.find(
+  (arg) => !arg.startsWith("--") && arg !== process.argv[0] && arg !== process.argv[1],
+)
+  ? resolve(
+      process.cwd(),
+      process.argv.find(
+        (arg) => !arg.startsWith("--") && arg !== process.argv[0] && arg !== process.argv[1],
+      ),
+    )
   : resolve(root, "openapi/control-plane.json");
 const outputPath = resolve(root, "src/generated/control_plane.d.ts");
 const checkOnly = process.argv.includes("--check");

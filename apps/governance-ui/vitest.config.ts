@@ -9,7 +9,9 @@ export default defineConfig({
     name: "stories",
     browser: {
       enabled: true,
-      provider: playwright({ launchOptions: { executablePath: process.env.DAL_OBSCURA_E2E_EXECUTABLE_PATH } }),
+      provider: playwright({
+        launchOptions: { executablePath: process.env.DAL_OBSCURA_E2E_EXECUTABLE_PATH },
+      }),
       headless: true,
       instances: [{ browser: "chromium" }],
     },

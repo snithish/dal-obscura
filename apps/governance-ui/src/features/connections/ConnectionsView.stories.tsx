@@ -5,10 +5,17 @@ import type { Catalog, PluginDescriptor, PluginPair, PluginState } from "../../d
 import { ConnectionsView } from "./ConnectionsView";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-const diagnosticQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+const diagnosticQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+});
 diagnosticQueryClient.setQueryData(
   ["management", "storybook|admin", "connections", "diagnose", "analytics"],
-  { catalog: "analytics", status: "unavailable", message: "TLS handshake failed", checked_at: "2026-09-21T08:00:00Z" },
+  {
+    catalog: "analytics",
+    status: "unavailable",
+    message: "TLS handshake failed",
+    checked_at: "2026-09-21T08:00:00Z",
+  },
 );
 
 const catalogPlugin: PluginDescriptor = {
@@ -40,36 +47,48 @@ const typedCatalogPlugin: PluginDescriptor = {
       { name: "uri", type: "string", required: true, secret: false },
       { name: "port", type: "integer", required: true, secret: false },
       { name: "tls", type: "boolean", required: true, secret: false },
-      { name: "region", type: "enum", required: false, secret: false, options: ["eu-west-1", "us-east-1"] },
+      {
+        name: "region",
+        type: "enum",
+        required: false,
+        secret: false,
+        options: ["eu-west-1", "us-east-1"],
+      },
     ],
   },
 };
 
-const catalogs: Catalog[] = [{
-  id: "catalog-analytics",
-  name: "analytics",
-  plugin_id: "iceberg-rest",
-  options: { uri: "https://catalog.example" },
-  status: "ready",
-  revision: 4,
-  discovered_table_count: 24,
-  governed_asset_count: 18,
-}];
+const catalogs: Catalog[] = [
+  {
+    id: "catalog-analytics",
+    name: "analytics",
+    plugin_id: "iceberg-rest",
+    options: { uri: "https://catalog.example" },
+    status: "ready",
+    revision: 4,
+    discovered_table_count: 24,
+    governed_asset_count: 18,
+  },
+];
 
-const pluginStates: PluginState[] = [{
-  kind: "catalog",
-  plugin_id: "iceberg-rest",
-  status: "enabled",
-  lifecycle: "enabled",
-}];
+const pluginStates: PluginState[] = [
+  {
+    kind: "catalog",
+    plugin_id: "iceberg-rest",
+    status: "enabled",
+    lifecycle: "enabled",
+  },
+];
 
-const pluginPairs: PluginPair[] = [{
-  catalog_plugin_id: "iceberg-rest",
-  format_plugin_id: "iceberg",
-  capabilities: ["scan"],
-  handle_versions: [1],
-  status: "admitted",
-}];
+const pluginPairs: PluginPair[] = [
+  {
+    catalog_plugin_id: "iceberg-rest",
+    format_plugin_id: "iceberg",
+    capabilities: ["scan"],
+    handle_versions: [1],
+    status: "admitted",
+  },
+];
 
 const meta = {
   title: "Workflows/Connections management",
@@ -88,7 +107,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "Production connections management with admitted plugin descriptors and lifecycle state. Fixtures contain no credentials and actions that would mutate the control plane are not invoked by the story.",
+        component:
+          "Production connections management with admitted plugin descriptors and lifecycle state. Fixtures contain no credentials and actions that would mutate the control plane are not invoked by the story.",
       },
     },
   },
@@ -116,19 +136,23 @@ export const EmptyState: Story = {
   args: { catalogs: [], plugins: [], pluginStates: [], pluginPairs: [], canManagePlugins: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("No catalogs configured")).toBeVisible();
-    await expect(canvas.getByText("Connect an admitted catalog adapter to begin asset onboarding.")).toBeVisible();
+    await expect(
+      canvas.getByText("Connect an admitted catalog adapter to begin asset onboarding."),
+    ).toBeVisible();
   },
 };
 
 export const SecretReferenceEditing: Story = {
   args: {
-    catalogs: [{
-      ...catalogs[0],
-      options: {
-        uri: "https://catalog.example",
-        password: { secret: "vault/catalog/password", scope: "catalog:analytics" },
+    catalogs: [
+      {
+        ...catalogs[0],
+        options: {
+          uri: "https://catalog.example",
+          password: { secret: "vault/catalog/password", scope: "catalog:analytics" },
+        },
       },
-    }],
+    ],
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("button", { name: "Edit" })).toBeVisible();
@@ -144,11 +168,13 @@ export const SecretReferenceEditing: Story = {
 export const TypedConfiguration: Story = {
   args: {
     plugins: [typedCatalogPlugin],
-    catalogs: [{
-      ...catalogs[0],
-      plugin_id: "typed-catalog",
-      options: { uri: "https://catalog.example", port: 443, tls: true, region: "eu-west-1" },
-    }],
+    catalogs: [
+      {
+        ...catalogs[0],
+        plugin_id: "typed-catalog",
+        options: { uri: "https://catalog.example", port: 443, tls: true, region: "eu-west-1" },
+      },
+    ],
   },
   play: async ({ canvas }) => {
     await canvas.getByRole("button", { name: "Edit" }).click();
@@ -161,11 +187,13 @@ export const TypedConfiguration: Story = {
 export const InvalidTypedValue: Story = {
   args: {
     plugins: [typedCatalogPlugin],
-    catalogs: [{
-      ...catalogs[0],
-      plugin_id: "typed-catalog",
-      options: { uri: "https://catalog.example", port: 443, tls: true, region: "eu-west-1" },
-    }],
+    catalogs: [
+      {
+        ...catalogs[0],
+        plugin_id: "typed-catalog",
+        options: { uri: "https://catalog.example", port: 443, tls: true, region: "eu-west-1" },
+      },
+    ],
   },
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Edit" }));

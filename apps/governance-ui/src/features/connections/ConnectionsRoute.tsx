@@ -8,11 +8,25 @@ export function ConnectionsRoute({ onDirtyChange }: { onDirtyChange: (dirty: boo
   const { session, generation, queryClient } = useSessionScope();
   const scope = sessionQueryScope(session, generation);
   const query = useConnectionsQueries(queryClient, scope, session);
-  return <QueryView page="connections" loaded={Boolean(query.data)} loading={query.loading}
-    error={query.error} onReload={() => void query.refresh()}>
-    <ConnectionsView catalogs={query.data?.catalogs ?? []} plugins={query.data?.plugins ?? []}
-      pluginStates={query.data?.pluginStates ?? []} pluginPairs={query.data?.pluginPairs ?? []}
-      canManagePlugins={Boolean(session?.platform_admin)} onReload={() => void query.refresh()}
-      onDirtyChange={onDirtyChange} queryClient={queryClient} sessionScope={scope} />
-  </QueryView>;
+  return (
+    <QueryView
+      page="connections"
+      loaded={Boolean(query.data)}
+      loading={query.loading}
+      error={query.error}
+      onReload={() => void query.refresh()}
+    >
+      <ConnectionsView
+        catalogs={query.data?.catalogs ?? []}
+        plugins={query.data?.plugins ?? []}
+        pluginStates={query.data?.pluginStates ?? []}
+        pluginPairs={query.data?.pluginPairs ?? []}
+        canManagePlugins={Boolean(session?.platform_admin)}
+        onReload={() => void query.refresh()}
+        onDirtyChange={onDirtyChange}
+        queryClient={queryClient}
+        sessionScope={scope}
+      />
+    </QueryView>
+  );
 }

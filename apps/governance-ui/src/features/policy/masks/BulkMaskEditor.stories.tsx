@@ -5,21 +5,46 @@ import { authoritativeColumnOptions } from "../policy_editor";
 import { BulkMaskEditor } from "./BulkMaskEditor";
 
 const field = (name: string, id: number): SchemaNode => ({
-  field_id: id, name, human_path: name, type: "string", nullable: true, kind: "scalar",
+  field_id: id,
+  name,
+  human_path: name,
+  type: "string",
+  nullable: true,
+  kind: "scalar",
   path: { version: 1, segments: [{ kind: "field", name, field_id: id }] },
 });
-const options = authoritativeColumnOptions([field("email", 1), field("phone", 2), field("country", 3)]);
-const rule: PolicyRule = { ordinal: 1, effect: "allow", principals: ["group:analysts"], columns: ["email", "phone"], masks: { email: { type: "hash" }, phone: { type: "email" } }, row_filter: null };
+const options = authoritativeColumnOptions([
+  field("email", 1),
+  field("phone", 2),
+  field("country", 3),
+]);
+const rule: PolicyRule = {
+  ordinal: 1,
+  effect: "allow",
+  principals: ["group:analysts"],
+  columns: ["email", "phone"],
+  masks: { email: { type: "hash" }, phone: { type: "email" } },
+  row_filter: null,
+};
 const meta = {
   title: "Workflows/Policy editor mask states",
   component: BulkMaskEditor,
-  args: { rule, options, supportedMasks: ["null", "redact", "hash", "email", "keep_last", "default"], readOnly: false, onApply: fn() },
+  args: {
+    rule,
+    options,
+    supportedMasks: ["null", "redact", "hash", "email", "keep_last", "default"],
+    readOnly: false,
+    onApply: fn(),
+  },
 } satisfies Meta<typeof BulkMaskEditor>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const MixedMasks: Story = {
-  play: async ({ canvas }) => { await expect(canvas.getByRole("button", { name: "Edit Hash mask" })).toBeVisible(); await expect(canvas.getByRole("button", { name: "Edit Mask email mask" })).toBeVisible(); },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Edit Hash mask" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Edit Mask email mask" })).toBeVisible();
+  },
 };
 
 export const InvalidMaskValue: Story = {
@@ -50,14 +75,26 @@ export const ReadOnly: Story = {
 const longLiteralPath = `["literal.dotted_${"深".repeat(1024)}"]`;
 const wideNames = [...Array.from({ length: 100 }, (_, index) => `field_${index}`), longLiteralPath];
 export const ReadOnlyWideMaskReview: Story = {
-  args: { readOnly: true, rule: { ...rule, columns: wideNames, masks: Object.fromEntries(wideNames.map(name => [name, { type: "hash" as const }])) } },
+  args: {
+    readOnly: true,
+    rule: {
+      ...rule,
+      columns: wideNames,
+      masks: Object.fromEntries(wideNames.map((name) => [name, { type: "hash" as const }])),
+    },
+  },
   play: async ({ canvas, canvasElement, args }) => {
     await expect(canvas.getByRole("button", { name: "Edit Hash mask" })).toBeDisabled();
     await userEvent.click(canvas.getByText("Review all 101 masked columns", { exact: true }));
-    await userEvent.type(canvas.getByRole("searchbox", { name: "Search masked columns" }), "literal.dotted");
+    await userEvent.type(
+      canvas.getByRole("searchbox", { name: "Search masked columns" }),
+      "literal.dotted",
+    );
     await expect(canvas.getByText("1 of 101 columns", { exact: true })).toBeVisible();
     await expect(canvasElement.querySelectorAll(".column-path-review code")).toHaveLength(1);
-    await expect(canvasElement.querySelector(".column-path-review code")?.textContent).toBe(longLiteralPath);
+    await expect(canvasElement.querySelector(".column-path-review code")?.textContent).toBe(
+      longLiteralPath,
+    );
     await expect(args.onApply).not.toHaveBeenCalled();
   },
 };

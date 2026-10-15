@@ -25,11 +25,7 @@ export function assetInventoryOptions(scope: string, search = "") {
 }
 
 /** Query cache owns pagination and cancellation; local state owns search input. */
-export function useAssetInventory(
-  client: QueryClient,
-  scope: string,
-  enabled: boolean,
-) {
+export function useAssetInventory(client: QueryClient, scope: string, enabled: boolean) {
   const [input, setInput] = useState({ scope, value: "", term: "" });
   const search = input.scope === scope ? input.value : "";
   const term = input.scope === scope ? input.term : "";
@@ -46,22 +42,20 @@ export function useAssetInventory(
     scope: string;
     data: InfiniteData<AssetPage>;
   } | null>(null);
-  if (lastSuccess.current?.scope !== scope) lastSuccess.current = null;
-  if (query.data && !query.isPlaceholderData)
-    lastSuccess.current = { scope, data: query.data };
+  useEffect(() => {
+    if (lastSuccess.current?.scope !== scope) lastSuccess.current = null;
+    if (query.data && !query.isPlaceholderData) lastSuccess.current = { scope, data: query.data };
+  }, [scope, query.data, query.isPlaceholderData]);
   // Keep useful results after a failed search, always within this login scope.
-  const data = query.data ?? lastSuccess.current?.data;
-  const assets = useMemo(
-    () => data?.pages.flatMap((page) => page.items) ?? [],
-    [data],
-  );
+  const data =
+    query.data ?? (lastSuccess.current?.scope === scope ? lastSuccess.current.data : undefined);
+  const assets = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
 
   useEffect(() => {
     const timer = window.setTimeout(
       () =>
         setInput((current) => {
-          if (current.scope !== scope || current.term === search.trim())
-            return current;
+          if (current.scope !== scope || current.term === search.trim()) return current;
           return { ...current, term: search.trim() };
         }),
       250,
@@ -96,6 +90,5 @@ export function useAssetInventory(
       lastSuccess.current = null;
       setInput({ scope, value: "", term: "" });
     },
-
   };
 }

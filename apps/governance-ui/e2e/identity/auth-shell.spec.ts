@@ -6,7 +6,9 @@ async function assertEdgeChallenge(page: Page, options: EdgeChallengeOptions) {
   await edgeChallengeApi(page, options);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
-  await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
+  await expect(
+    page.getByText("The browser or edge session expired. Sign in again to continue."),
+  ).toBeVisible();
   await expect(page.getByText("Use demo persona")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
   await expect(page.getByLabel("Find governed asset")).toHaveCount(0);
@@ -26,8 +28,20 @@ test.describe("signed-out governance shell", () => {
   });
 
   test("uses the configured SSO entry and hides local bootstrap", async ({ page }) => {
-    await signedOutApi(page, { oidc: { authority: "https://idp.example.invalid", client_id: "governance-ui", redirect_uri: "https://ui.example.invalid/auth/callback" } });
-    await page.route("**/auth/login", async (route) => route.fulfill({ status: 200, headers: { "content-type": "text/html" }, body: "<title>SSO redirect</title>" }));
+    await signedOutApi(page, {
+      oidc: {
+        authority: "https://idp.example.invalid",
+        client_id: "governance-ui",
+        redirect_uri: "https://ui.example.invalid/auth/callback",
+      },
+    });
+    await page.route("**/auth/login", async (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/html" },
+        body: "<title>SSO redirect</title>",
+      }),
+    );
     await page.goto("/");
 
     await expect(page.getByRole("button", { name: "Sign in with SSO" })).toBeVisible();
@@ -37,11 +51,11 @@ test.describe("signed-out governance shell", () => {
   });
 
   for (const [name, options] of [
-    ['HTML success response', {}],
-    ['HTML forbidden response', {status: 403}],
-    ['redirect to HTML challenge', {redirect: true}],
+    ["HTML success response", {}],
+    ["HTML forbidden response", { status: 403 }],
+    ["redirect to HTML challenge", { redirect: true }],
   ] as const) {
-    test(name + ' requires fresh sign-in', async ({page}) => {
+    test(name + " requires fresh sign-in", async ({ page }) => {
       await assertEdgeChallenge(page, options);
     });
   }
@@ -56,8 +70,14 @@ test.describe("signed-out governance shell", () => {
     expect(blockingViolations).toEqual([]);
   });
 
-  test("keeps signed-out actions inside the viewport at supported sizes and zoom", async ({ page }) => {
-    for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+  test("keeps signed-out actions inside the viewport at supported sizes and zoom", async ({
+    page,
+  }) => {
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]) {
       await page.setViewportSize(viewport);
       await page.goto("/");
       const login = page.getByRole("heading", { name: "Sign in to your workspace" });
@@ -77,7 +97,9 @@ test.describe("signed-out governance shell", () => {
       }
     }
 
-    await page.evaluate(() => { document.body.style.zoom = "2"; });
+    await page.evaluate(() => {
+      document.body.style.zoom = "2";
+    });
     const zoomedButton = page.getByRole("button", { name: "Sign in locally" });
     await expect(zoomedButton).toBeVisible();
     const zoomedBox = await zoomedButton.boundingBox();

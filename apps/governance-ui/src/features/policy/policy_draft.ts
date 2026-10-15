@@ -36,8 +36,7 @@ export function emptyPolicyDraft(editVersion = 0): PolicyDraft {
   };
 }
 
-const nextOrdinal = (rules: PolicyRule[]) =>
-  Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
+const nextOrdinal = (rules: PolicyRule[]) => Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
 const newRule = (ordinal: number): PolicyRule => ({
   ordinal,
   effect: "allow",
@@ -51,10 +50,7 @@ const newRule = (ordinal: number): PolicyRule => ({
 });
 
 /** One transition owns the draft, saved baseline, revision, and in-flight save. */
-export function reducePolicyDraft(
-  state: PolicyDraft,
-  action: PolicyDraftAction,
-): PolicyDraft {
+export function reducePolicyDraft(state: PolicyDraft, action: PolicyDraftAction): PolicyDraft {
   switch (action.type) {
     case "clear":
       return emptyPolicyDraft(state.editVersion + 1);
@@ -92,10 +88,7 @@ export function reducePolicyDraft(
         saved: action.submission.rules,
         revision: action.revision,
         pending: null,
-        status:
-          state.editVersion === action.submission.editVersion
-            ? "saved"
-            : "unsaved",
+        status: state.editVersion === action.submission.editVersion ? "saved" : "unsaved",
         errors: [],
       };
     case "failed":
@@ -103,14 +96,8 @@ export function reducePolicyDraft(
       return {
         ...state,
         pending: null,
-        status:
-          state.editVersion === action.submission.editVersion
-            ? "failed"
-            : "unsaved",
-        errors:
-          state.editVersion === action.submission.editVersion
-            ? action.errors
-            : [],
+        status: state.editVersion === action.submission.editVersion ? "failed" : "unsaved",
+        errors: state.editVersion === action.submission.editVersion ? action.errors : [],
       };
     case "cancelSave":
       return state.pending === action.submission
@@ -130,8 +117,7 @@ export function reducePolicyDraft(
           ...newRule(nextOrdinal(state.rules)),
           effect: "allow_all",
           name: "Allow all",
-          description:
-            "All authenticated readers receive all columns and rows without masks.",
+          description: "All authenticated readers receive all columns and rows without masks.",
           principals: ["*"],
           columns: ["*"],
         },
@@ -140,10 +126,7 @@ export function reducePolicyDraft(
     case "duplicate": {
       if (!state.rules[action.index]) return state;
       const duplicate = structuredClone(state.rules[action.index]);
-      rules = [
-        ...state.rules,
-        { ...duplicate, ordinal: nextOrdinal(state.rules) },
-      ];
+      rules = [...state.rules, { ...duplicate, ordinal: nextOrdinal(state.rules) }];
       break;
     }
     case "remove":
@@ -152,9 +135,7 @@ export function reducePolicyDraft(
       break;
     case "update":
       if (!state.rules[action.index]) return state;
-      rules = state.rules.map((rule, index) =>
-        index === action.index ? action.rule : rule,
-      );
+      rules = state.rules.map((rule, index) => (index === action.index ? action.rule : rule));
       break;
   }
   return {

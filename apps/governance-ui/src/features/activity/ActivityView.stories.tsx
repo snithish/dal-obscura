@@ -20,17 +20,19 @@ const observations: WorkspaceObservations = {
   data_plane: { status: "ready", reason: "Flight health probe succeeded" },
 };
 
-const events: AuditEvent[] = [{
-  id: "audit-1",
-  actor: "user:admin@example.com",
-  action: "asset.policy.replace",
-  resource_type: "asset",
-  resource_id: "asset-orders",
-  outcome: "success",
-  details: {},
-  correlation_id: "req-17",
-  created_at: "2026-09-21T08:00:00Z",
-}];
+const events: AuditEvent[] = [
+  {
+    id: "audit-1",
+    actor: "user:admin@example.com",
+    action: "asset.policy.replace",
+    resource_type: "asset",
+    resource_id: "asset-orders",
+    outcome: "success",
+    details: {},
+    correlation_id: "req-17",
+    created_at: "2026-09-21T08:00:00Z",
+  },
+];
 
 const data: ActivityData = { summary, observations, events, eventsNextCursor: null };
 
@@ -49,7 +51,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "Production activity and audit workflow with server-provided summary counts, measured data-plane observations, exact audit records, and filter controls. Fixtures are redacted and deterministic.",
+        component:
+          "Production activity and audit workflow with server-provided summary counts, measured data-plane observations, exact audit records, and filter controls. Fixtures are redacted and deterministic.",
       },
     },
   },
@@ -70,7 +73,9 @@ export const LoadingState: Story = {
   args: { loading: true, data: {} },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Loading activity" })).toBeVisible();
-    await expect(canvas.getByText("Checking the current workspace state and your capabilities.")).toBeVisible();
+    await expect(
+      canvas.getByText("Checking the current workspace state and your capabilities."),
+    ).toBeVisible();
   },
 };
 

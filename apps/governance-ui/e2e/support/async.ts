@@ -12,9 +12,15 @@ export function deferredResponse(): DeferredResponse {
   let startedResolve!: () => void;
   let completedResolve!: (request: Request) => void;
   let release!: () => void;
-  const started = new Promise<void>((resolve) => { startedResolve = resolve; });
-  const completed = new Promise<Request>((resolve) => { completedResolve = resolve; });
-  const released = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => {
+    startedResolve = resolve;
+  });
+  const completed = new Promise<Request>((resolve) => {
+    completedResolve = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   let tracked = false;
   function markStarted(page: Page, request: Request) {
     if (tracked) return;

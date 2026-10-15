@@ -11,28 +11,17 @@ export type SchemaPath = ApiSchemas["FieldPathResponse"];
 export type SchemaNode = ApiSchemas["SchemaNodeResponse"];
 export type AssetSchema = ApiSchemas["AssetSchemaResponse"];
 type WireRule = ApiSchemas["PolicyRuleSchema"];
-export type PolicyRule = Required<
-  Pick<WireRule, "principals" | "columns" | "masks" | "effect">
-> &
+export type PolicyRule = Required<Pick<WireRule, "principals" | "columns" | "masks" | "effect">> &
   Partial<Pick<WireRule, "name" | "description" | "when">> & {
     ordinal: number;
     row_filter: string | null;
   };
 export type Asset = Pick<
   ApiSchemas["AssetDetailResponse"],
-  | "id"
-  | "catalog"
-  | "name"
-  | "backend"
-  | "table_identifier"
-  | "owners"
-  | "schema_fields"
+  "id" | "catalog" | "name" | "backend" | "table_identifier" | "owners" | "schema_fields"
 > &
   Partial<
-    Pick<
-      ApiSchemas["AssetDetailResponse"],
-      "revision" | "policy_revision" | "policy_status"
-    >
+    Pick<ApiSchemas["AssetDetailResponse"], "revision" | "policy_revision" | "policy_status">
   > & { schema?: AssetSchema; policy_rules?: PolicyRule[] };
 export type AssetPage = { items: Asset[]; next_cursor: string | null };
 export type Preview = Pick<
@@ -68,10 +57,9 @@ export type CatalogDiagnostic = ApiSchemas["CatalogDiagnosticResponse"];
 export type AssetGrant = ApiSchemas["AssetGrantResponse"];
 export type AssetCapability = ApiSchemas["AssetCapabilityResponse"];
 export type AssetAccess = ApiSchemas["AssetAccessResponse"];
-export type RuntimeSettings = Omit<
-  ApiSchemas["RuntimeSettingsResponse"],
-  "revision"
-> & { revision?: number };
+export type RuntimeSettings = Omit<ApiSchemas["RuntimeSettingsResponse"], "revision"> & {
+  revision?: number;
+};
 export type PluginDescriptor = ApiSchemas["PluginDescriptorResponse"];
 export type PluginState = ApiSchemas["PluginStateResponse"];
 export type PluginPair = ApiSchemas["PluginPairResponse"];
@@ -101,8 +89,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (method && !["GET", "HEAD", "OPTIONS"].includes(method) && csrf) {
     headers.set("x-csrf-token", csrf);
   }
-  if (init?.body && !headers.has("content-type"))
-    headers.set("content-type", "application/json");
+  if (init?.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   const response = await fetch(path, {
     ...init,
     credentials: "same-origin",
@@ -143,9 +130,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ? (body as Record<string, unknown>)
         : {};
     const errorEnvelope =
-      envelope.error &&
-      typeof envelope.error === "object" &&
-      !Array.isArray(envelope.error)
+      envelope.error && typeof envelope.error === "object" && !Array.isArray(envelope.error)
         ? (envelope.error as Record<string, unknown>)
         : {};
     const detail =
@@ -156,8 +141,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
           : `Request failed (${response.status})`;
     const failure = new Error(detail) as ApiFailure;
     failure.status = response.status;
-    if (typeof errorEnvelope.code === "string")
-      failure.code = errorEnvelope.code;
+    if (typeof errorEnvelope.code === "string") failure.code = errorEnvelope.code;
     const requestId =
       typeof errorEnvelope.request_id === "string"
         ? errorEnvelope.request_id
@@ -166,22 +150,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (typeof errorEnvelope.current_revision === "number")
       failure.currentRevision = errorEnvelope.current_revision;
     if (Array.isArray(errorEnvelope.field_errors)) {
-      failure.fieldErrors = errorEnvelope.field_errors.flatMap(
-        (item): ApiFieldError[] => {
-          if (!item || typeof item !== "object" || Array.isArray(item))
-            return [];
-          const value = item as Record<string, unknown>;
-          if (
-            typeof value.field !== "string" ||
-            typeof value.message !== "string" ||
-            typeof value.type !== "string"
-          )
-            return [];
-          return [
-            { field: value.field, message: value.message, type: value.type },
-          ];
-        },
-      );
+      failure.fieldErrors = errorEnvelope.field_errors.flatMap((item): ApiFieldError[] => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+        const value = item as Record<string, unknown>;
+        if (
+          typeof value.field !== "string" ||
+          typeof value.message !== "string" ||
+          typeof value.type !== "string"
+        )
+          return [];
+        return [{ field: value.field, message: value.message, type: value.type }];
+      });
     }
     throw failure;
   }
@@ -191,49 +170,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const controlPlane = {
   startLogin: () => {
     try {
-      window.sessionStorage.setItem(
-        "dal_obscura_post_login_hash",
-        window.location.hash,
-      );
+      window.sessionStorage.setItem("dal_obscura_post_login_hash", window.location.hash);
     } catch {
       // Private browsing policies may deny sessionStorage; login still works.
     }
     window.location.assign("/auth/login");
   },
-  getSession: (signal?: AbortSignal) =>
-    request<Session>("/v1/session", { signal }),
+  getSession: (signal?: AbortSignal) => request<Session>("/v1/session", { signal }),
   getUiAuthConfig: (signal?: AbortSignal) =>
     request<ApiSchemas["UiAuthConfigResponse"]>("/v1/ui-auth-config", {
       signal,
     }),
   getSessionOptions: async (signal?: AbortSignal) => {
-    const options = await request<ApiSchemas["SessionOptionsResponse"]>(
-      "/v1/session/options",
-      { signal },
-    );
+    const options = await request<ApiSchemas["SessionOptionsResponse"]>("/v1/session/options", {
+      signal,
+    });
     return { ...options, oidc: options.oidc ?? null } satisfies SessionOptions;
   },
   bootstrapLogin: (token: string, signal?: AbortSignal) =>
-    request<ApiSchemas["AuthenticationMutationResponse"]>(
-      "/v1/session/bootstrap",
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}` },
-        signal,
-      },
-    ),
+    request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/session/bootstrap", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      signal,
+    }),
   logout: (signal?: AbortSignal) =>
     request<ApiSchemas["LogoutResponse"]>("/v1/logout", {
       method: "POST",
       signal,
     }),
   listAssetPage: async (
-    params: {
-      limit?: number;
-      cursor?: string;
-      search?: string;
-      signal?: AbortSignal;
-    } = {},
+    params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {},
   ) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
@@ -263,10 +229,7 @@ export const controlPlane = {
     return { ...access, issuer: access.issuer ?? null } satisfies AssetAccess;
   },
   listGrants: (assetId: string, signal?: AbortSignal) =>
-    request<ApiSchemas["AssetGrantResponse"][]>(
-      `${assetPath(assetId)}/grants`,
-      { signal },
-    ),
+    request<ApiSchemas["AssetGrantResponse"][]>(`${assetPath(assetId)}/grants`, { signal }),
   saveOwners: (
     assetId: string,
     owners: string[],
@@ -277,9 +240,7 @@ export const controlPlane = {
       method: "PUT",
       body: JSON.stringify({
         owners,
-        ...(expectedRevision === undefined
-          ? {}
-          : { expected_revision: expectedRevision }),
+        ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }),
       }),
       signal,
     }),
@@ -293,9 +254,7 @@ export const controlPlane = {
       method: "PUT",
       body: JSON.stringify({
         grants,
-        ...(expectedRevision === undefined
-          ? {}
-          : { expected_revision: expectedRevision }),
+        ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }),
       }),
       signal,
     }),
@@ -363,20 +322,13 @@ export const controlPlane = {
     } satisfies CatalogDiagnostic;
   },
   getRuntimeSettings: (signal?: AbortSignal) =>
-    request<ApiSchemas["RuntimeSettingsResponse"] | null>(
-      "/v1/settings/runtime",
-      { signal },
-    ),
+    request<ApiSchemas["RuntimeSettingsResponse"] | null>("/v1/settings/runtime", { signal }),
   getAuthProviders: (signal?: AbortSignal) =>
-    request<ApiSchemas["AuthProviderResponse"][]>(
-      "/v1/settings/auth-providers",
-      { signal },
-    ),
+    request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", { signal }),
   getAuthProviderRevision: (signal?: AbortSignal) =>
-    request<ApiSchemas["AuthProviderRevisionResponse"]>(
-      "/v1/settings/auth-providers/revision",
-      { signal },
-    ),
+    request<ApiSchemas["AuthProviderRevisionResponse"]>("/v1/settings/auth-providers/revision", {
+      signal,
+    }),
   saveAuthProviders: (
     providers: Array<{
       ordinal: number;
@@ -387,24 +339,16 @@ export const controlPlane = {
     expectedRevision?: number,
     signal?: AbortSignal,
   ) =>
-    request<ApiSchemas["AuthProviderResponse"][]>(
-      "/v1/settings/auth-providers",
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          providers,
-          ...(expectedRevision === undefined
-            ? {}
-            : { expected_revision: expectedRevision }),
-        }),
-        signal,
-      },
-    ),
+    request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", {
+      method: "PUT",
+      body: JSON.stringify({
+        providers,
+        ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }),
+      }),
+      signal,
+    }),
   listPlugins: async (signal?: AbortSignal) => {
-    const plugins = await request<ApiSchemas["PluginListResponse"]>(
-      "/v1/plugins",
-      { signal },
-    );
+    const plugins = await request<ApiSchemas["PluginListResponse"]>("/v1/plugins", { signal });
     return {
       ...plugins,
       states: plugins.states.map((state) => ({
@@ -433,9 +377,10 @@ export const controlPlane = {
       signal,
     }),
   getObservations: async (signal?: AbortSignal) => {
-    const observations = await request<
-      ApiSchemas["WorkspaceObservationsResponse"]
-    >("/v1/workspace/observations", { signal });
+    const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>(
+      "/v1/workspace/observations",
+      { signal },
+    );
     return observations satisfies WorkspaceObservations;
   },
   saveCatalog: (
@@ -445,20 +390,15 @@ export const controlPlane = {
     expectedRevision?: number,
     signal?: AbortSignal,
   ) =>
-    request<ApiSchemas["CatalogMutationResponse"]>(
-      `/v1/catalogs/${encodeURIComponent(name)}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          plugin_id: pluginId,
-          options,
-          ...(expectedRevision === undefined
-            ? {}
-            : { expected_revision: expectedRevision }),
-        }),
-        signal,
-      },
-    ),
+    request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        plugin_id: pluginId,
+        options,
+        ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }),
+      }),
+      signal,
+    }),
   saveAsset: (
     catalog: string,
     target: string,
@@ -485,26 +425,20 @@ export const controlPlane = {
     revokeExistingTokens: boolean,
     signal?: AbortSignal,
   ) =>
-    request<ApiSchemas["PolicyMutationResponse"]>(
-      `${assetPath(assetId)}/policy`,
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          expected_revision: expectedRevision,
-          rules,
-          revoke_existing_tokens: revokeExistingTokens,
-        }),
-        signal,
-      },
-    ),
+    request<ApiSchemas["PolicyMutationResponse"]>(`${assetPath(assetId)}/policy`, {
+      method: "PUT",
+      body: JSON.stringify({
+        expected_revision: expectedRevision,
+        rules,
+        revoke_existing_tokens: revokeExistingTokens,
+      }),
+      signal,
+    }),
   revokeAssetTokens: (assetId: string, signal?: AbortSignal) =>
-    request<ApiSchemas["AssetTokenRevocationResponse"]>(
-      `${assetPath(assetId)}/tickets/revoke`,
-      {
-        method: "POST",
-        signal,
-      },
-    ),
+    request<ApiSchemas["AssetTokenRevocationResponse"]>(`${assetPath(assetId)}/tickets/revoke`, {
+      method: "POST",
+      signal,
+    }),
   saveRuntimeSettings: (settings: RuntimeSettings, signal?: AbortSignal) =>
     request<ApiSchemas["RuntimeSettingsResponse"]>("/v1/settings/runtime", {
       method: "PUT",
@@ -513,21 +447,16 @@ export const controlPlane = {
         max_tickets: settings.max_tickets,
         max_ticket_exchanges: settings.max_ticket_exchanges,
         path_rules: settings.path_rules,
-        ...(settings.revision === undefined
-          ? {}
-          : { expected_revision: settings.revision }),
+        ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }),
       }),
       signal,
     }),
   attributeCatalog: async (assetId: string, signal?: AbortSignal) => {
-    const data = await request<AttributeProvider[]>(
-      `${assetPath(assetId)}/identity-attributes`,
-      { signal },
-    );
+    const data = await request<AttributeProvider[]>(`${assetPath(assetId)}/identity-attributes`, {
+      signal,
+    });
     if (!Array.isArray(data))
-      throw new Error(
-        "Identity attribute metadata is unavailable. Refresh to retry.",
-      );
+      throw new Error("Identity attribute metadata is unavailable. Refresh to retry.");
     return data;
   },
   previewAttributeMapping: (
@@ -565,9 +494,7 @@ export const controlPlane = {
     return {
       decision: raw.decision,
       allowed_columns: raw.allowed_columns,
-      masks: Object.fromEntries(
-        raw.masks.map((mask) => [mask.column, { type: mask.type }]),
-      ),
+      masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
       row_filter: raw.row_filter ?? null,
       policy_revision: raw.policy_revision,
       status: "completed",
@@ -586,21 +513,8 @@ function readCookie(name: string): string | undefined {
     ?.slice(prefix.length);
 }
 
-function normalizeAsset(asset: Asset): Asset {
-  if (
-    typeof asset.name !== "string" ||
-    !asset.name ||
-    !isStringArray(asset.owners) ||
-    !Array.isArray(asset.schema_fields)
-  )
-    throw new Error("Invalid asset response.");
-  return asset;
-}
-
-function normalizeInventoryAsset(
-  asset: ApiSchemas["AssetInventoryResponse"],
-): Asset {
-  return normalizeAsset({
+function normalizeInventoryAsset(asset: ApiSchemas["AssetInventoryResponse"]): Asset {
+  return {
     id: asset.id,
     catalog: asset.catalog,
     name: asset.name,
@@ -610,11 +524,11 @@ function normalizeInventoryAsset(
     schema_fields: [],
     policy_status: asset.policy_status,
     policy_revision: asset.policy_revision,
-  });
+  };
 }
 
 function normalizeDetailAsset(asset: ApiSchemas["AssetDetailResponse"]): Asset {
-  return normalizeAsset({
+  return {
     id: asset.id,
     revision: asset.revision,
     policy_revision: asset.policy_revision,
@@ -624,138 +538,20 @@ function normalizeDetailAsset(asset: ApiSchemas["AssetDetailResponse"]): Asset {
     table_identifier: asset.table_identifier,
     owners: asset.owners,
     policy_status: asset.policy_status,
-    schema_fields: asset.schema_fields.map((field) => {
-      if (
-        typeof field.name !== "string" ||
-        typeof field.type !== "string" ||
-        typeof field.nullable !== "boolean"
-      )
-        throw new Error("Invalid schema field response.");
-      return { name: field.name, type: field.type, nullable: field.nullable };
-    }),
+    schema_fields: asset.schema_fields,
     policy_rules: asset.policy_rules.map(normalizePolicyRule),
-  });
-}
-
-function normalizePolicyRule(
-  value: ApiSchemas["AssetDetailResponse"]["policy_rules"][number],
-  index: number,
-): PolicyRule {
-  const rule = value as Record<string, unknown>;
-  const effect = rule.effect;
-  if (effect !== "allow" && effect !== "allow_all")
-    throw new Error(`Asset policy rule ${index + 1} has unsupported effect.`);
-  if (!Number.isInteger(rule.ordinal))
-    throw new Error(`Asset policy rule ${index + 1} has invalid ordinal.`);
-  if (!isStringArray(rule.principals) || !isStringArray(rule.columns))
-    throw new Error(
-      `Asset policy rule ${index + 1} has invalid principal or column selections.`,
-    );
-  if (rule.row_filter !== null && typeof rule.row_filter !== "string")
-    throw new Error(`Asset policy rule ${index + 1} has invalid row filter.`);
-  if (
-    rule.masks === null ||
-    typeof rule.masks !== "object" ||
-    Array.isArray(rule.masks)
-  )
-    throw new Error(`Asset policy rule ${index + 1} has invalid masks.`);
-  if (
-    rule.when === null ||
-    typeof rule.when !== "object" ||
-    Array.isArray(rule.when)
-  )
-    throw new Error(`Asset policy rule ${index + 1} has invalid conditions.`);
-
-  const supportedMasks: Mask["type"][] = [
-    "null",
-    "redact",
-    "hash",
-    "email",
-    "keep_last",
-    "default",
-  ];
-  const masks = Object.fromEntries(
-    Object.entries(rule.masks).map(([field, rawMask]) => {
-      if (
-        rawMask === null ||
-        typeof rawMask !== "object" ||
-        Array.isArray(rawMask)
-      )
-        throw new Error(
-          `Asset policy rule ${index + 1} has invalid mask for ${field}.`,
-        );
-      const mask = rawMask as Record<string, unknown>;
-      if (
-        typeof mask.type !== "string" ||
-        !supportedMasks.includes(mask.type as Mask["type"])
-      )
-        throw new Error(
-          `Asset policy rule ${index + 1} has unsupported mask for ${field}.`,
-        );
-      const scalar = mask.value;
-      if (
-        scalar !== undefined &&
-        scalar !== null &&
-        !["string", "number", "boolean"].includes(typeof scalar)
-      )
-        throw new Error(
-          `Asset policy rule ${index + 1} has invalid mask value for ${field}.`,
-        );
-      const exemptions = mask.exempt_principals;
-      const validExemptions =
-        exemptions === undefined ||
-        (isStringArray(exemptions) &&
-          exemptions.every(
-            (token) =>
-              token.trim() &&
-              token === token.trim() &&
-              token !== "*" &&
-              token.toLowerCase() !== "everyone" &&
-              (!token.startsWith("group:") ||
-                (token.slice(6).trim() &&
-                  !["*", "everyone"].includes(token.slice(6).toLowerCase()) &&
-                  !/\s/.test(token))),
-          ));
-      if (!validExemptions)
-        throw new Error(
-          `Asset policy rule ${index + 1} has invalid mask exemptions for ${field}.`,
-        );
-      return [
-        field,
-        {
-          type: mask.type as Mask["type"],
-          ...(scalar === undefined ? {} : { value: scalar as Mask["value"] }),
-          ...(exemptions?.length
-            ? { exempt_principals: [...new Set(exemptions)].sort() }
-            : {}),
-        },
-      ];
-    }),
-  );
-  const when: Record<string, string | string[]> = {};
-  for (const [claim, condition] of Object.entries(rule.when)) {
-    if (typeof condition === "string") when[claim] = condition;
-    else if (isStringArray(condition)) when[claim] = condition;
-    else
-      throw new Error(
-        `Asset policy rule ${index + 1} has invalid condition for ${claim}.`,
-      );
-  }
-  return {
-    ordinal: rule.ordinal as number,
-    effect,
-    name: typeof rule.name === "string" ? rule.name : "",
-    description: typeof rule.description === "string" ? rule.description : "",
-    principals: rule.principals,
-    columns: rule.columns,
-    masks,
-    row_filter: rule.row_filter,
-    when,
   };
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
+// The generated wire schema is authoritative; only supply editor defaults here.
+function normalizePolicyRule(rule: WireRule, index: number): PolicyRule {
+  return {
+    ...rule,
+    ordinal: rule.ordinal ?? index,
+    principals: rule.principals ?? [],
+    columns: rule.columns ?? [],
+    masks: rule.masks ?? {},
+    row_filter: rule.row_filter ?? null,
+    when: rule.when ?? {},
+  };
 }

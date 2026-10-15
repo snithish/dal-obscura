@@ -36,3 +36,24 @@ For UX changes, inspect real rendered states, keyboard focus, accessibility and
 responsive layouts. Keep before/after review captures in `docs/ui-review/`, separate
 from correctness tests. Research established patterns before substantial redesigns;
 apply only patterns that fit governed data and identity authoring.
+
+## Review and recovery
+
+Run `pnpm --dir apps/governance-ui format` before review. The UI check includes
+Biome formatting with a line width of 100 and two-space indentation for JavaScript,
+TypeScript, JSX/TSX, JSON and CSS. Lint rules and import assists are disabled so
+the gate only checks formatting. Markdown/MDX, YAML and HTML are outside the
+format gate; HTML support remains experimental. Generated OpenAPI and client types
+keep their generator's formatting. The [Biome configuration](../apps/governance-ui/biome.json)
+owns file selection and output exclusions. Adapt wire values only where editor
+state needs concrete defaults; the generated schema owns the response contract.
+
+A render failure clears private queries and invalidates pending session work before
+reconnection. Recovery reloads saved server state and warns that unsaved edits may
+be lost. StrictMode and browser stories exercise session cleanup and remounts.
+
+The production budget counts gzip bytes across all JavaScript chunks, including
+lazy routes. Its allowance leaves about ten percent above the reviewed 200 KiB
+baseline for routine changes. It remains a build failure when exceeded. The
+[budget check](../apps/governance-ui/scripts/check-budgets.mjs) owns the limits.
+A budget increase is a size allowance, not evidence of faster loading.

@@ -2,7 +2,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "../support/fixtures";
 
-test("administrator management screens stay within the page at supported sizes", async ({ page }) => {
+test("administrator management screens stay within the page at supported sizes", async ({
+  page,
+}) => {
   await authenticatedApi(page, {
     admin: true,
     configuredSettings: true,
@@ -15,7 +17,11 @@ test("administrator management screens stay within the page at supported sizes",
     ["#connections", "Catalog connections"],
     ["#settings", "Runtime and identity"],
   ] as const;
-  for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1440, height: 900 },
+  ]) {
     await page.setViewportSize(viewport);
     for (const [hash, heading] of screens) {
       await page.goto(`/${hash}`);
@@ -24,19 +30,27 @@ test("administrator management screens stay within the page at supported sizes",
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth,
       }));
-      expect(dimensions.documentWidth, `${hash} at ${viewport.width}px page overflow`).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+      expect(
+        dimensions.documentWidth,
+        `${hash} at ${viewport.width}px page overflow`,
+      ).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
     }
   }
 
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const [hash, heading] of screens) {
     await page.goto(`/${hash}`);
-    await page.evaluate(() => { document.body.style.zoom = "2"; });
+    await page.evaluate(() => {
+      document.body.style.zoom = "2";
+    });
     const zoomedDimensions = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: document.documentElement.clientWidth,
     }));
-    expect(zoomedDimensions.documentWidth, `${hash} at 200% zoom page overflow`).toBeLessThanOrEqual(zoomedDimensions.viewportWidth + 1);
+    expect(
+      zoomedDimensions.documentWidth,
+      `${hash} at 200% zoom page overflow`,
+    ).toBeLessThanOrEqual(zoomedDimensions.viewportWidth + 1);
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   }
 });
@@ -88,20 +102,36 @@ test("administrator access management submits owner and grant changes", async ({
   await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "orders", exact: true }).click();
   await page.getByRole("tab", { name: "Access" }).click();
-  await expect(page.getByRole("heading", { name: "Owners and delegated capabilities" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Owners and delegated capabilities" }),
+  ).toBeVisible();
 
   await page.getByLabel("Owner principals").fill("alex@example.invalid, steward@example.invalid");
-  const owners = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/owners"));
+  const owners = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().endsWith("/owners"),
+  );
   await page.getByRole("button", { name: "Save owners" }).click();
-  expect((await owners).postDataJSON()).toEqual({ expected_revision: 1, owners: ["alex@example.invalid", "steward@example.invalid"] });
+  expect((await owners).postDataJSON()).toEqual({
+    expected_revision: 1,
+    owners: ["alex@example.invalid", "steward@example.invalid"],
+  });
   await expect(page.getByText("Owners updated.")).toBeVisible();
 
   await page.getByRole("button", { name: "Add capability" }).click();
   await page.getByLabel("Grant principal 1").fill("group:data-stewards");
-  const grants = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/grants"));
+  const grants = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().endsWith("/grants"),
+  );
   await page.getByRole("button", { name: "Save capabilities" }).click();
-  expect((await grants).postDataJSON()).toEqual({ expected_revision: 1, grants: [{ principal: "group:data-stewards", capability: "read" }] });
-  await expect(page.getByText("Delegated capabilities updated. Changes take effect on the next authorized request.")).toBeVisible();
+  expect((await grants).postDataJSON()).toEqual({
+    expected_revision: 1,
+    grants: [{ principal: "group:data-stewards", capability: "read" }],
+  });
+  await expect(
+    page.getByText(
+      "Delegated capabilities updated. Changes take effect on the next authorized request.",
+    ),
+  ).toBeVisible();
 });
 
 test("administrator settings submits staged runtime changes", async ({ page }) => {
@@ -111,13 +141,23 @@ test("administrator settings submits staged runtime changes", async ({ page }) =
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("11");
 
   await page.getByLabel("Ticket TTL (seconds)").fill("30");
-  const saved = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/settings/runtime"));
+  const saved = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().endsWith("/settings/runtime"),
+  );
   await page.getByRole("button", { name: "Save runtime settings" }).click();
-  expect((await saved).postDataJSON()).toEqual({ expected_revision: 1, ticket_ttl_seconds: 30, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }] });
+  expect((await saved).postDataJSON()).toEqual({
+    expected_revision: 1,
+    ticket_ttl_seconds: 30,
+    max_tickets: 64,
+    max_ticket_exchanges: 2,
+    path_rules: [{ root: "file:///fresh-settings" }],
+  });
   await expect(page.getByText("Runtime settings saved to live configuration.")).toBeVisible();
 });
 
-test("administrator catalogs save, diagnose, and discover through admitted plugins", async ({ page }) => {
+test("administrator catalogs save, diagnose, and discover through admitted plugins", async ({
+  page,
+}) => {
   await authenticatedApi(page, { admin: true, configuredConnections: true });
   await page.goto("/#connections");
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
@@ -127,39 +167,66 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await expect(page.getByText("Catalog reachable · 1 tables")).toBeVisible();
   await page.getByRole("button", { name: "Discover tables" }).click();
   await expect(page.getByRole("cell", { name: "orders" })).toBeVisible();
-  const governRequest = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith("/v1/assets/analytics/orders"));
+  const governRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "PUT" && request.url().endsWith("/v1/assets/analytics/orders"),
+  );
   await page.getByRole("button", { name: "Govern table" }).click();
-  await expect((await governRequest).postDataJSON()).toMatchObject({ table_identifier: "demo.orders" });
+  await expect((await governRequest).postDataJSON()).toMatchObject({
+    table_identifier: "demo.orders",
+  });
 
   await page.getByLabel("Name").fill("warehouse");
   await page.getByLabel("Catalog URI").fill("https://warehouse.example");
   await page.getByLabel("Password secret reference").fill("catalog/warehouse");
-  const saved = page.waitForRequest(request => request.method() === "PUT" && request.url().endsWith("/catalogs/warehouse"));
+  const saved = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().endsWith("/catalogs/warehouse"),
+  );
   await page.getByRole("button", { name: "Save connection" }).click();
-  expect((await saved).postDataJSON()).toEqual({ plugin_id: "synthetic.catalog.iceberg", options: { uri: "https://warehouse.example", password: { secret: "catalog/warehouse", scope: "catalog:warehouse" } } });
-  await expect(page.getByText("Connection saved. Discovery remains bounded to this configured catalog.")).toBeVisible();
+  expect((await saved).postDataJSON()).toEqual({
+    plugin_id: "synthetic.catalog.iceberg",
+    options: {
+      uri: "https://warehouse.example",
+      password: { secret: "catalog/warehouse", scope: "catalog:warehouse" },
+    },
+  });
+  await expect(
+    page.getByText("Connection saved. Discovery remains bounded to this configured catalog."),
+  ).toBeVisible();
 });
 
-test("administrator chooses an admitted table format before governing discovery", async ({ page }) => {
+test("administrator chooses an admitted table format before governing discovery", async ({
+  page,
+}) => {
   await authenticatedApi(page, { admin: true, configuredConnections: true, multipleFormats: true });
   await page.goto("/#connections");
   await page.getByRole("button", { name: "Discover tables" }).click();
   await expect(page.getByLabel("Selected table format")).toBeVisible();
 
   await page.getByRole("button", { name: "Govern table" }).click();
-  await expect(page.getByText("Select the table format explicitly before governing a discovered table.")).toBeVisible();
+  await expect(
+    page.getByText("Select the table format explicitly before governing a discovered table."),
+  ).toBeVisible();
 
   await page.getByLabel("Selected table format").selectOption("synthetic.table.delta");
-  const governRequest = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith("/v1/assets/analytics/orders"));
+  const governRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "PUT" && request.url().endsWith("/v1/assets/analytics/orders"),
+  );
   await page.getByRole("button", { name: "Govern table" }).click();
-  await expect((await governRequest).postDataJSON()).toMatchObject({ backend: "synthetic.table.delta", table_identifier: "demo.orders" });
+  await expect((await governRequest).postDataJSON()).toMatchObject({
+    backend: "synthetic.table.delta",
+    table_identifier: "demo.orders",
+  });
 });
 
 test("management refresh failure preserves the loaded connections view", async ({ page }) => {
   await authenticatedApi(page, { admin: true, configuredConnections: true });
   await page.goto("/#connections");
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
-  await page.route("**/v1/catalogs", async (route) => route.fulfill({ status: 503, json: { detail: "catalog backend unavailable" } }));
+  await page.route("**/v1/catalogs", async (route) =>
+    route.fulfill({ status: 503, json: { detail: "catalog backend unavailable" } }),
+  );
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
@@ -169,30 +236,51 @@ test("management refresh failure preserves the loaded connections view", async (
 });
 
 test("administrator plugin lifecycle applies disable and retire transitions", async ({ page }) => {
-  await authenticatedApi(page, { admin: true, configuredConnections: true, configuredLifecycle: true });
+  await authenticatedApi(page, {
+    admin: true,
+    configuredConnections: true,
+    configuredLifecycle: true,
+  });
   await page.goto("/#connections");
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
 
-  const catalogPlugin = page.locator("article.plugin-card").filter({ hasText: "Synthetic Iceberg Catalog" });
-  await catalogPlugin.getByLabel("Lifecycle for Synthetic Iceberg Catalog").selectOption("disabled");
+  const catalogPlugin = page
+    .locator("article.plugin-card")
+    .filter({ hasText: "Synthetic Iceberg Catalog" });
+  await catalogPlugin
+    .getByLabel("Lifecycle for Synthetic Iceberg Catalog")
+    .selectOption("disabled");
   await catalogPlugin.getByRole("button", { name: "Apply" }).click();
-  await expect(page.getByText("Synthetic Iceberg Catalog lifecycle is now disabled.")).toBeVisible();
-  await expect(catalogPlugin.getByLabel("Lifecycle for Synthetic Iceberg Catalog")).toHaveValue("disabled");
+  await expect(
+    page.getByText("Synthetic Iceberg Catalog lifecycle is now disabled."),
+  ).toBeVisible();
+  await expect(catalogPlugin.getByLabel("Lifecycle for Synthetic Iceberg Catalog")).toHaveValue(
+    "disabled",
+  );
 
-  const formatPlugin = page.locator("article.plugin-card").filter({ hasText: "Synthetic Iceberg" }).filter({ hasNotText: "Catalog" });
+  const formatPlugin = page
+    .locator("article.plugin-card")
+    .filter({ hasText: "Synthetic Iceberg" })
+    .filter({ hasNotText: "Catalog" });
   await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("revoked");
   await formatPlugin.getByRole("button", { name: "Apply" }).click();
   await expect(page.getByText("Synthetic Iceberg lifecycle is now revoked.")).toBeVisible();
   await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("removed");
   await expect(formatPlugin.getByRole("button", { name: "Apply" })).toBeEnabled();
-  const removalResponse = page.waitForResponse((response) => response.url().includes("/v1/plugins/table_format/synthetic.table.iceberg/lifecycle") && response.request().method() === "PATCH");
+  const removalResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/v1/plugins/table_format/synthetic.table.iceberg/lifecycle") &&
+      response.request().method() === "PATCH",
+  );
   await formatPlugin.getByRole("button", { name: "Apply" }).click();
   await page.getByRole("button", { name: "Remove plugin", exact: true }).click();
   await expect((await removalResponse).status()).toBe(200);
   await expect(page.getByText("Synthetic Iceberg lifecycle is now removed.")).toBeVisible();
 });
 
-test("administrator activity filters and paginates the permitted audit records", async ({ page }) => {
+test("administrator activity filters and paginates the permitted audit records", async ({
+  page,
+}) => {
   await authenticatedApi(page, { admin: true, configuredAudit: true });
   await page.goto("/#activity");
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();

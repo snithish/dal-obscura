@@ -2,7 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from "react";
 import { Button, Group, Modal, Text } from "@mantine/core";
 
-type Confirmation = { title: string; message: string; confirmLabel: string; cancelLabel?: string; destructive?: boolean };
+type Confirmation = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+};
 type Request = Confirmation & { owner: symbol; resolve: (confirmed: boolean) => void };
 const Context = createContext<{
   ask: (options: Confirmation, owner: symbol) => Promise<boolean>;
@@ -29,21 +35,47 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
       setOpened(true);
     });
   }, []);
-  const cancel = useCallback((owner: symbol) => {
-    if (pending.current?.owner === owner) settle(false);
-  }, [settle]);
-  useEffect(() => () => { pending.current?.resolve(false); pending.current = null; }, []);
-  return <Context.Provider value={{ ask, cancel }}>
-    {children}
-    <Modal opened={opened} onClose={() => settle(false)} title={request?.title}
-      centered size="md" transitionProps={{ duration: 0 }} closeButtonProps={{ "aria-label": "Cancel action" }}>
-      <Text>{request?.message}</Text>
-      <Group justify="flex-end" mt="lg">
-        <Button variant="default" data-autofocus onClick={() => settle(false)}>{request?.cancelLabel ?? "Cancel"}</Button>
-        <Button variant={request?.destructive ? "default" : "filled"} className={request?.destructive ? "danger" : undefined} onClick={() => settle(true)}>{request?.confirmLabel}</Button>
-      </Group>
-    </Modal>
-  </Context.Provider>;
+  const cancel = useCallback(
+    (owner: symbol) => {
+      if (pending.current?.owner === owner) settle(false);
+    },
+    [settle],
+  );
+  useEffect(
+    () => () => {
+      pending.current?.resolve(false);
+      pending.current = null;
+    },
+    [],
+  );
+  return (
+    <Context.Provider value={{ ask, cancel }}>
+      {children}
+      <Modal
+        opened={opened}
+        onClose={() => settle(false)}
+        title={request?.title}
+        centered
+        size="md"
+        transitionProps={{ duration: 0 }}
+        closeButtonProps={{ "aria-label": "Cancel action" }}
+      >
+        <Text>{request?.message}</Text>
+        <Group justify="flex-end" mt="lg">
+          <Button variant="default" data-autofocus onClick={() => settle(false)}>
+            {request?.cancelLabel ?? "Cancel"}
+          </Button>
+          <Button
+            variant={request?.destructive ? "default" : "filled"}
+            className={request?.destructive ? "danger" : undefined}
+            onClick={() => settle(true)}
+          >
+            {request?.confirmLabel}
+          </Button>
+        </Group>
+      </Modal>
+    </Context.Provider>
+  );
 }
 
 export function useConfirmation() {

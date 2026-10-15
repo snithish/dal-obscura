@@ -9,7 +9,9 @@ import {
 } from "./policy_draft";
 
 export function usePolicyDraft(initial: Pick<PolicyDraft, "rules" | "revision">) {
-  const [state, setState] = useState(() => reducePolicyDraft(emptyPolicyDraft(), { type: "load", ...initial }));
+  const [state, setState] = useState(() =>
+    reducePolicyDraft(emptyPolicyDraft(), { type: "load", ...initial }),
+  );
   const current = useRef(state);
   function dispatch(action: PolicyDraftAction) {
     const next = reducePolicyDraft(current.current, action);

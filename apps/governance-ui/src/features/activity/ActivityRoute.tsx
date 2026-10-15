@@ -19,7 +19,16 @@ export function ActivityRoute() {
     queryClient.setQueryData(filterKey, next);
     setFilters(next);
   }
-  return <ActivityView data={query.data ?? {}} loading={query.loading} error={query.error}
-    onReload={() => void query.refresh()} onLoadMore={query.loadMore} auditLoading={query.auditLoading}
-    filters={filters} onFiltersChange={changeFilters} />;
+  return (
+    <ActivityView
+      data={query.data ?? {}}
+      loading={query.loading}
+      error={query.error}
+      onReload={() => void query.refresh()}
+      onLoadMore={query.loadMore}
+      auditLoading={query.auditLoading}
+      filters={filters}
+      onFiltersChange={changeFilters}
+    />
+  );
 }

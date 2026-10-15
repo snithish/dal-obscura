@@ -7,7 +7,10 @@ test("web-vitals gate accepts measurements at documented limits", () => {
 });
 
 test("web-vitals gate rejects a reported slow largest paint", () => {
-  assert.throws(() => assertWebVitals({ lcpMs: 3000, cls: 0 }), /Largest Contentful Paint.*exceeds/);
+  assert.throws(
+    () => assertWebVitals({ lcpMs: 3000, cls: 0 }),
+    /Largest Contentful Paint.*exceeds/,
+  );
 });
 
 for (const lcpMs of [null, undefined, NaN, Infinity, "100", -1]) {

@@ -3,11 +3,16 @@ import test from "node:test";
 import { emptyPolicyDraft, reducePolicyDraft } from "./policy_draft.ts";
 
 const rule = {
-  ordinal: 10, effect: "allow", principals: ["group:analysts"], columns: ["email"],
+  ordinal: 10,
+  effect: "allow",
+  principals: ["group:analysts"],
+  columns: ["email"],
   masks: { email: { type: "hash", exempt_principals: ["privacy"] } },
-  row_filter: null, when: { region: ["us"] },
+  row_filter: null,
+  when: { region: ["us"] },
 };
-const load = () => reducePolicyDraft(emptyPolicyDraft(), { type: "load", rules: [rule], revision: 3 });
+const load = () =>
+  reducePolicyDraft(emptyPolicyDraft(), { type: "load", rules: [rule], revision: 3 });
 
 test("save completion advances saved baseline while preserving edits made in flight", () => {
   let draft = load();
@@ -49,7 +54,9 @@ test("duplicate and discard isolate nested masks, exemptions, and condition valu
 test("failed save preserves draft and exposes validation only for its submitted version", () => {
   let draft = reducePolicyDraft(load(), { type: "beginSave" });
   const submission = draft.pending;
-  const errors = [{ field: "rules.0.principals", type: "value_error", message: "Select a principal" }];
+  const errors = [
+    { field: "rules.0.principals", type: "value_error", message: "Select a principal" },
+  ];
   draft = reducePolicyDraft(draft, { type: "failed", submission, errors });
   assert.equal(draft.status, "failed");
   assert.deepEqual(draft.errors, errors);

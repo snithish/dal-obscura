@@ -5,10 +5,13 @@ export function assertWebVitals(metrics) {
     throw new Error("Largest Contentful Paint must be a finite, non-negative measurement");
   }
   if (metrics.lcpMs > WEB_VITALS_LIMITS.lcpMs) {
-    throw new Error(`Largest Contentful Paint ${metrics.lcpMs} exceeds ${WEB_VITALS_LIMITS.lcpMs} ms`);
+    throw new Error(
+      `Largest Contentful Paint ${metrics.lcpMs} exceeds ${WEB_VITALS_LIMITS.lcpMs} ms`,
+    );
   }
   if (!Number.isFinite(metrics.cls) || metrics.cls < 0) {
     throw new Error("Cumulative Layout Shift must be a finite, non-negative measurement");
   }
-  if (metrics.cls > WEB_VITALS_LIMITS.cls) throw new Error(`Cumulative Layout Shift ${metrics.cls} exceeds ${WEB_VITALS_LIMITS.cls}`);
+  if (metrics.cls > WEB_VITALS_LIMITS.cls)
+    throw new Error(`Cumulative Layout Shift ${metrics.cls} exceeds ${WEB_VITALS_LIMITS.cls}`);
 }

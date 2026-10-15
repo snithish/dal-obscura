@@ -64,10 +64,13 @@ export function SettingsView({
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const savingRef = useRef(false);
 
-  useEffect(() => () => {
-    for (const controller of mutationControllers.current) controller.abort();
-    mutationControllers.current.clear();
-  }, [sessionScope]);
+  useEffect(
+    () => () => {
+      for (const controller of mutationControllers.current) controller.abort();
+      mutationControllers.current.clear();
+    },
+    [sessionScope],
+  );
 
   const beginMutation = (): AbortController => {
     const controller = new AbortController();
@@ -83,7 +86,9 @@ export function SettingsView({
     const next = runtime ?? emptyRuntime;
     if (runtimeDirty) return;
     setForm(next);
-    setPathRuleRoots(next.path_rules.map((rule) => typeof rule.root === "string" ? rule.root : ""));
+    setPathRuleRoots(
+      next.path_rules.map((rule) => (typeof rule.root === "string" ? rule.root : "")),
+    );
     setRuntimeDirty(false);
     runtimeEditEpoch.current += 1;
   }, [runtime, runtimeDirty]);
@@ -91,10 +96,21 @@ export function SettingsView({
     if (providersDirty) return;
     setProviderRows(providers);
     setProviderErrors({});
-    setProviderTexts(Object.fromEntries(providers.flatMap((provider) => [
-      "subject_claim", "group_claims", "attribute_claims", "algorithms",
-      "leeway_seconds", "jwks_refresh_interval_seconds", "max_jwks_keys",
-    ].map((key) => [`${provider.id}:${key}`, providerText(provider, key)]))));
+    setProviderTexts(
+      Object.fromEntries(
+        providers.flatMap((provider) =>
+          [
+            "subject_claim",
+            "group_claims",
+            "attribute_claims",
+            "algorithms",
+            "leeway_seconds",
+            "jwks_refresh_interval_seconds",
+            "max_jwks_keys",
+          ].map((key) => [`${provider.id}:${key}`, providerText(provider, key)]),
+        ),
+      ),
+    );
     setProvidersDirty(false);
     providerEditEpoch.current += 1;
   }, [providers, providersDirty]);
@@ -104,7 +120,7 @@ export function SettingsView({
   }, [dirty, onDirtyChange]);
 
   async function reload() {
-    if (dirty && !await confirm(discardChanges("settings", "reload settings"))) return;
+    if (dirty && !(await confirm(discardChanges("settings", "reload settings")))) return;
     runtimeEditEpoch.current += 1;
     providerEditEpoch.current += 1;
     setRuntimeDirty(false);
@@ -145,8 +161,18 @@ export function SettingsView({
       setMessage("Runtime settings saved to live configuration.");
       onReload();
     } catch (error) {
-      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Settings update was rejected; the previous values remain active."));
-    } finally { finishMutation(controller); savingRef.current = false; setSaving(false); }
+      if (!isAbortError(error))
+        setMessage(
+          recoveryMessage(
+            error,
+            "Settings update was rejected; the previous values remain active.",
+          ),
+        );
+    } finally {
+      finishMutation(controller);
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   async function saveProviders() {
@@ -155,8 +181,20 @@ export function SettingsView({
       setMessage("Fix the highlighted identity provider fields before saving.");
       return;
     }
-    if (!providerRows.some((provider) => provider.enabled) && !await confirm({ title: "Disable all identity providers?", message: "No identity provider will remain enabled. Users may be unable to authenticate after workers reload this configuration.", confirmLabel: "Save with no providers", cancelLabel: "Keep editing", destructive: true })) {
-      setMessage("Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.");
+    if (
+      !providerRows.some((provider) => provider.enabled) &&
+      !(await confirm({
+        title: "Disable all identity providers?",
+        message:
+          "No identity provider will remain enabled. Users may be unable to authenticate after workers reload this configuration.",
+        confirmLabel: "Save with no providers",
+        cancelLabel: "Keep editing",
+        destructive: true,
+      }))
+    ) {
+      setMessage(
+        "Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.",
+      );
       return;
     }
     savingRef.current = true;
@@ -178,11 +216,23 @@ export function SettingsView({
       setProvidersDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       void queryClient.invalidateQueries({ queryKey: ["identity-attributes", sessionScope] });
-      setMessage("Identity provider settings saved to live configuration. Restart data-plane workers to reload their provider chain.");
+      setMessage(
+        "Identity provider settings saved to live configuration. Restart data-plane workers to reload their provider chain.",
+      );
       onReload();
     } catch (error) {
-      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Identity provider update was rejected; the serving provider chain remains unchanged."));
-    } finally { finishMutation(controller); savingRef.current = false; setSaving(false); }
+      if (!isAbortError(error))
+        setMessage(
+          recoveryMessage(
+            error,
+            "Identity provider update was rejected; the serving provider chain remains unchanged.",
+          ),
+        );
+    } finally {
+      finishMutation(controller);
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   function updateProviderText(index: number, key: string, value: string) {
@@ -196,18 +246,27 @@ export function SettingsView({
     };
     let parsed: unknown = value;
     if (key === "group_claims" || key === "algorithms") {
-      parsed = value.split(",").map((item) => item.trim()).filter(Boolean);
+      parsed = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
       if (key === "algorithms" && !(parsed as string[]).length) {
         setError("Enter at least one signing algorithm.");
         return;
       }
     } else if (key === "attribute_claims") {
-      const entries = value.split(",").map((item) => item.trim()).filter(Boolean);
+      const entries = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
       const mapping: Record<string, string> = {};
       for (const entry of entries) {
         const separator = entry.indexOf("=");
         if (separator <= 0 || separator === entry.length - 1) {
-          setProviderErrors((current) => ({ ...current, [fieldKey]: "Use name=claim.path entries separated by commas." }));
+          setProviderErrors((current) => ({
+            ...current,
+            [fieldKey]: "Use name=claim.path entries separated by commas.",
+          }));
           return;
         }
         mapping[entry.slice(0, separator).trim()] = entry.slice(separator + 1).trim();
@@ -242,7 +301,13 @@ export function SettingsView({
       if (trimmed) {
         try {
           const url = new URL(trimmed);
-          if (!(["http:", "https:"] as string[]).includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+          if (
+            !(["http:", "https:"] as string[]).includes(url.protocol) ||
+            url.username ||
+            url.password ||
+            url.search ||
+            url.hash
+          ) {
             setError("Use an HTTP(S) URL without credentials, query data, or a fragment.");
             return;
           }
@@ -253,42 +318,62 @@ export function SettingsView({
       }
       parsed = trimmed;
     }
-    setProviderErrors((current) => { const next = { ...current }; delete next[fieldKey]; return next; });
-    setProviderRows((current) => current.map((item, row) => row === index ? {
-      ...item,
-      args: (() => {
-        const args = { ...item.args };
-        if (parsed === undefined || ((key === "audience" || key === "jwks_url") && !value.trim())) delete args[key];
-        else args[key] = parsed;
-        return args;
-      })(),
-    } : item));
+    setProviderErrors((current) => {
+      const next = { ...current };
+      delete next[fieldKey];
+      return next;
+    });
+    setProviderRows((current) =>
+      current.map((item, row) =>
+        row === index
+          ? {
+              ...item,
+              args: (() => {
+                const args = { ...item.args };
+                if (
+                  parsed === undefined ||
+                  ((key === "audience" || key === "jwks_url") && !value.trim())
+                )
+                  delete args[key];
+                else args[key] = parsed;
+                return args;
+              })(),
+            }
+          : item,
+      ),
+    );
   }
 
   function updateProviderEnabled(index: number, enabled: boolean) {
     markDirty("providers");
-    setProviderRows((current) => current.map((provider, row) => row === index ? { ...provider, enabled } : provider));
+    setProviderRows((current) =>
+      current.map((provider, row) => (row === index ? { ...provider, enabled } : provider)),
+    );
   }
 
   function addProvider() {
     markDirty("providers");
-    const ordinal = providerRows.reduce((highest, provider) => Math.max(highest, provider.ordinal), 0) + 1;
-    setProviderRows((current) => [...current, {
-      id: `unsaved-${Date.now()}-${ordinal}`,
-      ordinal,
-      module: OIDC_IDENTITY_MODULE,
-      args: {
-        issuer: "",
-        subject_claim: "sub",
-        group_claims: ["groups"],
-        algorithms: ["RS256"],
-        leeway_seconds: 0,
-        jwks_refresh_interval_seconds: 30,
-        max_jwks_keys: 256,
+    const ordinal =
+      providerRows.reduce((highest, provider) => Math.max(highest, provider.ordinal), 0) + 1;
+    setProviderRows((current) => [
+      ...current,
+      {
+        id: `unsaved-${Date.now()}-${ordinal}`,
+        ordinal,
+        module: OIDC_IDENTITY_MODULE,
+        args: {
+          issuer: "",
+          subject_claim: "sub",
+          group_claims: ["groups"],
+          algorithms: ["RS256"],
+          leeway_seconds: 0,
+          jwks_refresh_interval_seconds: 30,
+          max_jwks_keys: 256,
+        },
+        enabled: true,
+        revision: providerRevision ?? 0,
       },
-      enabled: true,
-      revision: providerRevision ?? 0,
-    }]);
+    ]);
     setMessage("New OIDC provider added. Enter an issuer URL before saving.");
   }
 
@@ -297,8 +382,16 @@ export function SettingsView({
     setProviderRows((current) => current.filter((_, row) => row !== index));
     const provider = providerRows[index];
     if (!provider) return;
-    setProviderErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`))));
-    setProviderTexts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`))));
+    setProviderErrors((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`)),
+      ),
+    );
+    setProviderTexts((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`)),
+      ),
+    );
   }
 
   function moveProvider(index: number, direction: -1 | 1) {
@@ -314,7 +407,7 @@ export function SettingsView({
 
   function updatePathRule(index: number, value: string) {
     markDirty("runtime");
-    setPathRuleRoots((current) => current.map((root, row) => row === index ? value : root));
+    setPathRuleRoots((current) => current.map((root, row) => (row === index ? value : root)));
   }
 
   return (
@@ -323,73 +416,292 @@ export function SettingsView({
         <div>
           <span className="eyebrow">SETTINGS</span>
           <h2>Runtime and identity</h2>
-          <p className="muted">These controls affect ticket fan-out and authentication. Changes are server-validated and do not expose secrets.</p>
+          <p className="muted">
+            These controls affect ticket fan-out and authentication. Changes are server-validated
+            and do not expose secrets.
+          </p>
         </div>
-        <Button type="button" variant="default" className="secondary" onClick={reload} leftSection={<Icon name="refresh-cw" size={16} />}>Refresh</Button>
+        <Button
+          type="button"
+          variant="default"
+          className="secondary"
+          onClick={reload}
+          leftSection={<Icon name="refresh-cw" size={16} />}
+        >
+          Refresh
+        </Button>
       </div>
       <div className="form-card">
         <h3>Runtime limits</h3>
-        <p className="help">{runtime ? "Values are loaded from the control plane. Saving updates live configuration." : "No runtime settings are configured yet. Enter values to create the initial configuration."}</p>
+        <p className="help">
+          {runtime
+            ? "Values are loaded from the control plane. Saving updates live configuration."
+            : "No runtime settings are configured yet. Enter values to create the initial configuration."}
+        </p>
         <div className="form-grid three">
-          <TextInput label="Ticket TTL (seconds)" type="number" min={1} value={form.ticket_ttl_seconds || ""} placeholder="900" onChange={(event) => { markDirty("runtime"); setForm({ ...form, ticket_ttl_seconds: Number(event.currentTarget.value) }); }} />
-          <TextInput label="Max tickets" type="number" min={1} value={form.max_tickets || ""} placeholder="64" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_tickets: Number(event.currentTarget.value) }); }} />
-          <TextInput label="Ticket exchanges" type="number" min={1} value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_ticket_exchanges: Number(event.currentTarget.value) }); }} />
+          <TextInput
+            label="Ticket TTL (seconds)"
+            type="number"
+            min={1}
+            value={form.ticket_ttl_seconds || ""}
+            placeholder="900"
+            onChange={(event) => {
+              markDirty("runtime");
+              setForm({ ...form, ticket_ttl_seconds: Number(event.currentTarget.value) });
+            }}
+          />
+          <TextInput
+            label="Max tickets"
+            type="number"
+            min={1}
+            value={form.max_tickets || ""}
+            placeholder="64"
+            onChange={(event) => {
+              markDirty("runtime");
+              setForm({ ...form, max_tickets: Number(event.currentTarget.value) });
+            }}
+          />
+          <TextInput
+            label="Ticket exchanges"
+            type="number"
+            min={1}
+            value={form.max_ticket_exchanges || ""}
+            placeholder="2"
+            onChange={(event) => {
+              markDirty("runtime");
+              setForm({ ...form, max_ticket_exchanges: Number(event.currentTarget.value) });
+            }}
+          />
         </div>
         <fieldset className="runtime-path-rules">
           <legend>Storage path roots</legend>
-          <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
-          <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={index}>
-            <TextInput aria-label={`Storage path root ${index + 1}`} value={root} onChange={(event) => updatePathRule(index, event.currentTarget.value)} placeholder="s3://warehouse/curated" />
-            <Button className="danger" variant="default" size="sm" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }} leftSection={<Icon name="trash" size={15} />}>Remove</Button>
-          </div>)}</div>
-          <Button className="secondary" variant="default" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => [...current, ""]); }} leftSection={<Icon name="plus" size={16} />}>Add storage root</Button>
+          <p className="help">
+            Every metadata and data location must stay under one of these roots. Leave the list
+            empty only for an explicitly local development profile.
+          </p>
+          <div className="path-rule-list">
+            {pathRuleRoots.map((root, index) => (
+              <div className="path-rule-row" key={index}>
+                <TextInput
+                  aria-label={`Storage path root ${index + 1}`}
+                  value={root}
+                  onChange={(event) => updatePathRule(index, event.currentTarget.value)}
+                  placeholder="s3://warehouse/curated"
+                />
+                <Button
+                  className="danger"
+                  variant="default"
+                  size="sm"
+                  type="button"
+                  onClick={() => {
+                    markDirty("runtime");
+                    setPathRuleRoots((current) => current.filter((_, row) => row !== index));
+                  }}
+                  leftSection={<Icon name="trash" size={15} />}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button
+            className="secondary"
+            variant="default"
+            type="button"
+            onClick={() => {
+              markDirty("runtime");
+              setPathRuleRoots((current) => [...current, ""]);
+            }}
+            leftSection={<Icon name="plus" size={16} />}
+          >
+            Add storage root
+          </Button>
         </fieldset>
-        <Button type="button" className="primary" disabled={saving} onClick={() => void save()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save runtime settings"}</Button>
-        {message && <p className="notice" role="status">{message}</p>}
+        <Button
+          type="button"
+          className="primary"
+          disabled={saving}
+          onClick={() => void save()}
+          leftSection={<Icon name="save" size={16} />}
+        >
+          {saving ? "Saving…" : "Save runtime settings"}
+        </Button>
+        {message && (
+          <p className="notice" role="status">
+            {message}
+          </p>
+        )}
       </div>
       <div className="form-card">
-        <div className="form-card-head"><h3>Authentication providers</h3><Button className="secondary" variant="default" type="button" onClick={addProvider} leftSection={<Icon name="plus" size={16} />}>Add OIDC provider</Button></div>
-        <p className="help">The ordered provider chain is evaluated top to bottom. Secrets and static JWKS material are never editable in this browser.</p>
-        {providerRows.length ? <div className="provider-editor-list">{providerRows.map((provider, index) => {
-          const providerField = (key: string, label: string, options: { type?: string; placeholder?: string; help?: string } = {}) => {
-            const fieldKey = `${provider.id}:${key}`;
-            const error = providerErrors[fieldKey];
-            return <div className="provider-field" key={key}>
-              <TextInput
-                label={label}
-                type={options.type ?? "text"}
-                value={providerTexts[fieldKey] ?? providerText(provider, key)}
-                placeholder={options.placeholder}
-                aria-invalid={error ? "true" : undefined}
-                aria-describedby={error ? `${fieldKey}-error` : undefined}
-                onChange={(event) => updateProviderText(index, key, event.currentTarget.value)}
-              />
-              {options.help && !error && <small>{options.help}</small>}
-              {error && <span className="auth-error" id={`${fieldKey}-error`} role="alert">{error}</span>}
-            </div>;
-          };
-          return <fieldset className="provider-editor" key={provider.id}>
-            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><Button className="secondary" variant="default" size="sm" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)} leftSection={<Icon name="arrow-up" size={14} />}>Move up</Button><Button className="secondary" variant="default" size="sm" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)} leftSection={<Icon name="arrow-down" size={14} />}>Move down</Button><Button className="danger" variant="default" size="sm" type="button" onClick={() => removeProvider(index)} leftSection={<Icon name="trash" size={14} />}>Remove</Button></span></legend>
-            <Checkbox className="provider-enabled" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.currentTarget.checked)} label="Enabled" />
-            <div className="form-grid">
-              {providerField("issuer", "Issuer URL", { placeholder: "https://id.example.com/" })}
-              {providerField("audience", "Audience", { placeholder: "optional or comma-separated" })}
-              {providerField("jwks_url", "JWKS URL", { placeholder: "optional; discovered from issuer" })}
-              {providerField("subject_claim", "Subject claim", { placeholder: "sub" })}
-              {providerField("group_claims", "Group claims", { placeholder: "groups, realm_access.roles" })}
-              {providerField("algorithms", "Signing algorithms", { placeholder: "RS256" })}
-              {providerField("leeway_seconds", "Clock leeway (seconds)", { type: "number", placeholder: "0" })}
-              {providerField("jwks_refresh_interval_seconds", "JWKS refresh (seconds)", { type: "number", placeholder: "30" })}
-              {providerField("max_jwks_keys", "Maximum JWKS keys", { type: "number", placeholder: "256" })}
-            </div>
-            <AttributeMappings provider={provider} onChange={(claims, definitions, error) => {
-              markDirty("providers");
-              setProviderRows((current) => current.map((item, row) => row === index ? { ...item, args: { ...item.args, attribute_claims: claims, attribute_definitions: definitions } } : item));
-              setProviderErrors((current) => { const next = { ...current }; const key = `${provider.id}:attribute-mappings`; if (error) next[key] = error; else delete next[key]; return next; });
-            }} />
-          </fieldset>;
-        })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API.</p>}
-        <Button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save identity providers"}</Button>
+        <div className="form-card-head">
+          <h3>Authentication providers</h3>
+          <Button
+            className="secondary"
+            variant="default"
+            type="button"
+            onClick={addProvider}
+            leftSection={<Icon name="plus" size={16} />}
+          >
+            Add OIDC provider
+          </Button>
+        </div>
+        <p className="help">
+          The ordered provider chain is evaluated top to bottom. Secrets and static JWKS material
+          are never editable in this browser.
+        </p>
+        {providerRows.length ? (
+          <div className="provider-editor-list">
+            {providerRows.map((provider, index) => {
+              const providerField = (
+                key: string,
+                label: string,
+                options: { type?: string; placeholder?: string; help?: string } = {},
+              ) => {
+                const fieldKey = `${provider.id}:${key}`;
+                const error = providerErrors[fieldKey];
+                return (
+                  <div className="provider-field" key={key}>
+                    <TextInput
+                      label={label}
+                      type={options.type ?? "text"}
+                      value={providerTexts[fieldKey] ?? providerText(provider, key)}
+                      placeholder={options.placeholder}
+                      aria-invalid={error ? "true" : undefined}
+                      aria-describedby={error ? `${fieldKey}-error` : undefined}
+                      onChange={(event) =>
+                        updateProviderText(index, key, event.currentTarget.value)
+                      }
+                    />
+                    {options.help && !error && <small>{options.help}</small>}
+                    {error && (
+                      <span className="auth-error" id={`${fieldKey}-error`} role="alert">
+                        {error}
+                      </span>
+                    )}
+                  </div>
+                );
+              };
+              return (
+                <fieldset className="provider-editor" key={provider.id}>
+                  <legend>
+                    <span>{provider.module.split(".").at(-1) ?? provider.module}</span>
+                    <small>Order {provider.ordinal}</small>
+                    <span className="provider-order-actions">
+                      <Button
+                        className="secondary"
+                        variant="default"
+                        size="sm"
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => moveProvider(index, -1)}
+                        leftSection={<Icon name="arrow-up" size={14} />}
+                      >
+                        Move up
+                      </Button>
+                      <Button
+                        className="secondary"
+                        variant="default"
+                        size="sm"
+                        type="button"
+                        disabled={index === providerRows.length - 1}
+                        onClick={() => moveProvider(index, 1)}
+                        leftSection={<Icon name="arrow-down" size={14} />}
+                      >
+                        Move down
+                      </Button>
+                      <Button
+                        className="danger"
+                        variant="default"
+                        size="sm"
+                        type="button"
+                        onClick={() => removeProvider(index)}
+                        leftSection={<Icon name="trash" size={14} />}
+                      >
+                        Remove
+                      </Button>
+                    </span>
+                  </legend>
+                  <Checkbox
+                    className="provider-enabled"
+                    checked={provider.enabled}
+                    onChange={(event) => updateProviderEnabled(index, event.currentTarget.checked)}
+                    label="Enabled"
+                  />
+                  <div className="form-grid">
+                    {providerField("issuer", "Issuer URL", {
+                      placeholder: "https://id.example.com/",
+                    })}
+                    {providerField("audience", "Audience", {
+                      placeholder: "optional or comma-separated",
+                    })}
+                    {providerField("jwks_url", "JWKS URL", {
+                      placeholder: "optional; discovered from issuer",
+                    })}
+                    {providerField("subject_claim", "Subject claim", { placeholder: "sub" })}
+                    {providerField("group_claims", "Group claims", {
+                      placeholder: "groups, realm_access.roles",
+                    })}
+                    {providerField("algorithms", "Signing algorithms", { placeholder: "RS256" })}
+                    {providerField("leeway_seconds", "Clock leeway (seconds)", {
+                      type: "number",
+                      placeholder: "0",
+                    })}
+                    {providerField("jwks_refresh_interval_seconds", "JWKS refresh (seconds)", {
+                      type: "number",
+                      placeholder: "30",
+                    })}
+                    {providerField("max_jwks_keys", "Maximum JWKS keys", {
+                      type: "number",
+                      placeholder: "256",
+                    })}
+                  </div>
+                  <AttributeMappings
+                    provider={provider}
+                    onChange={(claims, definitions, error) => {
+                      markDirty("providers");
+                      setProviderRows((current) =>
+                        current.map((item, row) =>
+                          row === index
+                            ? {
+                                ...item,
+                                args: {
+                                  ...item.args,
+                                  attribute_claims: claims,
+                                  attribute_definitions: definitions,
+                                },
+                              }
+                            : item,
+                        ),
+                      );
+                      setProviderErrors((current) => {
+                        const next = { ...current };
+                        const key = `${provider.id}:attribute-mappings`;
+                        if (error) next[key] = error;
+                        else delete next[key];
+                        return next;
+                      });
+                    }}
+                  />
+                </fieldset>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="empty-result">
+            <strong>No identity providers configured.</strong>
+            <br />
+            Add the first OIDC provider through the control-plane bootstrap or API.
+          </p>
+        )}
+        <Button
+          type="button"
+          className="primary"
+          disabled={saving || Object.keys(providerErrors).length > 0}
+          onClick={() => void saveProviders()}
+          leftSection={<Icon name="save" size={16} />}
+        >
+          {saving ? "Saving…" : "Save identity providers"}
+        </Button>
       </div>
     </section>
   );

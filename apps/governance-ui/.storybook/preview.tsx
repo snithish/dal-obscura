@@ -14,17 +14,35 @@ function Theme({ choice }: { choice: "light" | "dark" | "auto" }) {
 
 const preview: Preview = {
   globalTypes: {
-    theme: { description: "Shared application theme", toolbar: {
-      icon: "circlehollow", items: [{ value: "light", title: "Light" }, { value: "dark", title: "Dark" }, { value: "auto", title: "System" }], dynamicTitle: true,
-    } },
+    theme: {
+      description: "Shared application theme",
+      toolbar: {
+        icon: "circlehollow",
+        items: [
+          { value: "light", title: "Light" },
+          { value: "dark", title: "Dark" },
+          { value: "auto", title: "System" },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
   initialGlobals: { theme: "light" },
   parameters: {
     layout: "padded",
     a11y: { test: "error" },
-    options: { storySort: { order: ["Foundations", "Components", "Patterns", "Workflows", "Contribution"] } },
+    options: {
+      storySort: { order: ["Foundations", "Components", "Patterns", "Workflows", "Contribution"] },
+    },
   },
-  decorators: [(Story, context) => <AppProviders><Theme choice={context.globals.theme} /><Story /></AppProviders>],
+  decorators: [
+    (Story, context) => (
+      <AppProviders>
+        <Theme choice={context.globals.theme} />
+        <Story />
+      </AppProviders>
+    ),
+  ],
   beforeEach: async () => {
     await document.fonts.ready;
     return installStoryNetworkGuard();

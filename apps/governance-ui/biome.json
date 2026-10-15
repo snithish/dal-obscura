@@ -1,0 +1,22 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "files": {
+    "includes": [
+      "**/*.{js,cjs,mjs,ts,tsx,json,css}",
+      "!!**/dist",
+      "!!**/storybook-static",
+      "!!**/playwright-report",
+      "!!**/test-results",
+      "!**/src/generated",
+      "!**/openapi"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": { "enabled": false },
+  "assist": { "enabled": false }
+}

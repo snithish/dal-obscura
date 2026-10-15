@@ -1,8 +1,5 @@
 import { useWorkspaceNavigation } from "./navigation/useWorkspaceNavigation";
-import {
-  discardChanges,
-  useConfirmation,
-} from "../shared/ConfirmationProvider";
+import { discardChanges, useConfirmation } from "../shared/ConfirmationProvider";
 import { useCallback, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Button, useMantineColorScheme } from "@mantine/core";
 import { locationFromUrl, pageFromHash, type UiPage } from "./navigation/routes";
@@ -11,19 +8,22 @@ import { sessionQueryScope } from "../data/query_scope";
 import { useAssetInventory } from "../features/assets/useAssetInventory";
 import { AppShell } from "./AppShell";
 import { AssetInventory } from "../features/assets/AssetInventory";
-import {
-  CommandPalette,
-  type PaletteCommand,
-} from "./navigation/CommandPalette";
+import { CommandPalette, type PaletteCommand } from "./navigation/CommandPalette";
 import { LoginPanel } from "../features/identity/LoginPanel";
 import { WorkspaceContent } from "./WorkspaceContent";
 
 const AssetRoute = lazy(async () => ({
   default: (await import("../features/assets/AssetRoute")).AssetRoute,
 }));
-const ActivityRoute = lazy(async () => ({ default: (await import("../features/activity/ActivityRoute")).ActivityRoute }));
-const ConnectionsRoute = lazy(async () => ({ default: (await import("../features/connections/ConnectionsRoute")).ConnectionsRoute }));
-const SettingsRoute = lazy(async () => ({ default: (await import("../features/settings/SettingsRoute")).SettingsRoute }));
+const ActivityRoute = lazy(async () => ({
+  default: (await import("../features/activity/ActivityRoute")).ActivityRoute,
+}));
+const ConnectionsRoute = lazy(async () => ({
+  default: (await import("../features/connections/ConnectionsRoute")).ConnectionsRoute,
+}));
+const SettingsRoute = lazy(async () => ({
+  default: (await import("../features/settings/SettingsRoute")).SettingsRoute,
+}));
 
 type Page = UiPage;
 type Theme = "system" | "light" | "dark";
@@ -32,13 +32,24 @@ type WorkspaceState = "loading" | "ready" | "unavailable";
 export function Workspace() {
   const { confirm } = useConfirmation();
   const scope = useSessionScope();
-  const { session, generation: sessionGeneration, queryClient,
-    isCurrent, authConfig, sessionOptions, bootstrapToken, setBootstrapToken,
-    authError, loggingIn, logoutPending, bootstrapLogin, logout } = scope;
+  const {
+    session,
+    generation: sessionGeneration,
+    queryClient,
+    isCurrent,
+    authConfig,
+    sessionOptions,
+    bootstrapToken,
+    setBootstrapToken,
+    authError,
+    loggingIn,
+    logoutPending,
+    bootstrapLogin,
+    logout,
+  } = scope;
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const theme: Theme = colorScheme === "auto" ? "system" : colorScheme;
-  const setTheme = (next: Theme) =>
-    setColorScheme(next === "system" ? "auto" : next);
+  const setTheme = (next: Theme) => setColorScheme(next === "system" ? "auto" : next);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -60,13 +71,9 @@ export function Workspace() {
       onDirtyChange(false);
     },
   });
-  const { page, assetId: requestedAssetId, tab: routeTab } = navigation;
+  const { page, assetId: requestedAssetId, tab: routeTab, openAsset } = navigation;
   const sessionCacheKey = sessionQueryScope(session, sessionGeneration);
-  const inventory = useAssetInventory(
-    queryClient,
-    sessionCacheKey,
-    Boolean(session),
-  );
+  const inventory = useAssetInventory(queryClient, sessionCacheKey, Boolean(session));
   const {
     assets,
     search: assetSearch,
@@ -75,9 +82,15 @@ export function Workspace() {
     error: assetInventoryError,
   } = inventory;
   const workspace: WorkspaceState = session
-    ? inventory.pending ? "loading" : inventory.error && !assets.length ? "unavailable" : "ready"
+    ? inventory.pending
+      ? "loading"
+      : inventory.error && !assets.length
+        ? "unavailable"
+        : "ready"
     : scope.status;
-  useEffect(() => { if (session) restorePostLoginHash(); }, [session]);
+  useEffect(() => {
+    if (session) restorePostLoginHash();
+  }, [session]);
 
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
@@ -115,9 +128,7 @@ export function Workspace() {
       queryKey: ["management", sessionCacheKey],
     });
     navigation.redirectToAssets();
-    setNotice(
-      "This workspace view requires platform administrator capability.",
-    );
+    setNotice("This workspace view requires platform administrator capability.");
   }, [page, queryClient, session, sessionCacheKey]);
 
   const navigateTo = navigation.navigate;
@@ -130,9 +141,7 @@ export function Workspace() {
   function runPaletteCommand(command: Page | "help") {
     closePalette();
     if (command === "help") {
-      setNotice(
-        "Use navigation to inspect governed assets, author policies, and audit activity.",
-      );
+      setNotice("Use navigation to inspect governed assets, author policies, and audit activity.");
       return;
     }
     navigateTo(command);
@@ -151,9 +160,7 @@ export function Workspace() {
 
   function restorePostLoginHash() {
     try {
-      const pending = window.sessionStorage.getItem(
-        "dal_obscura_post_login_hash",
-      );
+      const pending = window.sessionStorage.getItem("dal_obscura_post_login_hash");
       window.sessionStorage.removeItem("dal_obscura_post_login_hash");
       if (pending && pageFromHash(pending) !== "assets") {
         window.location.hash = pageFromHash(pending);
@@ -171,12 +178,8 @@ export function Workspace() {
     return confirmed;
   }
 
-  const openAsset = navigation.openAsset;
-
   const signedOut = !session || workspace === "unavailable";
-  const canManageWorkspace = Boolean(
-    session?.capabilities.includes("workspace:admin"),
-  );
+  const canManageWorkspace = Boolean(session?.capabilities.includes("workspace:admin"));
   const paletteCommands: PaletteCommand[] = [
     "assets",
     "activity",
@@ -185,9 +188,7 @@ export function Workspace() {
   ];
   const paletteAssets = assets
     .filter((item) =>
-      `${item.catalog} ${item.name}`
-        .toLowerCase()
-        .includes(paletteQuery.trim().toLowerCase()),
+      `${item.catalog} ${item.name}`.toLowerCase().includes(paletteQuery.trim().toLowerCase()),
     )
     .slice(0, 8);
   const accessView = (
@@ -201,9 +202,17 @@ export function Workspace() {
       message={
         (!session ? scope.status : workspace) === "loading"
           ? "Checking your workspace access and available assets."
-          : !session ? scope.notice : notice
+          : !session
+            ? scope.notice
+            : notice
       }
-      retry={!session && scope.status === "unavailable" ? scope.reconnect : workspace === "unavailable" ? () => void inventory.refresh() : undefined}
+      retry={
+        !session && scope.status === "unavailable"
+          ? scope.reconnect
+          : workspace === "unavailable"
+            ? () => void inventory.refresh()
+            : undefined
+      }
       authConfig={authConfig}
       sessionOptions={sessionOptions}
       bootstrapToken={bootstrapToken}
@@ -223,16 +232,19 @@ export function Workspace() {
           </section>
         }
       >
-        {page === "activity" ? <ActivityRoute /> : page === "connections"
-          ? <ConnectionsRoute onDirtyChange={onDirtyChange} />
-          : <SettingsRoute onDirtyChange={onDirtyChange} />}
+        {page === "activity" ? (
+          <ActivityRoute />
+        ) : page === "connections" ? (
+          <ConnectionsRoute onDirtyChange={onDirtyChange} />
+        ) : (
+          <SettingsRoute onDirtyChange={onDirtyChange} />
+        )}
       </Suspense>
     );
   const assetView = !requestedAssetId ? (
     <>
       <p className="inventory-intro">
-        Browse governed data. Open an asset to manage its policy, access, and
-        consumers.
+        Browse governed data. Open an asset to manage its policy, access, and consumers.
       </p>
       {assetInventoryError && (
         <div role="alert" className="notice">
@@ -253,12 +265,23 @@ export function Workspace() {
       />
     </>
   ) : (
-    <Suspense fallback={<section className="coming-soon" role="status">
-      <h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p>
-    </section>}>
-      <AssetRoute key={requestedAssetId} assetId={requestedAssetId} initialTab={routeTab}
-        onTabChange={navigation.updateTab} onBack={() => navigateTo("assets")}
-        onContextChange={setAssetContext} onDirtyChange={onDirtyChange} />
+    <Suspense
+      fallback={
+        <section className="coming-soon" role="status">
+          <h2>Loading policy workspace</h2>
+          <p>Preparing the nested policy editor.</p>
+        </section>
+      }
+    >
+      <AssetRoute
+        key={requestedAssetId}
+        assetId={requestedAssetId}
+        initialTab={routeTab}
+        onTabChange={navigation.updateTab}
+        onBack={() => navigateTo("assets")}
+        onContextChange={setAssetContext}
+        onDirtyChange={onDirtyChange}
+      />
     </Suspense>
   );
   const content = (
@@ -271,9 +294,7 @@ export function Workspace() {
       noAssetsView={
         <LoginPanel
           title={
-            assets.length ||
-            locationFromUrl(window.location.hash, window.location.search)
-              .assetId
+            assets.length || locationFromUrl(window.location.hash, window.location.search).assetId
               ? "Asset unavailable"
               : "No governed assets"
           }
@@ -295,9 +316,7 @@ export function Workspace() {
           ? (assetContext?.name ?? "Asset workspace")
           : undefined
       }
-      assetCatalog={
-        page === "assets" && requestedAssetId ? assetContext?.catalog : undefined
-      }
+      assetCatalog={page === "assets" && requestedAssetId ? assetContext?.catalog : undefined}
       mobileNavOpen={mobileNavOpen}
       mobileNavTrigger={mobileNavTrigger}
       theme={theme}

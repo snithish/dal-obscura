@@ -17,9 +17,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const styleNonce = nonce && /^[a-f0-9]{32}$/.test(nonce) ? nonce : undefined;
   if (styleNonce) setNonce(styleNonce); // Mantine's scroll-lock stylesheet uses this public API.
   return (
-    <MantineProvider theme={theme} cssVariablesResolver={cssVariablesResolver}
-      colorSchemeManager={colorSchemeManager} defaultColorScheme="auto"
-      getStyleNonce={styleNonce ? () => styleNonce : undefined}>
+    <MantineProvider
+      theme={theme}
+      cssVariablesResolver={cssVariablesResolver}
+      colorSchemeManager={colorSchemeManager}
+      defaultColorScheme="auto"
+      getStyleNonce={styleNonce ? () => styleNonce : undefined}
+    >
       <ConfirmationProvider>{children}</ConfirmationProvider>
     </MantineProvider>
   );

@@ -14,24 +14,32 @@ const runtime: RuntimeSettings = {
   revision: 7,
 };
 
-const providers: AuthProvider[] = [{
-  id: "provider-main",
-  ordinal: 1,
-  module: "dal_obscura.identity.oidc.OidcJwksIdentityProvider",
-  args: {
-    issuer: "https://idp.example",
-    subject_claim: "sub",
-    group_claims: ["groups"],
-    attribute_claims: { department: "department.id" },
-    attribute_definitions: { department: { label: "Department", description: "Business unit", allowed_values: ["Engineering", "Finance"] } },
-    algorithms: ["RS256"],
-    leeway_seconds: 30,
-    jwks_refresh_interval_seconds: 300,
-    max_jwks_keys: 32,
+const providers: AuthProvider[] = [
+  {
+    id: "provider-main",
+    ordinal: 1,
+    module: "dal_obscura.identity.oidc.OidcJwksIdentityProvider",
+    args: {
+      issuer: "https://idp.example",
+      subject_claim: "sub",
+      group_claims: ["groups"],
+      attribute_claims: { department: "department.id" },
+      attribute_definitions: {
+        department: {
+          label: "Department",
+          description: "Business unit",
+          allowed_values: ["Engineering", "Finance"],
+        },
+      },
+      algorithms: ["RS256"],
+      leeway_seconds: 30,
+      jwks_refresh_interval_seconds: 300,
+      max_jwks_keys: 32,
+    },
+    enabled: true,
+    revision: 3,
   },
-  enabled: true,
-  revision: 3,
-}];
+];
 
 const meta = {
   title: "Workflows/Runtime and identity settings",
@@ -48,7 +56,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "Production runtime and identity settings with deployment-managed values represented as safe references. The story is fixture-only and does not save or contact an identity provider.",
+        component:
+          "Production runtime and identity settings with deployment-managed values represented as safe references. The story is fixture-only and does not save or contact an identity provider.",
       },
     },
   },
@@ -62,7 +71,11 @@ export const ConfiguredWorkspace: Story = {
     await expect(canvas.getByLabelText("Ticket TTL (seconds)")).toHaveValue(900);
     await expect(canvas.getByRole("heading", { name: "Authentication providers" })).toBeVisible();
     await expect(canvas.getByDisplayValue("https://idp.example")).toBeVisible();
-    await expect(canvas.getByText("Values are loaded from the control plane. Saving updates live configuration.")).toBeVisible();
+    await expect(
+      canvas.getByText(
+        "Values are loaded from the control plane. Saving updates live configuration.",
+      ),
+    ).toBeVisible();
   },
 };
 
@@ -79,7 +92,9 @@ export const PreventAccidentalProviderLockout: Story = {
     const removeButtons = canvas.getAllByRole("button", { name: "Remove" });
     await userEvent.click(removeButtons[removeButtons.length - 1]);
     await userEvent.click(canvas.getByRole("button", { name: "Save identity providers" }));
-    const dialog = await within(document.body).findByRole("dialog", { name: "Disable all identity providers?" });
+    const dialog = await within(document.body).findByRole("dialog", {
+      name: "Disable all identity providers?",
+    });
     await userEvent.click(within(dialog).getByRole("button", { name: "Keep editing" }));
     await expect(canvas.getByRole("status")).toHaveTextContent("were not saved");
   },
@@ -90,7 +105,9 @@ export const InvalidAttributeMapping: Story = {
     const field = canvas.getByLabelText("Source claim path 1");
     await userEvent.clear(field);
     await userEvent.type(field, "employee..department");
-    await expect(canvas.getByRole("alert")).toHaveTextContent("Every mapping needs a unique internal key and a valid source claim path.");
+    await expect(canvas.getByRole("alert")).toHaveTextContent(
+      "Every mapping needs a unique internal key and a valid source claim path.",
+    );
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },
 };
