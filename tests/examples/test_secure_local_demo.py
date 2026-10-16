@@ -71,7 +71,7 @@ def test_failed_certificate_generation_leaves_no_partial_identity(tmp_path, monk
     def fail(*args, **kwargs):
         raise RuntimeError("injected OpenSSL failure")
 
-    monkeypatch.setattr(cli.common, "_run", fail)
+    monkeypatch.setattr("subprocess.run", fail)
     with pytest.raises(RuntimeError, match="injected"):
         cli.ensure_tls(tmp_path)
     assert not (tmp_path / ".tls").exists()
@@ -86,69 +86,58 @@ def test_mismatched_server_key_fails_before_startup(tmp_path):
         cli.validate_tls(tmp_path)
 
 
-def test_failed_reset_preserves_ca_and_credentials(tmp_path, monkeypatch):
-    cli = _cli()
-    cli.initialize(tmp_path, {})
-    directory = tmp_path / ".tls"
+def test_failed_reset_preserves_ca_and_credentials(demo_process):
+    demo = demo_process(secure=True, failure=True)
+    _cli().initialize(demo.root, {})
+    directory = demo.root / ".tls"
     directory.mkdir()
     (directory / "ca.key").write_text("preserve")
-    before = (tmp_path / ".env").read_bytes()
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-
-    def fail(*args, **kwargs):
-        raise RuntimeError("engine unavailable")
-
-    monkeypatch.setattr(cli, "compose", fail)
-    assert cli.main(["reset"]) == 1
-    assert (tmp_path / ".env").read_bytes() == before
+    before = (demo.root / ".env").read_bytes()
+    assert demo.run("reset").returncode == 1
+    assert (demo.root / ".env").read_bytes() == before
     assert (directory / "ca.key").read_text() == "preserve"
 
 
-def test_reset_can_recover_incomplete_configuration_without_other_projects(tmp_path, monkeypatch):
-    cli = _cli()
-    (tmp_path / ".env").write_text("ADMIN_TOKEN=interrupted\n")
-    (tmp_path / ".tls").mkdir()
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    calls = []
-
-    def compose(values, *args, **kwargs):
-        calls.append((values["PROJECT_NAME"], args))
-        return ""
-
-    monkeypatch.setattr(cli, "compose", compose)
-    assert cli.main(["reset"]) == 0
-    assert calls[0][0].startswith("dal-obscura-secure-local-")
-    assert not (tmp_path / ".env").exists()
-    assert not (tmp_path / ".tls").exists()
+def test_reset_can_recover_incomplete_configuration_without_other_projects(demo_process):
+    demo = demo_process(secure=True)
+    (demo.root / ".env").write_text("ADMIN_TOKEN=interrupted\n")
+    (demo.root / ".tls").mkdir()
+    result = demo.run("reset")
+    assert result.returncode == 0, result.stderr
+    command = demo.commands()[0]
+    assert command[-3:] == ["down", "--volumes", "--remove-orphans"]
+    assert command[command.index("--project-name") + 1].startswith("dal-obscura-secure-local-")
+    assert not (demo.root / ".env").exists()
+    assert not (demo.root / ".tls").exists()
 
 
-def test_failed_tls_cleanup_keeps_reset_credentials_for_retry(tmp_path, monkeypatch):
-    cli = _cli()
-    cli.initialize(tmp_path, {})
-    (tmp_path / ".tls").mkdir()
-    before = (tmp_path / ".env").read_bytes()
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: "")
+def test_failed_tls_cleanup_keeps_reset_credentials_for_retry(demo_process, monkeypatch):
+    demo = demo_process(secure=True)
+    cli = _module(str(demo.root / "scripts/demo.py"))
+    cli.initialize(demo.root, {})
+    (demo.root / ".tls").mkdir()
+    before = (demo.root / ".env").read_bytes()
+    monkeypatch.setenv("PATH", demo.environment["PATH"])
+    monkeypatch.setenv("TEST_DOCKER_LOG", demo.environment["TEST_DOCKER_LOG"])
 
     def fail(*args, **kwargs):
         raise PermissionError("TLS cleanup failed")
 
     monkeypatch.setattr(cli.shutil, "rmtree", fail)
     assert cli.main(["reset"]) == 1
-    assert (tmp_path / ".env").read_bytes() == before
+    assert (demo.root / ".env").read_bytes() == before
 
 
-def test_reset_unlinks_tls_symlink_without_deleting_target(tmp_path, monkeypatch):
-    cli = _cli()
-    cli.initialize(tmp_path, {})
+def test_reset_unlinks_tls_symlink_without_deleting_target(demo_process, tmp_path):
+    demo = demo_process(secure=True)
+    _cli().initialize(demo.root, {})
     outside = tmp_path / "other-identity"
     outside.mkdir()
     (outside / "ca.key").write_text("preserve")
-    (tmp_path / ".tls").symlink_to(outside, target_is_directory=True)
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: "")
-    assert cli.main(["reset"]) == 0
-    assert not (tmp_path / ".tls").exists()
+    (demo.root / ".tls").symlink_to(outside, target_is_directory=True)
+    result = demo.run("reset")
+    assert result.returncode == 0, result.stderr
+    assert not (demo.root / ".tls").exists()
     assert (outside / "ca.key").read_text() == "preserve"
 
 

@@ -14,7 +14,7 @@ from dal_obscura.adapters.sql.tickets import (
     SqlAlchemyTicketStore,
 )
 from dal_obscura.application.reads.tickets.payload import TicketPayload
-from tests.support.read.tickets import ticket_payload
+from tests.support.read.fakes import ticket_payload
 
 
 def _payload(ticket_id: str, *, expires_at: int = 2000) -> TicketPayload:

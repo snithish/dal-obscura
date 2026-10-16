@@ -13,7 +13,7 @@ def context(seconds=30):
 
 
 def catalog(monkeypatch, provider, operation):
-    monkeypatch.setattr("dal_obscura_iceberg.catalog._load_iceberg_catalog", lambda *args: provider)
+    monkeypatch.setattr("pyiceberg.catalog.load_catalog", lambda *args, **kwargs: provider)
     return IcebergCatalog(
         CatalogConfig(plugin_id="iceberg.catalog", instance_id="analytics", revision=1), operation
     )
@@ -76,8 +76,6 @@ def discover_iceberg_tables(
     options,
     *,
     load_catalog_fn,
-    max_namespaces=1000,
-    max_tables=10000,
     deadline_at=None,
     cancel_check=None,
 ):
@@ -86,6 +84,7 @@ def discover_iceberg_tables(
     from time import monotonic
     from unittest.mock import patch
 
+    import pyiceberg.catalog as provider_catalog
     from dal_obscura_iceberg import catalog as iceberg_catalog
     from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
     from dal_obscura_plugin_api.execution import close_preserving_error
@@ -99,12 +98,10 @@ def discover_iceberg_tables(
     )
     with (
         patch.object(
-            iceberg_catalog,
-            "_load_iceberg_catalog",
-            lambda name, values: load_catalog_fn(name, **values),
+            provider_catalog,
+            "load_catalog",
+            lambda name, **values: load_catalog_fn(name, **values),
         ),
-        patch.object(iceberg_catalog, "DEFAULT_MAX_NAMESPACES", max_namespaces),
-        patch.object(iceberg_catalog, "DEFAULT_MAX_TABLES", max_tables),
     ):
         plugin = iceberg_catalog.IcebergCatalog(
             CatalogConfig(
@@ -243,22 +240,32 @@ def test_iceberg_discovery_does_not_hide_root_table_provider_errors() -> None:
 
 
 def test_iceberg_discovery_rejects_namespace_explosion():
+    from dal_obscura_iceberg.discovery import DEFAULT_MAX_NAMESPACES
+
+    class WideCatalog(FakeIcebergCatalog):
+        def list_namespaces(self, namespace=()):
+            return (
+                ((str(index),) for index in range(DEFAULT_MAX_NAMESPACES + 1))
+                if not namespace
+                else ()
+            )
+
     with pytest.raises(ValueError, match="namespace limit"):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: FakeIcebergCatalog(),
-            max_namespaces=2,
+            "analytics", {}, load_catalog_fn=lambda *args, **kwargs: WideCatalog()
         )
 
 
 def test_iceberg_discovery_rejects_table_explosion():
+    from dal_obscura_iceberg.discovery import DEFAULT_MAX_TABLES
+
+    class WideCatalog(FakeIcebergCatalog):
+        def list_tables(self, namespace):
+            return ((*namespace, str(index)) for index in range(DEFAULT_MAX_TABLES + 1))
+
     with pytest.raises(ValueError, match="table limit"):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: FakeIcebergCatalog(),
-            max_tables=1,
+            "analytics", {}, load_catalog_fn=lambda *args, **kwargs: WideCatalog()
         )
 
 
@@ -277,7 +284,6 @@ def test_iceberg_discovery_stops_an_unbounded_provider_page():
             "analytics",
             {},
             load_catalog_fn=lambda name, **options: EndlessCatalog(),
-            max_namespaces=4,
         )
 
 

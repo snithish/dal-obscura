@@ -1,14 +1,24 @@
+"""Read-service fixtures with explicit identities, passive tasks and ticket state."""
+
 from __future__ import annotations
 
 import base64
 import json
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import cast
+from typing import Any, cast
 
 import pyarrow as pa
 
-from dal_obscura.application.reads.sources import Plan, ScanTask, Source
+from dal_obscura.adapters.duckdb.compiler import DuckDBProjectionCompiler
+from dal_obscura.adapters.duckdb.transform import (
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
+from dal_obscura.application.reads.execution import ExecutionSupervisor, ManagedStream, StreamGuard
+from dal_obscura.application.reads.service import ReadService, ReadSettings
+from dal_obscura.application.reads.sources import AccessContext, Plan, ScanTask, Source
 from dal_obscura.application.reads.tickets.contracts import StoredTicket
 from dal_obscura.application.reads.tickets.payload import (
     ScanPayload,
@@ -19,8 +29,10 @@ from dal_obscura.application.reads.tickets.payload import (
 from dal_obscura.kernel.identity.authentication import AuthenticationRequest
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.plans.request import PlanRequest
+from dal_obscura.kernel.policy.authorization import AuthorizationPort
 from dal_obscura.kernel.policy.filters import deserialize_row_filter
-from dal_obscura.kernel.policy.models import AccessDecision
+from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
+from tests.support.arrow import id_region_batch, id_region_schema
 
 
 def scan_payload() -> ScanPayload:
@@ -329,3 +341,121 @@ def encode_scan_task(table_format: Source, schema: pa.Schema) -> str:
         table_format=table_format, schema=schema, partition=StubInputPartition(payload=b"payload")
     )
     return FixtureTaskCodec().encode(task)
+
+
+class _UnusedSource:
+    @contextmanager
+    def open(self, catalog, target):
+        raise AssertionError("This fetch scenario must not discover a source")
+        yield
+
+
+def make_read_service(**options: Any) -> ReadService:
+    settings = {
+        name: options.pop(name) for name in ReadSettings.__dataclass_fields__ if name in options
+    }
+    return ReadService(
+        execution_supervisor=options.pop("execution_supervisor", ExecutionSupervisor()),
+        projection_compiler=options.pop("projection_compiler", DuckDBProjectionCompiler()),
+        row_transform=options.pop("row_transform", DuckDBRowTransformAdapter()),
+        access_context=options.pop("access_context", _UnusedSource()),
+        ticket_codec=options.pop("ticket_codec", FakeTicketCodec()),
+        ticket_store=options.pop("ticket_store", FakeTicketStore()),
+        settings=ReadSettings(**settings),
+        task_codec=options.pop("task_codec", FixtureTaskCodec()),
+        **options,
+    )
+
+
+@dataclass(frozen=True)
+class StaticAccessContext:
+    """Composition for immutable catalogs/policies, including in-memory fixtures.
+
+    Mutable live configuration must implement AccessContextPort with a shared
+    snapshot instead of independently querying these two ports.
+    """
+
+    authorizer: AuthorizationPort
+    catalog_registry: Any
+
+    @contextmanager
+    def open(self, catalog: str | None, target: str) -> Generator[AccessContext]:
+        table = self.catalog_registry.resolve(catalog, target)
+        yield AccessContext(table, self.authorizer, table.get_schema())
+
+
+def expiry_stream(batches, *, ticket_expires_at, identity_expires_at, stream_deadline_at, now):
+    return ManagedStream(
+        batches,
+        guard=StreamGuard(
+            ticket_expires_at,
+            identity_expires_at,
+            stream_deadline_at,
+            now,
+            lambda: None,
+        ).check_disclosure,
+    )
+
+
+def ticket_payload(**changes: Any) -> TicketPayload:
+    base = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
+        catalog="catalog1",
+        target="users",
+        columns=["id", "region"],
+        scan=scan_payload(),
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="abc",
+    )
+    return replace(base, **changes)
+
+
+AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
+
+
+def governed_read_service(table_format: Source, decision: AccessDecision, **options):
+    ticket_codec = HmacTicketCodecAdapter("secret")
+    ticket_store = FakeTicketStore()
+
+    authorizer = FakeAuthorizer(decision=decision, current_version=decision.policy_version)
+    catalog_registry = FakeCatalogRegistry(table_format)
+    principal = Principal(id="user1", groups=[], attributes={})
+    return make_read_service(
+        identity=FakeIdentity(principal=principal),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
+        ),
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+        **options,
+    )
+
+
+def _build_use_case_dependencies():
+    schema = id_region_schema()
+    batches = (id_region_batch([1], ["us"]),)
+    decision = AccessDecision(
+        allowed_columns=["id", "region"],
+        masks={"region": MaskRule(type="redact", value="***")},
+        row_filter="region = 'us'",
+        policy_version=100,
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=batches,
+    )
+    return schema, decision, table_format
+
+
+def _ticket_store_with(payload: TicketPayload, *, max_exchanges: int = 1) -> FakeTicketStore:
+    ticket_store = FakeTicketStore()
+    ticket_store.store_many([payload], max_exchanges=max_exchanges)
+    return ticket_store

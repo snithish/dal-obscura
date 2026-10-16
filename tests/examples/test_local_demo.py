@@ -97,29 +97,31 @@ def test_concurrent_start_fails_without_touching_state(tmp_path):
         pytest.fail("second operation must not acquire lock")
 
 
-def test_start_waits_for_runtime_to_release_a_recently_stopped_port(monkeypatch):
+@pytest.mark.socket
+def test_start_waits_for_runtime_to_release_a_recently_stopped_port():
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
     cli = _cli()
-    attempts = []
+    release = Event()
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
 
-    class Probe:
-        def setsockopt(self, *_):
-            pass
+        def stop_proxy():
+            assert release.wait(5)
+            time.sleep(0.2)
+            listener.close()
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            pass
-
-        def bind(self, address):
-            attempts.append(address)
-            if len(attempts) == 1:
-                raise OSError("runtime proxy is shutting down")
-
-    monkeypatch.setattr(cli.socket, "socket", Probe)
-    monkeypatch.setattr(cli, "sleep", lambda _: None, raising=False)
-    cli.check_ports({"UI_PORT": "28821"}, set(), timeout=5)
-    assert attempts == [("127.0.0.1", 28821)] * 2
+        with ThreadPoolExecutor(max_workers=1) as workers:
+            stopped = workers.submit(stop_proxy)
+            release.set()
+            cli.check_ports({"UI_PORT": str(port)}, set(), timeout=5)
+            stopped.result(timeout=5)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", port))
 
 
 def test_secret_redaction_includes_generated_credentials(tmp_path):
@@ -142,7 +144,8 @@ def test_iceberg_seed_is_atomic_multifile_and_preserves_edits(tmp_path, monkeypa
         "uri": f"sqlite:///{tmp_path}/catalog.db",
         "warehouse": str(tmp_path / "warehouse"),
     }
-    monkeypatch.setattr(seed, "_catalog_options", lambda: options)
+    monkeypatch.setenv("ICEBERG_CATALOG_URI", options["uri"])
+    monkeypatch.setenv("ICEBERG_WAREHOUSE", options["warehouse"])
     fixture = json.loads(Path("examples/demo/keycloak/fixtures/demo_fixture.json").read_text())[
         "tables"
     ][0]
@@ -168,7 +171,8 @@ def test_failed_iceberg_seed_does_not_publish_partial_table(tmp_path, monkeypatc
         "uri": f"sqlite:///{tmp_path}/catalog.db",
         "warehouse": str(tmp_path / "warehouse"),
     }
-    monkeypatch.setattr(seed, "_catalog_options", lambda: options)
+    monkeypatch.setenv("ICEBERG_CATALOG_URI", options["uri"])
+    monkeypatch.setenv("ICEBERG_WAREHOUSE", options["warehouse"])
     fixture = json.loads(Path("examples/demo/keycloak/fixtures/demo_fixture.json").read_text())[
         "tables"
     ][0]
@@ -193,24 +197,23 @@ def test_failed_iceberg_seed_does_not_publish_partial_table(tmp_path, monkeypatc
         assert catalog.load_table(fixture["target"]).scan().to_arrow().num_rows == 4
 
 
-def test_failed_reset_preserves_credentials(tmp_path, monkeypatch):
-    cli = _cli()
-    cli.initialize_config(tmp_path, {})
-    original = (tmp_path / ".env").read_bytes()
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-
-    def unavailable(*args, **kwargs):
-        raise RuntimeError("engine unavailable")
-
-    monkeypatch.setattr(cli, "_compose", unavailable)
-    assert cli.main(["reset"]) == 1
-    assert (tmp_path / ".env").read_bytes() == original
+def test_failed_reset_preserves_credentials(demo_process):
+    demo = demo_process(failure=True)
+    _cli().initialize_config(demo.root, {})
+    original = (demo.root / ".env").read_bytes()
+    result = demo.run("reset")
+    assert result.returncode == 1
+    assert (demo.root / ".env").read_bytes() == original
+    assert "down" in demo.commands()[0]
 
 
-def test_reset_can_recover_incomplete_configuration(tmp_path, monkeypatch):
-    cli = _cli()
-    (tmp_path / ".env").write_text("ADMIN_TOKEN=interrupted\n")
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    monkeypatch.setattr(cli, "_compose", lambda *args, **kwargs: "")
-    assert cli.main(["reset"]) == 0
-    assert not (tmp_path / ".env").exists()
+def test_reset_can_recover_incomplete_configuration(demo_process):
+    demo = demo_process()
+    (demo.root / ".env").write_text("ADMIN_TOKEN=interrupted\n")
+    result = demo.run("reset")
+    assert result.returncode == 0, result.stderr
+    assert not (demo.root / ".env").exists()
+    assert "Local example reset" in result.stdout
+    command = demo.commands()[0]
+    assert command[-3:] == ["down", "--volumes", "--remove-orphans"]
+    assert command[command.index("--project-name") + 1].startswith("dal-obscura-local-")

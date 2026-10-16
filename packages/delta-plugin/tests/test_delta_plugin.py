@@ -399,8 +399,17 @@ def test_deletion_vector_budget_is_checked_before_materialization(
         configuration={"delta.enableDeletionVectors": "true"},
     )
     native_delta(path, [1])
+    from dal_obscura_delta.snapshot import MAX_DV_ROWS
+
+    original_actions = DeltaTable.get_add_actions
+
+    def oversized_actions(self, *args, **kwargs):
+        actions = pa.table(original_actions(self, *args, **kwargs))
+        index = actions.schema.get_field_index("num_records")
+        return actions.set_column(index, "num_records", pa.array([MAX_DV_ROWS + 1] * len(actions)))
+
+    monkeypatch.setattr(DeltaTable, "get_add_actions", oversized_actions)
     _, format = open_format(tmp_path, context)
-    monkeypatch.setattr("dal_obscura_delta.format.MAX_DV_ROWS", 4)
 
     def forbidden_materialization(self):
         pytest.fail("kernel mask materialization must not run after budget rejection")

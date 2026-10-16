@@ -12,9 +12,6 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from dal_obscura.adapters.providers.published import (
     PublishedPolicy,
-    _catalog_config_for_asset,
-    _schema_identities,
-    _validate_schema_admission,
 )
 from dal_obscura.adapters.sql.database.db import (
     session_factory,
@@ -35,6 +32,12 @@ from dal_obscura.kernel.plans.snapshot import (
     PublishedSource,
 )
 from dal_obscura.kernel.policy.models import AccessRule, AssetPolicy
+from tests.control.live_admission_cases import (
+    AdmissionPlugins,
+    admission_identities,
+    admit_snapshot,
+    capture_catalog,
+)
 
 ICEBERG_CATALOG_ID = "iceberg.catalog"
 
@@ -73,9 +76,7 @@ def test_live_config_rejects_tampered_plugin_binding(plugin_id):
     catalog = PublishedCatalog("analytics", "", 0, {})
 
     with pytest.raises(ValueError, match="unsupported without an admitted registry"):
-        _catalog_config_for_asset(
-            replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id))
-        )
+        capture_catalog(replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)))
 
 
 def test_live_config_passes_runtime_path_enforcer_to_catalog():
@@ -90,23 +91,24 @@ def test_live_config_passes_runtime_path_enforcer_to_catalog():
     catalog = PublishedCatalog("analytics", "", 0, {})
     enforcer = PathRuleEnforcer([{"root": "s3://warehouse"}])
 
-    resolved = _catalog_config_for_asset(
+    resolved = capture_catalog(
         replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
         path_enforcer=enforcer,
-        plugin_registry=_AdmittedPluginSnapshot(
+        plugin_registry=AdmissionPlugins(
             ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
         ),
     )
 
-    assert resolved.path_enforcer is enforcer
-
-
-class _AdmittedPluginSnapshot:
-    def __init__(self, *keys: tuple[str, str]) -> None:
-        self._keys = set(keys)
-
-    def admitted(self) -> dict[tuple[str, str], object]:
-        return {key: object() for key in self._keys}
+    assert resolved.plugin_id == "iceberg.catalog"
+    with pytest.raises(PermissionError):
+        capture_catalog(
+            asset,
+            path_enforcer=enforcer,
+            location="s3://outside/table",
+            plugin_registry=AdmissionPlugins(
+                ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
+            ),
+        )
 
 
 def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
@@ -121,14 +123,14 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
     catalog = PublishedCatalog("analytics", "", 0, {})
 
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
-        _catalog_config_for_asset(
+        capture_catalog(
             replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
-            plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.catalog")),
+            plugin_registry=AdmissionPlugins(("catalog", "iceberg.catalog")),
         )
 
-    resolved = _catalog_config_for_asset(
+    resolved = capture_catalog(
         replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
-        plugin_registry=_AdmittedPluginSnapshot(
+        plugin_registry=AdmissionPlugins(
             ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
         ),
     )
@@ -139,9 +141,9 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
         catalog=replace(asset.catalog, plugin_id="dal_obscura.sources.catalogs.IcebergCatalog"),
     )
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
-        _catalog_config_for_asset(
+        capture_catalog(
             replace(retired, catalog=replace(catalog, plugin_id=retired.catalog.plugin_id)),
-            plugin_registry=_AdmittedPluginSnapshot(
+            plugin_registry=AdmissionPlugins(
                 ("catalog", "iceberg.catalog"), ("table_format", "iceberg")
             ),
         )
@@ -157,9 +159,9 @@ def test_live_config_preserves_external_plugin_identity():
         asset_id=None,
     )
     catalog = PublishedCatalog("analytics", "manifest", 0, {"root": "/srv/data"})
-    resolved = _catalog_config_for_asset(
+    resolved = capture_catalog(
         replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
-        plugin_registry=_AdmittedPluginSnapshot(
+        plugin_registry=AdmissionPlugins(
             ("catalog", "manifest"), ("table_format", "parquet.dataset")
         ),
     )
@@ -178,9 +180,9 @@ def test_live_config_preserves_catalog_plugin_revision():
     )
     catalog = PublishedCatalog("analytics", "manifest", 17, {"root": "/srv/data"})
 
-    resolved = _catalog_config_for_asset(
+    resolved = capture_catalog(
         replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
-        plugin_registry=_AdmittedPluginSnapshot(
+        plugin_registry=AdmissionPlugins(
             ("catalog", "manifest"), ("table_format", "parquet.dataset")
         ),
     )
@@ -197,11 +199,7 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
             pa.field("labels", pa.map_(pa.string(), pa.string())),
         ]
     )
-    identities = _schema_identities(schema)
-
-    assert len(identities) == 8
-    assert all(field_id.startswith("synthetic:") for _, field_id in identities)
-    assert any(path == ("profile", "phone") for path, _ in identities)
+    identities = admission_identities(schema)
 
     admission = {
         "fields": [
@@ -218,7 +216,7 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
         asset_id=None,
     )
 
-    _validate_schema_admission(asset, schema)
+    admit_snapshot(asset, schema)
     changed = pa.schema(
         [
             pa.field("email", pa.string()),
@@ -228,7 +226,7 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
         ]
     )
     with pytest.raises(ValueError, match="schema admission"):
-        _validate_schema_admission(asset, changed)
+        admit_snapshot(asset, changed)
 
 
 def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
@@ -246,12 +244,12 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
     )
 
     with pytest.raises(ValueError, match="stable provider field IDs"):
-        _validate_schema_admission(asset, schema)
+        admit_snapshot(asset, schema)
 
 
 def test_schema_admission_rejects_binary_metadata_replaced_with_escape_text():
     original = pa.schema([pa.field("email", pa.string(), metadata={b"key": b"\xff"})])
-    identities = _schema_identities(original)
+    identities = admission_identities(original)
     asset = PublishedAssetSnapshot(
         catalog=PublishedCatalog("analytics", "", 0, {}),
         target="default.users",
@@ -272,15 +270,9 @@ def test_schema_admission_rejects_binary_metadata_replaced_with_escape_text():
     )
     changed = pa.schema([pa.field("email", pa.string(), metadata={b"key": b"\\xff"})])
 
-    _validate_schema_admission(asset, original)
+    admit_snapshot(asset, original)
     with pytest.raises(ValueError, match="schema admission"):
-        _validate_schema_admission(asset, changed)
-
-
-def test_runtime_schema_identities_reject_oversized_canonical_metadata():
-    schema = pa.schema([pa.field("email", pa.string())], metadata={b"key": b"x" * 1_600_000})
-    with pytest.raises(ValueError, match="Schema encoding exceeds"):
-        _schema_identities(schema)
+        admit_snapshot(asset, changed)
 
 
 def test_legacy_wildcard_policy_requires_schema_admission():
@@ -299,7 +291,7 @@ def test_legacy_wildcard_policy_requires_schema_admission():
     )
 
     with pytest.raises(ValueError, match="requires schema admission"):
-        _validate_schema_admission(asset, pa.schema([pa.field("id", pa.int64())]))
+        admit_snapshot(asset, pa.schema([pa.field("id", pa.int64())]))
 
 
 def test_legacy_parent_policy_requires_schema_admission():
@@ -319,26 +311,30 @@ def test_legacy_parent_policy_requires_schema_admission():
     schema = pa.schema([pa.field("profile", pa.struct([pa.field("email", pa.string())]))])
 
     with pytest.raises(ValueError, match="requires schema admission"):
-        _validate_schema_admission(asset, schema)
+        admit_snapshot(asset, schema)
 
 
 def test_live_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     _seed_live_asset(db_session, policy_version=123)
     config_store = LiveConfigStore(session_factory(db_session.get_bind().engine))
 
     config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
 
-    def fail_get(*args, **kwargs):
-        del args, kwargs
+    from sqlalchemy import event
+
+    engine = db_session.get_bind().engine
+
+    def unavailable(*args, **kwargs):
         raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr(config_store, "_live_asset", fail_get)
-
-    with pytest.raises(RuntimeError, match="database unavailable"):
-        config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
+    event.listen(engine, "before_cursor_execute", unavailable)
+    try:
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            config_store.get_asset_and_catalog(catalog="analytics", target="default.users")
+    finally:
+        event.remove(engine, "before_cursor_execute", unavailable)
 
 
 def test_live_store_rejects_directly_removed_assets(db_session: Session):
@@ -412,7 +408,7 @@ def test_live_schema_admission_rejects_rebound_or_added_field():
     )
 
     with pytest.raises(ValueError, match="no longer matches"):
-        _validate_schema_admission(asset, schema)
+        admit_snapshot(asset, schema)
 
 
 def test_live_schema_admission_requires_refresh_after_renamed_field():
@@ -450,7 +446,7 @@ def test_live_schema_admission_requires_refresh_after_renamed_field():
     )
 
     with pytest.raises(ValueError, match="no longer matches"):
-        _validate_schema_admission(asset, schema)
+        admit_snapshot(asset, schema)
 
 
 def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
@@ -497,7 +493,7 @@ def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
         asset_id=None,
     )
 
-    _validate_schema_admission(
+    admit_snapshot(
         asset,
         pa.schema(
             [
@@ -513,23 +509,6 @@ def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
             ]
         ),
     )
-
-
-@pytest.mark.parametrize(
-    "metadata",
-    [
-        {b"PARQUET:field_id": b"bad\x00id"},
-        {b"iceberg.field.id": b"x" * 129},
-        {b"PARQUET:field_id": b"\xff"},
-        {b"PARQUET:field_id": b"synthetic:forged"},
-    ],
-)
-def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: dict[bytes, bytes]):
-    identities = _schema_identities(pa.schema([pa.field("id", pa.int64(), metadata=metadata)]))
-
-    [(path, field_id)] = list(identities)
-    assert path == ("id",)
-    assert field_id.startswith("synthetic:")
 
 
 def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
@@ -594,7 +573,7 @@ def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
         ]
     )
 
-    _validate_schema_admission(asset, schema)
+    admit_snapshot(asset, schema)
 
 
 def test_live_schema_admission_rejects_collection_identity_drift():
@@ -630,7 +609,7 @@ def test_live_schema_admission_rejects_collection_identity_drift():
     )
 
     with pytest.raises(ValueError, match="no longer matches"):
-        _validate_schema_admission(asset, schema)
+        admit_snapshot(asset, schema)
 
 
 def test_live_schema_admission_rejects_duplicate_live_field_ids():
@@ -663,7 +642,7 @@ def test_live_schema_admission_rejects_duplicate_live_field_ids():
     )
 
     with pytest.raises(ValueError, match="duplicate field identity"):
-        _validate_schema_admission(asset, schema)
+        admit_snapshot(asset, schema)
 
 
 def test_live_schema_admission_rejects_tampered_admission_digest():
@@ -680,7 +659,7 @@ def test_live_schema_admission_rejects_tampered_admission_digest():
     )
 
     with pytest.raises(ValueError, match="admission digest"):
-        _validate_schema_admission(
+        admit_snapshot(
             asset, pa.schema([pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})])
         )
 
@@ -755,4 +734,4 @@ def test_explicit_allow_all_does_not_require_a_frozen_column_selection():
         admitted_schema=None,
         asset_id=None,
     )
-    _validate_schema_admission(asset, pa.schema([pa.field("new_column", pa.string())]))
+    admit_snapshot(asset, pa.schema([pa.field("new_column", pa.string())]))

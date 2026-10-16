@@ -449,7 +449,14 @@ def test_native_stream_owns_reader(table, stop, monkeypatch):
     from dal_obscura_plugin_conformance.iceberg_fixtures import NativeReaderStub
 
     reader = NativeReaderStub(batch, fail=stop == "failure")
-    monkeypatch.setattr(plugin, "_native", lambda context: reader)
+    from types import SimpleNamespace
+
+    files = [(task.file.file_path, task.file.record_count) for task in table.scan().plan_files()]
+    monkeypatch.setattr(
+        "dal_obscura_iceberg_reader.Reader",
+        lambda *args: SimpleNamespace(files=lambda: files, start=lambda fragments: reader),
+    )
+    operation = replace(operation)
     _, batches = plugin.execute(task, operation)
     if stop == "failure":
         with pytest.raises(RuntimeError, match="native read failed"):

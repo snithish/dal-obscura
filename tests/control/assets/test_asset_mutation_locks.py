@@ -1,80 +1,115 @@
-from __future__ import annotations
+"""Asset mutations reject stale revisions without changing published state."""
 
-from unittest.mock import Mock
-from uuid import uuid4
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from uuid import UUID
 
 import pytest
 
-from dal_obscura.application.governance.assets import service as asset_service
-from dal_obscura.application.governance.errors import ValidationFailure
+from dal_obscura.adapters.providers.governance import ProviderAssetSchemaLoader
+from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory
+from dal_obscura.application.governance.assets.service import AssetsCommands
+from dal_obscura.application.governance.errors import ConfigurationConflictError, ValidationFailure
+from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from tests.support.storage.postgres import isolated_postgres_sessions
 
 
-def test_owner_replacement_locks_before_read_and_write() -> None:
-    store = Mock()
-    store.list_asset_owners.return_value = []
-    store.replace_asset_owners.return_value = ["user:owner"]
-    asset_id = uuid4()
-
-    assert asset_service.replace_asset_owners(
-        Mock(assets=store), asset_id, ["user:owner"], expected_revision=0
-    ) == ["user:owner"]
-
-    assert store.method_calls[:3] == [
-        ("lock_asset_for_update", (asset_id,), {}),
-        ("list_asset_owners", (asset_id,), {}),
-        (
-            "replace_asset_owners",
-            (),
-            {"asset_id": asset_id, "owners": ["user:owner"], "expected_revision": 0},
-        ),
-    ]
-
-
-def test_grant_replacement_locks_before_write() -> None:
-    store = Mock()
-    store.replace_asset_grants.return_value = []
-    asset_id = uuid4()
-
-    assert (
-        asset_service.replace_asset_grants(Mock(assets=store), asset_id, [], expected_revision=0)
-        == []
+@pytest.mark.parametrize("mutation", ["owners", "grants", "schema"])
+def test_stale_asset_mutation_preserves_current_owners_and_revision(asset_commands, mutation):
+    commands, work_factory, actor = asset_commands
+    asset = commands.upsert_workspace_asset(
+        "analytics", "events", "iceberg", "default.events", {}, actor=actor, correlation_id=None
     )
+    asset_id = UUID(asset["id"])
+    commands.replace_asset_owners(asset_id, ["current-owner"], 0, actor=actor, correlation_id=None)
+    with work_factory() as work:
+        before = work.assets.get_workspace_asset(asset_id)
+    with pytest.raises(ConfigurationConflictError, match="revision") as failure:
+        if mutation == "owners":
+            commands.replace_asset_owners(
+                asset_id, ["stale-owner"], 0, actor=actor, correlation_id=None
+            )
+        elif mutation == "grants":
+            commands.replace_asset_grants(
+                asset_id,
+                [{"principal": "stale-reader", "capability": "read"}],
+                0,
+                actor=actor,
+                correlation_id=None,
+            )
+        else:
+            commands.replace_asset_schema_fields(
+                asset_id,
+                [{"name": "stale-field", "path": ["stale-field"], "field_id": "1"}],
+                0,
+                actor=actor,
+                correlation_id=None,
+            )
+    assert failure.value.current_revision == 1
+    with work_factory() as work:
+        assert work.assets.get_workspace_asset(asset_id) == before
+        assert work.assets.list_asset_owners(asset_id) == ["current-owner"]
+        assert work.assets.list_asset_grants(asset_id) == []
+        assert work.assets.list_asset_schema_fields(asset_id) == []
 
-    assert store.method_calls == [
-        ("lock_asset_for_update", (asset_id,), {}),
-        (
-            "replace_asset_grants",
-            (),
-            {"asset_id": asset_id, "grants": [], "expected_revision": 0},
-        ),
-    ]
 
-
-def test_schema_admission_replacement_locks_before_write() -> None:
-    store = Mock()
-    store.replace_asset_schema_fields.return_value = []
-    asset_id = uuid4()
-
-    assert (
-        asset_service.replace_asset_schema_fields(
-            Mock(assets=store), asset_id, [], expected_revision=0
+def test_schema_identity_input_errors_are_safe_validation_failures(asset_commands):
+    commands, work_factory, actor = asset_commands
+    asset = commands.upsert_workspace_asset(
+        "analytics", "events", "iceberg", "default.events", {}, actor=actor, correlation_id=None
+    )
+    asset_id = UUID(asset["id"])
+    with pytest.raises(ValidationFailure, match="field id must be text"):
+        commands.replace_asset_schema_fields(
+            asset_id,
+            [{"name": "id", "path": ["id"], "field_id": 42}],
+            0,
+            actor=actor,
+            correlation_id=None,
         )
-        == []
-    )
-
-    assert store.method_calls == [
-        ("lock_asset_for_update", (asset_id,), {}),
-        (
-            "replace_asset_schema_fields",
-            (),
-            {"asset_id": asset_id, "fields": [], "expected_revision": 0},
-        ),
-    ]
+    with work_factory() as work:
+        assert work.assets.list_asset_schema_fields(asset_id) == []
+        assert work.assets.get_workspace_asset(asset_id)["revision"] == 0
 
 
-def test_schema_identity_input_errors_are_safe_validation_failures() -> None:
-    store = Mock()
-    store.replace_asset_schema_fields.side_effect = ValueError("field id is unsafe")
+@pytest.mark.integration
+def test_concurrent_owner_replacements_commit_exactly_one_revision():
+    actor = ControlPlaneActor.for_platform_admin("admin")
+    with isolated_postgres_sessions() as sessions:
+        factory = SqlGovernanceUnitOfWorkFactory(sessions)
+        with factory() as work:
+            work.workspace.ensure_workspace()
+            work.catalogs.upsert_catalog(name="analytics", plugin_id="iceberg.catalog", options={})
+            asset_id = work.assets.upsert_asset(
+                catalog="analytics",
+                target="events",
+                backend="iceberg",
+                table_identifier="default.events",
+                options={},
+            )
+            work.commit()
+        commands = AssetsCommands(
+            factory, schema_loader=ProviderAssetSchemaLoader(), plugin_registry=None
+        )
+        ready = Barrier(2)
 
-    with pytest.raises(ValidationFailure, match="field id is unsafe"):
-        asset_service.replace_asset_schema_fields(Mock(assets=store), uuid4(), [{"name": "id"}])
+        def replace(owner):
+            with factory() as work:
+                revision = work.assets.get_workspace_asset(asset_id)["revision"]
+            assert isinstance(revision, int)
+            ready.wait(timeout=10)
+            try:
+                commands.replace_asset_owners(
+                    asset_id, [owner], revision, actor=actor, correlation_id=owner
+                )
+                return owner
+            except ConfigurationConflictError:
+                return None
+
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            outcomes = list(workers.map(replace, ["owner-a", "owner-b"]))
+        winners = [owner for owner in outcomes if owner is not None]
+        assert len(winners) == 1
+        with factory() as work:
+            assert work.assets.list_asset_owners(asset_id) == winners
+            assert work.assets.get_workspace_asset(asset_id)["revision"] == 1

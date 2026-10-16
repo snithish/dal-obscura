@@ -8,7 +8,6 @@ from uuid import UUID
 
 from pyiceberg.schema import Schema
 from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringType, StructType
-from sqlalchemy.orm import Session
 
 from dal_obscura.adapters.providers.governance import ProviderAssetSchemaLoader
 from dal_obscura.application.governance.assets.schema import (
@@ -19,7 +18,7 @@ from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
 def discover_schema(
-    store: Session, asset_id: UUID, actor: ControlPlaneActor, **options: Any
+    store: _FakeStore, asset_id: UUID, actor: ControlPlaneActor, **options: Any
 ) -> dict[str, object]:
     captured = capture_asset_schema(
         Mock(assets=store, catalogs=store, workspace=store),

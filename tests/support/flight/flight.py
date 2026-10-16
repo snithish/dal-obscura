@@ -36,8 +36,7 @@ from dal_obscura.kernel.policy.models import (
 )
 from dal_obscura.kernel.policy.policy_resolution import resolve_access
 from dal_obscura.plugins.bootstrap import create_plugin_registry
-from tests.support.read.reads import StaticAccessContext, make_read_service
-from tests.support.read.use_cases import FakeTicketStore
+from tests.support.read.fakes import FakeTicketStore, StaticAccessContext, make_read_service
 
 TEST_JWT_SECRET = "test-jwt-secret-32-characters-long"
 

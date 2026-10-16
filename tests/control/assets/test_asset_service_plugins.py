@@ -1,19 +1,18 @@
-from __future__ import annotations
+"""Plugin binding validates admission before publishing a persisted asset."""
 
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import Mock
-from uuid import uuid4
+from dataclasses import replace
+from uuid import UUID
 
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.application.governance.assets.service import upsert_workspace_asset
+from dal_obscura.adapters.providers.governance import ProviderAssetSchemaLoader
+from dal_obscura.application.governance.assets.service import AssetsCommands
 from dal_obscura.application.governance.errors import ValidationFailure
 
 
-def _registry(*, overlap: bool = True) -> Any:
-    capabilities = frozenset({"nested_schema"}) if overlap else frozenset({"snapshot_reads"})
+def _commands(asset_commands, *, overlap=True, declared_format=True):
+    _, factory, actor = asset_commands
     catalog = PluginDescriptor(
         kind="catalog",
         plugin_id="fixture.catalog",
@@ -21,10 +20,12 @@ def _registry(*, overlap: bool = True) -> Any:
         config_version=1,
         distribution="fixture",
         version="1.0.0",
-        capabilities=capabilities,
+        capabilities=frozenset({"nested_schema"} if overlap else {"snapshot_reads"}),
         output_formats=frozenset({"fixture.format"}),
         handle_versions=frozenset({1}),
     )
+    if not declared_format:
+        catalog = replace(catalog, output_formats=frozenset())
     format_descriptor = PluginDescriptor(
         kind="table_format",
         plugin_id="fixture.format",
@@ -36,95 +37,68 @@ def _registry(*, overlap: bool = True) -> Any:
         handle_versions=frozenset({1}),
         config_schema={"fields": [{"name": "format_option", "type": "string", "required": True}]},
     )
-    registry = cast(Any, Mock())
-    registry.admitted.return_value = {
-        ("catalog", "fixture.catalog"): catalog,
-        ("table_format", "fixture.format"): format_descriptor,
-    }
-    return registry
+
+    class Registry:
+        def admitted(self):
+            return {
+                ("catalog", "fixture.catalog"): catalog,
+                ("table_format", "fixture.format"): format_descriptor,
+            }
+
+    with factory() as work:
+        work.catalogs.upsert_catalog(name="plugins", plugin_id="fixture.catalog", options={})
+        work.commit()
+    return AssetsCommands(
+        factory, schema_loader=ProviderAssetSchemaLoader(), plugin_registry=Registry()
+    ), actor
 
 
-def _store() -> Mock:
-    store = Mock()
-    store.get_workspace.return_value = SimpleNamespace()
-    store.get_workspace_catalog.return_value = {"plugin_id": "fixture.catalog"}
-    store.upsert_asset.return_value = uuid4()
-    return Mock(workspace=store, catalogs=store, assets=store)
-
-
-def test_asset_binding_validates_pair_capabilities_and_format_options() -> None:
-    store = _store()
-
-    with pytest.raises(ValidationFailure, match="missing required"):
-        upsert_workspace_asset(
-            store,
-            "analytics",
-            "events",
-            "fixture.format",
-            "default.events",
-            {},
-            plugin_registry=_registry(),
-        )
-
-    with pytest.raises(ValidationFailure, match="must be a string"):
-        upsert_workspace_asset(
-            store,
-            "analytics",
-            "events",
-            "fixture.format",
-            "default.events",
-            {"format_option": 42},
-            plugin_registry=_registry(),
-        )
-
-    result = upsert_workspace_asset(
-        store,
-        "analytics",
+def test_asset_binding_validates_pair_capabilities_and_format_options(asset_commands):
+    commands, actor = _commands(asset_commands)
+    for options, message in [({}, "missing required"), ({"format_option": 42}, "must be a string")]:
+        with pytest.raises(ValidationFailure, match=message):
+            commands.upsert_workspace_asset(
+                "plugins",
+                "events",
+                "fixture.format",
+                "default.events",
+                options,
+                actor=actor,
+                correlation_id=None,
+            )
+        assert commands.list_workspace_assets(actor=actor, correlation_id=None) == []
+    result = commands.upsert_workspace_asset(
+        "plugins",
         "events",
         "fixture.format",
         "default.events",
         {"format_option": "safe"},
-        plugin_registry=_registry(),
+        actor=actor,
+        correlation_id=None,
     )
-    assert result["catalog"] == "analytics"
-    store.assets.upsert_asset.assert_called_once()
+    persisted = commands.get_workspace_asset(UUID(result["id"]), actor=actor, correlation_id=None)
+    assert persisted["catalog"] == "plugins"
+    assert persisted["backend"] == "fixture.format"
+    assert persisted["table_identifier"] == "default.events"
+    assert persisted["options"] == {"format_option": "safe"}
 
 
-def test_asset_binding_rejects_non_overlapping_plugin_capabilities() -> None:
-    with pytest.raises(ValidationFailure, match="capabilities do not overlap"):
-        upsert_workspace_asset(
-            _store(),
-            "analytics",
+@pytest.mark.parametrize(
+    "overlap,declared_format,message",
+    [(False, True, "capabilities do not overlap"), (True, False, "does not declare")],
+)
+def test_asset_binding_rejects_incompatible_plugin_pair_without_publishing(
+    asset_commands, overlap, declared_format, message
+):
+    commands, actor = _commands(asset_commands, overlap=overlap, declared_format=declared_format)
+    with pytest.raises(ValidationFailure, match=message):
+        commands.upsert_workspace_asset(
+            "plugins",
             "events",
             "fixture.format",
             "default.events",
             {"format_option": "safe"},
-            plugin_registry=_registry(overlap=False),
+            actor=actor,
+            correlation_id=None,
         )
-
-
-def test_asset_binding_rejects_shared_capabilities_without_declared_output_format() -> None:
-    registry = _registry()
-    catalog = registry.admitted.return_value[("catalog", "fixture.catalog")]
-    catalog = PluginDescriptor(
-        kind=catalog.kind,
-        plugin_id=catalog.plugin_id,
-        api_version=catalog.api_version,
-        config_version=catalog.config_version,
-        distribution=catalog.distribution,
-        version=catalog.version,
-        capabilities=catalog.capabilities,
-        output_formats=frozenset(),
-        handle_versions=frozenset({1}),
-    )
-    registry.admitted.return_value[("catalog", "fixture.catalog")] = catalog
-    with pytest.raises(ValidationFailure, match="does not declare"):
-        upsert_workspace_asset(
-            _store(),
-            "analytics",
-            "events",
-            "fixture.format",
-            "default.events",
-            {"format_option": "safe"},
-            plugin_registry=registry,
-        )
+    assert commands.list_workspace_assets(actor=actor, correlation_id=None) == []

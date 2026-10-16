@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
-from dal_obscura_iceberg import catalog as iceberg_catalog
 from dal_obscura_iceberg.catalog import IcebergCatalog
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
@@ -26,12 +25,12 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
             loaded["table_identifier"] = table_identifier
             return FakePyIcebergTable()
 
-    def fake_load_catalog(catalog_name: str, options: dict[str, Any]) -> object:
+    def fake_load_catalog(catalog_name: str, **options: Any) -> object:
         loaded["catalog_name"] = catalog_name
         loaded["options"] = options
         return FakePyIcebergCatalog()
 
-    monkeypatch.setattr(iceberg_catalog, "_load_iceberg_catalog", fake_load_catalog)
+    monkeypatch.setattr("pyiceberg.catalog.load_catalog", fake_load_catalog)
 
     catalog = _catalog(
         name="analytics",
@@ -66,9 +65,8 @@ def test_iceberg_registry_rejects_malformed_provider_namespaces(monkeypatch, bad
             return []
 
     monkeypatch.setattr(
-        iceberg_catalog,
-        "_load_iceberg_catalog",
-        lambda catalog_name, options: MalformedCatalog(),
+        "pyiceberg.catalog.load_catalog",
+        lambda catalog_name, **options: MalformedCatalog(),
     )
     catalog = _catalog(name="analytics", options={})
 
@@ -88,9 +86,8 @@ def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypat
             return [bad_identifier]
 
     monkeypatch.setattr(
-        iceberg_catalog,
-        "_load_iceberg_catalog",
-        lambda catalog_name, options: MalformedCatalog(),
+        "pyiceberg.catalog.load_catalog",
+        lambda catalog_name, **options: MalformedCatalog(),
     )
     catalog = _catalog(name="analytics", options={})
 
@@ -109,9 +106,8 @@ def test_iceberg_registry_bounds_unbounded_namespace_providers(monkeypatch):
             return []
 
     monkeypatch.setattr(
-        iceberg_catalog,
-        "_load_iceberg_catalog",
-        lambda catalog_name, options: EndlessCatalog(),
+        "pyiceberg.catalog.load_catalog",
+        lambda catalog_name, **options: EndlessCatalog(),
     )
     catalog = _catalog(name="analytics", options={})
 
@@ -130,9 +126,8 @@ def test_iceberg_registry_bounds_unbounded_table_providers(monkeypatch):
             return (("users", str(index)) for index in range(100_000))
 
     monkeypatch.setattr(
-        iceberg_catalog,
-        "_load_iceberg_catalog",
-        lambda catalog_name, options: EndlessCatalog(),
+        "pyiceberg.catalog.load_catalog",
+        lambda catalog_name, **options: EndlessCatalog(),
     )
     catalog = _catalog(name="analytics", options={})
 
@@ -163,7 +158,7 @@ def test_catalog_handle_never_copies_provider_credentials_or_redirect_properties
         def load_table(self, identifier):
             return Table()
 
-    monkeypatch.setattr(iceberg_catalog, "_load_iceberg_catalog", lambda *args: Catalog())
+    monkeypatch.setattr("pyiceberg.catalog.load_catalog", lambda *args, **kwargs: Catalog())
     source = _catalog(name="analytics", options={}).resolve_table(
         TableIdentifier(("default",), "users"), _context()
     )

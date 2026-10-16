@@ -13,31 +13,26 @@ from dal_obscura.adapters.sql.database.db import migrate_config_store
 from dal_obscura.bootstrap import control as control_bootstrap
 from dal_obscura.bootstrap import control_config
 from dal_obscura.interfaces.cli import control as control_plane_cli
-from dal_obscura.plugins import PluginRegistry
 from dal_obscura.runtime.secrets import SecretProvider
 
 
-def test_control_plane_cli_starts_configured_app(engine_factory, monkeypatch, tmp_path) -> None:
+@pytest.mark.socket
+def test_control_plane_cli_starts_configured_app(engine_factory, tmp_path, control_server):
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     migrate_config_store(engine_factory(database_url))
-    calls: dict[str, object] = {}
-    environment = {
-        "DAL_OBSCURA_DATABASE_URL": database_url,
-        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
-        "DAL_OBSCURA_CONTROL_PLANE_HOST": "127.0.0.1",
-        "DAL_OBSCURA_CONTROL_PLANE_PORT": "8820",
-    }
-
-    monkeypatch.setattr(
-        control_bootstrap.uvicorn,
-        "run",
-        lambda app, **kwargs: calls.update({"app": app, **kwargs}),
-    )
-
-    assert control_plane_cli.run(environment) == 0
-    assert calls["host"] == "127.0.0.1"
-    assert calls["port"] == 8820
-    assert cast(FastAPI, calls["app"]).title == "dal-obscura control-plane API"
+    with control_server(
+        {
+            "DAL_OBSCURA_DATABASE_URL": database_url,
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
+        }
+    ) as client:
+        assert client.get("/healthz").json() == {"status": "ok"}
+        denied = client.get("/v1/session")
+        assert denied.status_code == 401
+        session = client.get("/v1/session", headers={"authorization": "Bearer test-admin"})
+        assert session.status_code == 200
+        assert session.json()["principal"] == "platform:admin"
+        assert session.json()["platform_admin"] is True
 
 
 @pytest.mark.parametrize("startup_fails", [False, True], ids=["shutdown", "startup-failure"])
@@ -82,10 +77,12 @@ def test_control_plane_owns_startup_backend_resources(
         resource.close()
 
 
-def test_control_plane_cli_passes_login_rate_limits(engine_factory, monkeypatch, tmp_path) -> None:
+@pytest.mark.socket
+def test_control_plane_cli_applies_configured_login_rate_limits(
+    engine_factory, tmp_path, control_server
+):
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     migrate_config_store(engine_factory(database_url))
-    captured: dict[str, object] = {}
     environment = {
         "DAL_OBSCURA_DATABASE_URL": database_url,
         "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
@@ -93,32 +90,32 @@ def test_control_plane_cli_passes_login_rate_limits(engine_factory, monkeypatch,
         "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_WINDOW_SECONDS": "120",
         "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS": "42",
         "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS": "77",
-        "DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS": "10.0.0.8/32, 10.0.0.9",
+        "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "ui",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
     }
-
-    monkeypatch.setattr(
-        control_bootstrap,
-        "build_control_app",
-        lambda *args, **kwargs: captured.update(kwargs) or FastAPI(),
-    )
-    monkeypatch.setattr(control_bootstrap.uvicorn, "run", lambda app, **kwargs: None)
-
-    assert control_plane_cli.run(environment) == 0
-    assert captured["login_rate_limit_attempts"] == 5
-    assert captured["login_rate_limit_window_seconds"] == 120
-    assert captured["login_rate_limit_block_seconds"] == 42
-    assert captured["login_rate_limit_aggregate_attempts"] == 77
-    assert captured["trusted_proxy_peers"] == ("10.0.0.8/32", "10.0.0.9")
-    assert captured["cors_origins"] == ("http://127.0.0.1:5173", "http://localhost:5173")
-    registry = cast(PluginRegistry, captured["plugin_registry"])
-    assert ("catalog", "iceberg.catalog") in registry.admitted()
-    assert ("table_format", "iceberg") in registry.admitted()
+    with control_server(environment) as client:
+        headers = {"authorization": "Bearer wrong-token", "origin": "https://console.example"}
+        for _ in range(5):
+            assert client.get("/auth/login", headers=headers).status_code == 303
+        blocked = client.get("/auth/login", headers=headers)
+        assert blocked.status_code == 429
+        assert 0 < int(blocked.headers["retry-after"]) <= 42
+        assert blocked.json()["error"]["code"] == "rate_limited"
+        session = client.get(
+            "/v1/session",
+            headers={"authorization": "Bearer test-admin", "origin": "https://console.example"},
+        )
+        assert session.headers["access-control-allow-origin"] == "https://console.example"
 
 
 def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
     config = control_config.ui_auth_config(
         {
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "governance-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS": "Owner=owner",
             "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL": "https://issuer.example/token",
@@ -270,6 +267,7 @@ def test_control_plane_cli_requires_a_shared_catalog_cursor_secret(secret, capsy
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "admin",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
@@ -308,6 +306,7 @@ def test_control_plane_cli_rejects_sqlite_in_production(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
@@ -328,6 +327,7 @@ def test_control_plane_cli_rejects_enabled_static_bootstrap_in_production(capsys
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
@@ -349,6 +349,7 @@ def test_control_plane_cli_requires_production_admin_group(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
@@ -371,6 +372,7 @@ def test_control_plane_cli_requires_oidc_redirect_origins_in_cors(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://other.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
@@ -423,6 +425,7 @@ def test_control_plane_cli_rejects_insecure_explicit_oidc_endpoints(name, value,
         "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
         "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL": "https://issuer.example/jwks",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
         "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",

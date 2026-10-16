@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Event
+from uuid import uuid4
+
 import pytest
-from dal_obscura_plugin_api import DiscoveryPage, PluginDescriptor, TableIdentifier
+from dal_obscura_plugin_api import CatalogConfig, DiscoveryPage, PluginDescriptor, TableIdentifier
 
 import dal_obscura.adapters.providers.discovery as discovery
 import dal_obscura.adapters.providers.governance as catalog_service
 from dal_obscura.adapters.providers.discovery import (
     discover_public_catalog_tables,
 )
+from dal_obscura.application.governance.values import CatalogDiscovery
 from dal_obscura.plugins import PluginRegistry
 from tests.support.sources.discovery import (
     PagedCatalogRegistry,
@@ -153,54 +158,55 @@ def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
         )
 
 
-def test_public_catalog_discovery_rejects_when_process_capacity_is_exhausted(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class OccupiedSlots:
-        def acquire(self, *, blocking: bool) -> bool:
-            assert blocking is False
-            return False
+def test_public_catalog_discovery_rejects_when_process_capacity_is_exhausted():
+    capacity = discovery.DEFAULT_MAX_ACTIVE_DISCOVERIES
+    entered = Barrier(capacity + 1)
+    release = Event()
 
-        def release(self) -> None:
-            raise AssertionError("an unacquired slot must not be released")
+    def blocked():
+        entered.wait(timeout=10)
+        assert release.wait(10), "Provider calls were not released"
 
-    monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", OccupiedSlots())
+    registry = PagedCatalogRegistry(total=1, on_list=blocked)
+    with ThreadPoolExecutor(max_workers=capacity) as workers:
+        futures = [
+            workers.submit(
+                discover_public_catalog_tables,
+                "analytics",
+                "fixture.catalog",
+                {},
+                plugin_registry=registry,
+            )
+            for _ in range(capacity)
+        ]
+        try:
+            entered.wait(timeout=10)
+            with pytest.raises(RuntimeError, match="capacity is exhausted"):
+                discover_public_catalog_tables(
+                    "analytics", "fixture.catalog", {}, plugin_registry=registry
+                )
+        finally:
+            release.set()
+        assert all(future.result(timeout=10).entries for future in futures)
+    registry.on_list = None
+    assert discover_public_catalog_tables(
+        "analytics", "fixture.catalog", {}, plugin_registry=registry
+    ).entries
 
-    with pytest.raises(RuntimeError, match="capacity is exhausted"):
-        discover_public_catalog_tables(
-            "analytics", "fixture.catalog", {}, plugin_registry=PluginRegistry()
-        )
 
-
-def test_public_catalog_discovery_releases_capacity_after_factory_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class Slots:
-        acquired = 0
-        released = 0
-
-        def acquire(self, *, blocking: bool) -> bool:
-            assert blocking is False
-            self.acquired += 1
-            return True
-
-        def release(self) -> None:
-            self.released += 1
-
-    slots = Slots()
-    monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", slots)
-
+def test_public_catalog_discovery_releases_capacity_after_factory_failure():
     class Registry(PluginRegistry):
         def load(self, kind, plugin_id):
-            del kind, plugin_id
             raise RuntimeError("factory lookup failed")
 
-    with pytest.raises(RuntimeError, match="factory lookup failed"):
-        discover_public_catalog_tables(
-            "analytics", "fixture.catalog", {}, plugin_registry=Registry()
-        )
-
-    assert (slots.acquired, slots.released) == (1, 1)
+    for _ in range(discovery.DEFAULT_MAX_ACTIVE_DISCOVERIES + 1):
+        with pytest.raises(RuntimeError, match="factory lookup failed"):
+            discover_public_catalog_tables(
+                "analytics", "fixture.catalog", {}, plugin_registry=Registry()
+            )
+    assert discover_public_catalog_tables(
+        "analytics", "fixture.catalog", {}, plugin_registry=PagedCatalogRegistry(total=1)
+    ).entries
 
 
 def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
@@ -256,25 +262,35 @@ def test_public_catalog_discovery_rejects_oversized_page() -> None:
         )
 
 
-def test_workspace_discovery_limits_each_authenticated_session(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(catalog_service, "_SESSION_DISCOVERY_SLOTS", {})
-    first = catalog_service._admit_session_discovery("issuer|operator")
-    second = catalog_service._admit_session_discovery("issuer|operator")
-    first.__enter__()
-    second.__enter__()
-    try:
-        with (
-            pytest.raises(catalog_service.ValidationFailure, match="session capacity"),
-            catalog_service._admit_session_discovery("issuer|operator"),
-        ):
-            pass
-    finally:
-        second.__exit__(None, None, None)
-        first.__exit__(None, None, None)
-    with catalog_service._admit_session_discovery("issuer|operator"):
-        pass
+def test_workspace_discovery_limits_each_authenticated_session():
+    capacity = catalog_service.DEFAULT_MAX_ACTIVE_DISCOVERIES_PER_SESSION
+    entered = Barrier(capacity + 1)
+    release = Event()
+    session_key = "session-" + uuid4().hex
+
+    def blocked():
+        entered.wait(timeout=10)
+        assert release.wait(10), "Session discoveries were not released"
+
+    registry = PagedCatalogRegistry(total=1, on_list=blocked)
+    browser = catalog_service.ProviderCatalogBrowser(plugin_registry=registry, secret_provider=None)
+    captured = CatalogDiscovery(uuid4(), CatalogConfig("fixture.catalog", "analytics", 0, {}))
+    with ThreadPoolExecutor(max_workers=capacity) as workers:
+        futures = [
+            workers.submit(browser.discover, captured, session_key=session_key)
+            for _ in range(capacity)
+        ]
+        try:
+            entered.wait(timeout=10)
+            with pytest.raises(catalog_service.ValidationFailure, match="session capacity"):
+                browser.discover(captured, session_key=session_key)
+            # Other callers retain their own admission budget.
+            registry.on_list = None
+            assert browser.discover(captured, session_key="other-" + session_key).entries
+        finally:
+            release.set()
+        assert all(future.result(timeout=10).entries for future in futures)
+    assert browser.discover(captured, session_key=session_key).entries
 
 
 def test_public_discovery_preserves_failure_when_provider_close_also_fails() -> None:

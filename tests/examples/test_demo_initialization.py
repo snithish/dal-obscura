@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+from email.message import Message
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -18,7 +22,8 @@ def workspace(tmp_path, monkeypatch, db_engine, http_client):
         "uri": f"sqlite:///{tmp_path}/catalog.db",
         "warehouse": str(tmp_path / "warehouse"),
     }
-    monkeypatch.setattr(seed_table, "_catalog_options", lambda: options)
+    monkeypatch.setenv("ICEBERG_CATALOG_URI", options["uri"])
+    monkeypatch.setenv("ICEBERG_WAREHOUSE", options["warehouse"])
     fixture = json.loads(Path("examples/demo/keycloak/fixtures/demo_fixture.json").read_text())
     for table in fixture["tables"]:
         seed_table._create_iceberg_table(table)
@@ -44,22 +49,50 @@ def workspace(tmp_path, monkeypatch, db_engine, http_client):
         response.raise_for_status()
         return response.json()
 
-    monkeypatch.setattr(provision_demo, "_request", request)
-    yield fixture, request
+    token_url = "https://identity.example/token"
+    monkeypatch.setenv("OIDC_TOKEN_URL", token_url)
+    monkeypatch.setenv("OIDC_CLI_CLIENT_SECRET", "fixture-client-secret")
+    monkeypatch.setenv("DEMO_ADMIN_PASSWORD", "fixture-password")
+
+    def transport(outgoing, timeout=15):
+        if outgoing.full_url == token_url:
+            return BytesIO(b'{"access_token":"test-admin"}')
+        result = client.request(
+            outgoing.get_method(),
+            urlsplit(outgoing.full_url).path,
+            content=outgoing.data,
+            headers=dict(outgoing.header_items()),
+        )
+        if result.status_code >= 400:
+            raise HTTPError(
+                outgoing.full_url,
+                result.status_code,
+                "Request rejected",
+                Message(),
+                BytesIO(result.content),
+            )
+        return BytesIO(result.content)
+
+    provision_demo._admin_token.cache_clear()
+    monkeypatch.setattr(provision_demo, "urlopen", transport)
+    try:
+        yield fixture, request, transport
+    finally:
+        provision_demo._admin_token.cache_clear()
 
 
 def test_initialization_resumes_after_interrupted_api_write(workspace, monkeypatch):
-    fixture, request = workspace
+    fixture, request, transport = workspace
 
-    def interrupted(method, path, body=None):
-        if method == "PUT" and path.endswith("/owners"):
+    def interrupted(outgoing, timeout=15):
+        if outgoing.get_method() == "PUT" and urlsplit(outgoing.full_url).path.endswith("/owners"):
             raise RuntimeError("injected interruption")
-        return request(method, path, body)
+        return transport(outgoing, timeout=timeout)
 
-    monkeypatch.setattr(provision_demo, "_request", interrupted)
+    monkeypatch.setattr(provision_demo, "urlopen", interrupted)
     with pytest.raises(RuntimeError, match="injected interruption"):
         provision_demo._provision_workspace(fixture)
-    monkeypatch.setattr(provision_demo, "_request", request)
+    monkeypatch.setattr(provision_demo, "urlopen", transport)
     provision_demo._provision_workspace(fixture)
     asset = request("GET", "/v1/assets")[0]
     detail = request("GET", f"/v1/assets/{asset['id']}")
@@ -74,7 +107,7 @@ def test_initialization_resumes_after_interrupted_api_write(workspace, monkeypat
 
 
 def test_reinitialization_preserves_authored_deny_all_and_settings(workspace):
-    fixture, request = workspace
+    fixture, request, _ = workspace
     provision_demo._provision_workspace(fixture)
     asset = request("GET", "/v1/assets")[0]
     request("PUT", f"/v1/assets/{asset['id']}/policy", {"expected_revision": 1, "rules": []})
@@ -105,7 +138,7 @@ def test_demo_owner_keys_are_issuer_scoped():
 
 
 def test_catalog_credentials_are_references_not_inline(workspace):
-    fixture, request = workspace
+    fixture, request, _ = workspace
     provision_demo._provision_workspace(fixture)
     catalog = request("GET", "/v1/catalogs")[0]
     assert catalog["options"]["uri"] == {

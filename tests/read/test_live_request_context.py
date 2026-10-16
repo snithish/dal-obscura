@@ -22,8 +22,7 @@ from dal_obscura.adapters.sql.database.orm import (
 from dal_obscura.adapters.sql.snapshots import LiveConfigStore
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.plugins.bootstrap import create_plugin_registry
-from tests.support.read.reads import make_read_service
-from tests.support.read.use_cases import StubTableFormat
+from tests.support.read.fakes import StubTableFormat, make_read_service
 from tests.support.sources.live_config import seed_live_config
 
 
@@ -40,7 +39,7 @@ def _table():
 def test_schema_read_reuses_the_schema_admitted_with_the_source(setup, monkeypatch):
     from dal_obscura.kernel.identity.authentication import AuthenticationRequest
     from dal_obscura.kernel.plans.request import PlanRequest
-    from tests.support.read.use_cases import FakeIdentity
+    from tests.support.read.fakes import FakeIdentity
 
     _, _, store = setup
     calls = 0
@@ -224,7 +223,7 @@ def test_many_concurrent_requests_share_one_provider(setup):
 def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypatch, operation):
     from dal_obscura.kernel.identity.authentication import AuthenticationRequest
     from dal_obscura.kernel.plans.request import PlanRequest
-    from tests.support.read.use_cases import FakeIdentity, FakeTicketCodec, FakeTicketStore
+    from tests.support.read.fakes import FakeIdentity, FakeTicketCodec, FakeTicketStore
 
     engine, factory, store = setup
     checked_out = 0

@@ -8,22 +8,21 @@ from dal_obscura.application.reads.tickets.contracts import StoredTicket
 from dal_obscura.application.reads.tickets.payload import ScanPayload
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.plans.request import PlanRequest
-from tests.support.read.read_scenarios import (
+from tests.support.read.fakes import (
     AUTHORIZATION_HEADER,
-    _build_use_case_dependencies,
-    _ticket_store_with,
-)
-from tests.support.read.reads import StaticAccessContext, make_read_service
-from tests.support.read.tickets import ticket_payload
-from tests.support.read.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
     FakeRowTransform,
     FakeTicketCodec,
     FakeTicketStore,
+    StaticAccessContext,
     StubInputPartition,
+    _build_use_case_dependencies,
+    _ticket_store_with,
     encode_scan_task,
+    make_read_service,
+    ticket_payload,
 )
 
 

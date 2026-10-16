@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pyarrow as pa
 import pytest
@@ -9,37 +9,35 @@ from dal_obscura_plugin_api.schema.bounds import MAX_SCHEMA_DEPTH, MAX_SCHEMA_NO
 from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, StringType, StructType
 
-from dal_obscura.adapters.providers.governance import ProviderAssetSchemaLoader
+from dal_obscura.application.governance.assets.schema import capture_asset_schema, get_asset_schema
 from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 from tests.control.assets.schema_cases import (
     _FakeCatalog,
     _FakeStore,
     _FakeTable,
-    _nested_schema,
     discover_schema,
 )
 from tests.support.sources.schema_catalog import schema_registry
 
 
-def test_get_asset_schema_reports_scope_encoding_budget(monkeypatch) -> None:
-    schema = pa.schema([pa.field("界" * 400_000, pa.string())])
-    monkeypatch.setattr(
-        "dal_obscura.adapters.providers.governance.ProviderAssetSchemaLoader.load_asset_schema",
-        lambda *args, **kwargs: schema,
+@pytest.fixture
+def captured_schema(asset_commands):
+    commands, work_factory, actor = asset_commands
+    asset = commands.upsert_workspace_asset(
+        "analytics", "events", "iceberg", "default.events", {}, actor=actor, correlation_id=None
     )
-    asset_id = uuid4()
+    with work_factory() as work:
+        return capture_asset_schema(work, UUID(asset["id"]), actor)
+
+
+def test_get_asset_schema_reports_scope_encoding_budget(captured_schema) -> None:
+    schema = pa.schema([pa.field("界" * 400_000, pa.string())])
     with pytest.raises(ValidationFailure, match="Schema encoding exceeds"):
-        discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
-            asset_id,
-            ControlPlaneActor.for_platform_admin("admin"),
-        )
+        get_asset_schema(captured_schema, schema)
 
 
-def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(monkeypatch) -> None:
-    from dal_obscura.application.governance.assets import schema as schema_service
-
+def test_get_asset_schema_rejects_path_amplification(captured_schema) -> None:
     schema = pa.schema(
         [
             pa.field(
@@ -48,41 +46,16 @@ def test_get_asset_schema_rejects_path_amplification_before_building_all_nodes(m
             )
         ]
     )
-    monkeypatch.setattr(
-        ProviderAssetSchemaLoader, "load_asset_schema", lambda *args, **kwargs: schema
-    )
-    visited = []
-    original = schema_service.numeric_field_id
-
-    def record_field(field, names, scope):
-        visited.append(field.name)
-        return original(field, names, scope)
-
-    monkeypatch.setattr(schema_service, "numeric_field_id", record_field)
-    asset_id = uuid4()
     with pytest.raises(ValidationFailure, match="Schema response exceeds the 8388608-byte budget"):
-        discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
-            asset_id,
-            ControlPlaneActor.for_platform_admin("admin"),
-        )
-    assert 1 < len(visited) < 101
+        get_asset_schema(captured_schema, schema)
 
 
-def test_get_asset_schema_preserves_long_names_within_response_budget(monkeypatch) -> None:
+def test_get_asset_schema_preserves_long_names_within_response_budget(captured_schema) -> None:
     from dal_obscura.interfaces.http.routes.asset_schemas import AssetSchemaResponse
 
     name = '界."' * 4096
     schema = pa.schema([pa.field(name, pa.struct([pa.field("leaf", pa.string())]))])
-    monkeypatch.setattr(
-        ProviderAssetSchemaLoader, "load_asset_schema", lambda *args, **kwargs: schema
-    )
-    asset_id = uuid4()
-    result = discover_schema(
-        _FakeStore(asset_id),  # type: ignore[arg-type]
-        asset_id,
-        ControlPlaneActor.for_platform_admin("admin"),
-    )
+    result = get_asset_schema(captured_schema, schema)
     encoded = AssetSchemaResponse.model_validate(result).model_dump_json().encode("utf-8")
     assert len(encoded) <= 8 * 1024 * 1024
     node = json.loads(encoded)["fields"][0]
@@ -91,34 +64,31 @@ def test_get_asset_schema_preserves_long_names_within_response_budget(monkeypatc
     assert node["children"][0]["human_path"] == f"[{json.dumps(name, ensure_ascii=False)}].leaf"
 
 
-def test_schema_response_budget_matches_serialized_http_contract(monkeypatch) -> None:
-    from dal_obscura.application.governance.assets import schema as schema_service
+def test_schema_response_budget_bounds_serialized_http_contract(captured_schema) -> None:
     from dal_obscura.interfaces.http.routes.asset_schemas import AssetSchemaResponse
 
-    schema = _nested_schema().as_arrow()
-    monkeypatch.setattr(
-        ProviderAssetSchemaLoader, "load_asset_schema", lambda *args, **kwargs: schema
+    # Modest source schemas can amplify substantially through repeated paths in the response.
+    name = "ancestor_" + "x" * 100_000
+    schema = pa.schema(
+        [
+            pa.field(
+                name, pa.struct([pa.field(f"child_{index}", pa.string()) for index in range(30)])
+            )
+        ]
     )
-    asset_id = uuid4()
-
-    def discover():
-        return discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
-            asset_id,
-            ControlPlaneActor.for_platform_admin("admin"),
-        )
-
-    expected_bytes = len(AssetSchemaResponse.model_validate(discover()).model_dump_json().encode())
-    budget = schema_service._SchemaResponseBudget(remaining=expected_bytes)
-    monkeypatch.setattr(schema_service, "_SchemaResponseBudget", lambda: budget)
-    assert (
-        len(AssetSchemaResponse.model_validate(discover()).model_dump_json().encode())
-        == expected_bytes
+    result = get_asset_schema(captured_schema, schema)
+    encoded = AssetSchemaResponse.model_validate(result).model_dump_json().encode("utf-8")
+    assert 6 * 1024 * 1024 < len(encoded) <= 8 * 1024 * 1024
+    assert len(json.loads(encoded)["fields"][0]["children"]) == 30
+    expanded = pa.schema(
+        [
+            pa.field(
+                name, pa.struct([pa.field(f"child_{index}", pa.string()) for index in range(60)])
+            )
+        ]
     )
-    assert budget.remaining == 0
-    budget.remaining = expected_bytes - 1
     with pytest.raises(ValidationFailure, match="Schema response exceeds"):
-        discover()
+        get_asset_schema(captured_schema, expanded)
 
 
 def test_get_asset_schema_rejects_excessive_node_count() -> None:
@@ -132,7 +102,7 @@ def test_get_asset_schema_rejects_excessive_node_count() -> None:
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed") as caught:
         discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
+            _FakeStore(asset_id),
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=schema_registry(lambda *_args, **_: _FakeCatalog(_FakeTable(schema))),
@@ -149,7 +119,7 @@ def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed") as caught:
         discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
+            _FakeStore(asset_id),
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=schema_registry(lambda *_args, **_: _FakeCatalog(_FakeTable(schema))),

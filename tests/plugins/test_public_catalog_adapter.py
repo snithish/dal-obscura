@@ -291,7 +291,7 @@ def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
     import hashlib
 
     from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
-    from tests.support.read.read_scenarios import (
+    from tests.support.read.fakes import (
         AUTHORIZATION_HEADER,
         governed_read_service,
     )

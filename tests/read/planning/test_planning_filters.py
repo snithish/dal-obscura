@@ -7,23 +7,22 @@ from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.plans.request import PlanRequest
 from dal_obscura.kernel.policy.filters import deserialize_row_filter
 from dal_obscura.kernel.policy.models import AccessDecision, MaskRule
-from tests.support.read.read_scenarios import (
+from tests.support.read.fakes import (
     AUTHORIZATION_HEADER,
-    _build_use_case_dependencies,
-    governed_read_service,
-)
-from tests.support.read.reads import StaticAccessContext, make_read_service
-from tests.support.read.tickets import ticket_payload
-from tests.support.read.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
     FakeTicketCodec,
     FakeTicketStore,
     PretendPushdownTableFormat,
+    StaticAccessContext,
     StubTableFormat,
     TrackingTableFormat,
+    _build_use_case_dependencies,
+    governed_read_service,
+    make_read_service,
     scan_payload,
+    ticket_payload,
 )
 
 

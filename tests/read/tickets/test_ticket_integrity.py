@@ -1,13 +1,18 @@
+"""Signed references, passive payload validation and authorization-bound integrity."""
+
+from __future__ import annotations
+
 import base64
 import hmac
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
 from dal_obscura.adapters.tickets.signing import HmacTicketCodecAdapter
-from dal_obscura.application.reads.tickets.payload import TicketPayload
-from tests.support.read.tickets import ticket_payload
+from dal_obscura.application.reads.tickets.payload import TicketPayload, ticket_payload_hash
+from tests.support.read.fakes import ticket_payload
 
 
 def _scan_payload():
@@ -192,3 +197,69 @@ def test_signed_reference_rejects_unknown_fields_even_with_valid_signature():
     token = f"{base64.urlsafe_b64encode(raw).decode()}.{signature}"
     with pytest.raises(PermissionError, match="Invalid ticket payload"):
         codec.verify(token)
+
+
+def test_ticket_payload_hash_changes_when_executable_scan_payload_changes():
+    first = ticket_payload()
+    second = ticket_payload(
+        scan={
+            "authorization_columns": ["id", "region"],
+            "read_payload": "payload-b",
+            "full_row_filter": None,
+            "masks": {},
+        }
+    )
+
+    assert ticket_payload_hash(first) != ticket_payload_hash(second)
+
+
+def test_ticket_payload_hash_changes_when_authorization_context_changes():
+    assert ticket_payload_hash(ticket_payload(principal_id="user1")) != ticket_payload_hash(
+        ticket_payload(principal_id="user2")
+    )
+    assert ticket_payload_hash(ticket_payload()) != ticket_payload_hash(
+        replace(ticket_payload(), identity_context="changed-groups-or-attributes")
+    )
+    assert ticket_payload_hash(ticket_payload(policy_version=100)) != ticket_payload_hash(
+        ticket_payload(policy_version=101)
+    )
+
+
+def test_ticket_payload_preserves_the_full_row_filter():
+    scan = ticket_payload().scan.copy()
+    scan["full_row_filter"] = "LOWER(region) = 'us'"
+    raw = ticket_payload(scan=scan).to_dict()
+
+    restored = TicketPayload.from_dict(raw)
+
+    assert restored.scan["full_row_filter"] == "LOWER(region) = 'us'"
+
+
+@pytest.mark.parametrize(
+    "changes,message",
+    [
+        pytest.param({"asset_id": None}, "asset_id", id="missing-governed-asset"),
+        pytest.param({"expires_at": True}, "expires_at", id="boolean-expiry"),
+        pytest.param({"policy_version": False}, "policy_version", id="boolean-policy-version"),
+        pytest.param({"columns": ["id", 1]}, "columns", id="non-string-column"),
+        pytest.param({"unexpected": "value"}, "fields", id="unknown-field"),
+        pytest.param(
+            {
+                "scan": {
+                    "authorization_columns": ["id", "region"],
+                    "read_payload": "payload",
+                    "masks": {},
+                    "full_row_filter": {"type": "comparison"},
+                }
+            },
+            "full_row_filter",
+            id="non-sql-filter",
+        ),
+    ],
+)
+def test_ticket_payload_rejects_malformed_fields(changes, message):
+    raw = ticket_payload().to_dict()
+    raw.update(changes)
+
+    with pytest.raises(ValueError, match=message):
+        TicketPayload.from_dict(raw)

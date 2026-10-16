@@ -8,7 +8,6 @@ import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor, SchemaDescriptor, TableHandle, TableIdentifier
 from dal_obscura_plugin_api.execution import close_preserving_error
-from dal_obscura_plugin_api.schema.identity import schema_scope_digest
 
 from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
@@ -25,21 +24,16 @@ from tests.support.sources.schema_catalog import schema_registry
 
 
 def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
-    from dal_obscura_plugin_api.paths import FieldSegment
-
-    from dal_obscura.application.governance.assets.schema import (
-        _arrow_field_node,
-        _SchemaResponseBudget,
-    )
-
     schema = _nested_schema()
-    for field, arrow_field in zip(schema.fields, schema.as_arrow(), strict=True):
-        node = _arrow_field_node(
-            arrow_field,
-            (FieldSegment(field.name, field.field_id),),
-            schema_scope_digest(schema.as_arrow()),
-            _SchemaResponseBudget(),
-        )
+    asset_id = uuid4()
+    result = discover_schema(
+        _FakeStore(asset_id),
+        asset_id,
+        ControlPlaneActor.for_platform_admin("admin"),
+        plugin_registry=schema_registry(lambda *args, **kwargs: _FakeCatalog(_FakeTable(schema))),
+    )
+    fields = cast(list[dict[str, object]], result["fields"])
+    for node, arrow_field in zip(fields, schema.as_arrow(), strict=True):
         assert node["type"] == str(arrow_field.type)
 
 
@@ -54,7 +48,7 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
         return catalog
 
     result = discover_schema(
-        store,  # type: ignore[arg-type]
+        store,
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
         plugin_registry=schema_registry(load_catalog),
@@ -201,7 +195,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             raise AssertionError((kind, plugin_id))
 
     result = discover_schema(
-        PublicStore(asset_id),  # type: ignore[arg-type]
+        PublicStore(asset_id),
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
         plugin_registry=Registry(),
@@ -221,7 +215,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
     format_close_fails = True
     with pytest.raises(ValidationFailure, match="Schema discovery failed"):
         discover_schema(
-            PublicStore(asset_id),  # type: ignore[arg-type]
+            PublicStore(asset_id),
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=Registry(),
@@ -242,7 +236,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed"):
         discover_schema(
-            PublicStore(asset_id),  # type: ignore[arg-type]
+            PublicStore(asset_id),
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=ForgedHandleRegistry(),
@@ -266,7 +260,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed"):
         discover_schema(
-            PublicStore(asset_id),  # type: ignore[arg-type]
+            PublicStore(asset_id),
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=ForgedRegistry(),
@@ -305,7 +299,7 @@ def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factor
 
     with pytest.raises(ValidationFailure, match="unsupported fields"):
         discover_schema(
-            store,  # type: ignore[arg-type]
+            store,
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=Registry(),
@@ -337,7 +331,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
 
     with pytest.raises(ValidationFailure, match="egress allowlist"):
         discover_schema(
-            store,  # type: ignore[arg-type]
+            store,
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=schema_registry(load_catalog),
@@ -372,7 +366,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         return _FakeCatalog(_FakeTable(_nested_schema()))
 
     discover_schema(
-        store,  # type: ignore[arg-type]
+        store,
         asset_id,
         ControlPlaneActor.for_platform_admin("admin"),
         plugin_registry=schema_registry(load_catalog),
@@ -389,7 +383,7 @@ def test_get_asset_schema_requires_read_capability() -> None:
     asset_id = uuid4()
     with pytest.raises(AuthorizationFailure):
         discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
+            _FakeStore(asset_id),
             asset_id,
             ControlPlaneActor("outsider", ()),
             plugin_registry=schema_registry(
@@ -406,7 +400,7 @@ def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
 
     with pytest.raises(ValidationFailure, match="Schema discovery failed") as failure:
         discover_schema(
-            _FakeStore(asset_id),  # type: ignore[arg-type]
+            _FakeStore(asset_id),
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=schema_registry(failing_catalog),

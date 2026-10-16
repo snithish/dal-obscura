@@ -5,19 +5,18 @@ import pytest
 from dal_obscura.kernel.identity.authentication import AuthenticationRequest
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.plans.request import PlanRequest
-from tests.support.read.read_scenarios import (
+from tests.support.read.fakes import (
     AUTHORIZATION_HEADER,
-    _build_use_case_dependencies,
-)
-from tests.support.read.reads import StaticAccessContext, make_read_service
-from tests.support.read.tickets import ticket_payload
-from tests.support.read.use_cases import (
     FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
     FakeTicketCodec,
     FakeTicketStore,
+    StaticAccessContext,
+    _build_use_case_dependencies,
+    make_read_service,
     scan_payload,
+    ticket_payload,
 )
 
 

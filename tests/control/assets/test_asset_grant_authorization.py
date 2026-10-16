@@ -1,31 +1,43 @@
-from unittest.mock import MagicMock, Mock, call
-from uuid import uuid4
+"""Grant authority is checked against persisted capabilities before disclosure or mutation."""
 
-from dal_obscura.application.governance.assets import service as asset_service
+from uuid import UUID
+
+import pytest
+
+from dal_obscura.application.governance.errors import AuthorizationFailure
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
 
 
-def test_grant_mutation_locks_before_authorization_and_write(monkeypatch):
-    operations = Mock()
-    operations.write.return_value = []
-    factory = MagicMock()
-    work = factory.return_value.__enter__.return_value
-    work.assets.lock_asset_for_update = operations.lock
-    monkeypatch.setattr(asset_service, "ensure_asset_capability", operations.authorize)
-    monkeypatch.setattr(asset_service, "replace_asset_grants", operations.write)
-    actor = ControlPlaneActor.for_platform_admin("platform:admin")
-    asset_id = uuid4()
-    commands = asset_service.AssetsCommands(factory, schema_loader=Mock(), plugin_registry=None)
-    result = commands.replace_asset_grants(
-        asset_id,
-        [],
-        expected_revision=0,
-        actor=actor,
-        correlation_id=None,
+@pytest.mark.parametrize(
+    "principal,authorized",
+    [("admin", True), ("manager", True), ("owner", False), ("reader", False)],
+)
+def test_grant_mutation_preserves_state_unless_actor_holds_grant_authority(
+    asset_commands, principal, authorized
+):
+    commands, work_factory, admin = asset_commands
+    asset = commands.upsert_workspace_asset(
+        "analytics", "events", "iceberg", "default.events", {}, actor=admin, correlation_id=None
     )
-    assert result == {"asset_id": str(asset_id), "grants": []}
-    assert operations.mock_calls == [
-        call.lock(asset_id),
-        call.authorize(work.assets, asset_id, actor, "grant"),
-        call.write(work, asset_id, [], 0, actor, correlation_id=None),
-    ]
+    asset_id = UUID(asset["id"])
+    commands.replace_asset_owners(asset_id, ["owner"], 0, actor=admin, correlation_id=None)
+    initial = [{"principal": "manager", "capability": "grant"}]
+    commands.replace_asset_grants(asset_id, initial, 1, actor=admin, correlation_id=None)
+    desired = [*initial, {"principal": "reader", "capability": "read"}]
+    actor = admin if principal == "admin" else ControlPlaneActor(principal, ())
+    if authorized:
+        assert commands.replace_asset_grants(
+            asset_id, desired, 2, actor=actor, correlation_id="grant-change"
+        ) == {"asset_id": str(asset_id), "grants": desired}
+    else:
+        with pytest.raises(AuthorizationFailure, match="grant"):
+            commands.replace_asset_grants(
+                asset_id, desired, 2, actor=actor, correlation_id="grant-change"
+            )
+    with work_factory() as work:
+        persisted = [
+            {"principal": grant["principal"], "capability": grant["capability"]}
+            for grant in work.assets.list_asset_grants(asset_id)
+        ]
+        assert persisted == (desired if authorized else initial)
+        assert work.assets.get_workspace_asset(asset_id)["revision"] == (3 if authorized else 2)
