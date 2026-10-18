@@ -15,7 +15,16 @@ test("catalog discovery pages replace rows and preserve the current page on fail
     requested.push(cursor);
     if (cursor === "next-page" && failNextPage) {
       failNextPage = false;
-      return route.fulfill({ status: 503, json: { detail: "Provider unavailable" } });
+      return route.fulfill({
+        status: 503,
+        json: {
+          error: {
+            code: "request_rejected",
+            message: "Provider unavailable",
+            request_id: "test-request",
+          },
+        },
+      });
     }
     const start = cursor ? 50 : 0;
     await route.fulfill({

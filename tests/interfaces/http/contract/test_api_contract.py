@@ -109,7 +109,7 @@ def test_early_body_rejection_preserves_customer_request_id(client_factory):
     )
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "request_too_large"
-    assert response.json()["detail"] == "Request body too large"
+    assert response.json()["error"]["message"] == "Request body too large"
     assert (
         response.json()["error"]["request_id"] == response.headers["x-request-id"] == "support-42"
     )

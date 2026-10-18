@@ -1,0 +1,1316 @@
+<!doctype html>
+<html lang="en" data-scheme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dal Obscura — Governance UI mockup (proposed)</title>
+<style>
+/* Tokens copied verbatim from apps/governance-ui/src/design/theme.ts */
+:root, [data-scheme="light"] {
+  --canvas:#F6F7F9; --surface:#FFFFFF; --surface-subtle:#EDF1F5;
+  --text:#182230; --text-secondary:#526076; --border:#D9E0E8; --control-border:#7A8799;
+  --primary:#175CD3; --primary-contrast:#FFFFFF; --primary-hover:#144CB0;
+  --selection:#E8F0FF; --selection-text:#184A9B; --focus:#175CD3;
+  --success:#157347; --success-surface:#E8F5ED;
+  --warning:#8A4B00; --warning-surface:#FFF3D6;
+  --danger:#B42318; --danger-surface:#FEECEB;
+  --radius:10px;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --shadow-sm:0 1px 2px #0f172a0d; --shadow:0 4px 18px #0000000f; --shadow-lg:0 8px 30px #0000001a;
+}
+[data-scheme="dark"] {
+  --canvas:#10151E; --surface:#171F2C; --surface-subtle:#202C3D;
+  --text:#E7ECF4; --text-secondary:#ADB9CA; --border:#334155; --control-border:#7D8FA7;
+  --primary:#85B4FF; --primary-contrast:#0C1525; --primary-hover:#A8CAFF;
+  --selection:#203D68; --selection-text:#D7E7FF; --focus:#A8CAFF;
+  --success:#8BDEB0; --success-surface:#163627;
+  --warning:#FFD084; --warning-surface:#3B2B12;
+  --danger:#FFB4AB; --danger-surface:#42201F;
+  --shadow-sm:0 1px 2px #0006; --shadow:0 4px 18px #0007; --shadow-lg:0 8px 30px #0009;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--canvas); color:var(--text);
+  font:14px/1.5 var(--font); font-synthesis:none;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:4px; }
+code,.mono { font-family:var(--mono); }
+h1,h2,h3 { margin:0; font-weight:600; letter-spacing:-.01em; }
+h1 { font-size:28px; line-height:36px; }
+h2 { font-size:20px; line-height:28px; }
+h3 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; margin:0 0 10px; color:var(--text-secondary); }
+p { margin:0; }
+.muted { color:var(--text-secondary); }
+.help { color:var(--text-secondary); font-size:13px; line-height:1.5; }
+.eyebrow { display:block; color:var(--primary); font:700 11px var(--mono); letter-spacing:.15em; margin-bottom:7px; }
+
+/* ---------- mockup chrome (not part of the app) ---------- */
+.mockbar {
+  position:sticky; top:0; z-index:100; display:flex; gap:16px; align-items:center;
+  padding:10px 20px; background:var(--surface); border-bottom:1px solid var(--border);
+}
+.mockbar .brand { font:700 12px var(--mono); letter-spacing:.1em; color:var(--text-secondary); }
+.mocktabs { display:flex; gap:4px; margin-left:8px; flex-wrap:wrap; }
+.mocktab {
+  border:1px solid var(--border); background:var(--surface); color:var(--text-secondary);
+  padding:6px 12px; border-radius:999px; cursor:pointer; font-size:13px;
+}
+.mocktab[aria-selected="true"] { background:var(--primary); border-color:var(--primary); color:var(--primary-contrast); font-weight:600; }
+.mockbar .spacer { margin-left:auto; }
+.ghost-btn { border:1px solid var(--border); background:var(--surface); padding:6px 12px; border-radius:8px; cursor:pointer; }
+.mocknote {
+  max-width:1180px; margin:16px auto 0; padding:12px 16px; border-radius:var(--radius);
+  background:var(--warning-surface); border:1px solid color-mix(in srgb,var(--warning) 25%,transparent);
+  color:var(--text); font-size:13px;
+}
+.screen { display:none; max-width:1180px; margin:20px auto 80px; padding:0 20px; }
+.screen[data-active="true"] { display:block; }
+
+/* ---------- app shell ---------- */
+.shell { display:grid; grid-template-columns:224px 1fr; min-height:640px; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; box-shadow:var(--shadow); }
+.shell-nav { border-right:1px solid var(--border); background:var(--canvas); padding:16px; display:flex; flex-direction:column; gap:4px; }
+.logo { font:700 15px var(--font); letter-spacing:.06em; margin-bottom:18px; }
+.logo span { display:block; font-size:11px; font-weight:400; letter-spacing:.04em; color:var(--text-secondary); }
+.navlink { display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:8px; border:0; background:transparent; text-align:left; cursor:pointer; color:var(--text-secondary); width:100%; }
+.navlink[aria-current="page"] { background:var(--selection); color:var(--selection-text); font-weight:600; }
+.navlink .ico { width:16px; text-align:center; opacity:.85; }
+.nav-foot { margin-top:auto; display:grid; gap:10px; padding-top:16px; }
+.pill { display:inline-flex; align-items:center; gap:6px; font:700 11px var(--font); padding:3px 9px; border-radius:999px; background:var(--success-surface); color:var(--success); }
+.pill.warn { background:var(--warning-surface); color:var(--warning); }
+.pill.danger { background:var(--danger-surface); color:var(--danger); }
+.pill.neutral { background:var(--surface-subtle); color:var(--text-secondary); }
+.hostchip { font:11px var(--mono); color:var(--text-secondary); }
+
+.shell-main { display:flex; flex-direction:column; min-width:0; }
+.shell-head { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--surface); }
+.shell-head .spacer { margin-left:auto; }
+.avatar { width:28px; height:28px; border-radius:50%; background:var(--selection); color:var(--selection-text); display:grid; place-items:center; font-weight:700; font-size:12px; }
+.principal { font-size:13px; color:var(--primary); }
+.btn { border:1px solid var(--control-border); background:var(--surface); color:var(--text); padding:7px 13px; border-radius:8px; cursor:pointer; font-weight:600; }
+.btn:hover { background:var(--surface-subtle); }
+.btn.primary { background:var(--primary); border-color:var(--primary); color:var(--primary-contrast); }
+.btn.primary:hover { background:var(--primary-hover); }
+.btn.subtle { border-color:transparent; background:transparent; color:var(--primary); }
+.btn.danger { color:var(--danger); border-color:color-mix(in srgb,var(--danger) 45%,transparent); }
+.btn.small { padding:4px 9px; font-size:12px; border-radius:6px; }
+.iconbtn { border:0; background:transparent; cursor:pointer; padding:6px; border-radius:6px; color:var(--text-secondary); }
+
+.breadcrumb { display:flex; gap:8px; align-items:center; padding:14px 20px 0; font-size:13px; color:var(--text-secondary); }
+.breadcrumb b { color:var(--text); font-weight:600; }
+.pagehead { display:flex; align-items:center; gap:12px; padding:8px 20px 16px; }
+.pagehead .spacer { margin-left:auto; }
+
+.content { padding:0 20px 24px; }
+
+/* ---------- inventory ---------- */
+.summary-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+.stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow-sm); }
+.stat .label { font:700 10px var(--mono); letter-spacing:.12em; color:var(--text-secondary); text-transform:uppercase; }
+.stat .value { font-size:26px; font-weight:600; line-height:1.2; margin-top:4px; }
+.stat .sub { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+.stat.alert .value { color:var(--warning); }
+
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); }
+.card + .card { margin-top:16px; }
+.card-head { display:flex; gap:16px; align-items:flex-start; padding:16px 18px; border-bottom:1px solid var(--border); }
+.card-head .spacer { margin-left:auto; }
+.toolbar-title h2 { font-size:17px; }
+.search { display:flex; align-items:center; gap:8px; border:1px solid var(--control-border); background:var(--surface); border-radius:8px; padding:8px 12px; min-width:250px; }
+.search input { border:0; background:transparent; outline:none; width:100%; }
+
+table.grid { width:100%; border-collapse:collapse; }
+table.grid th { text-align:left; padding:11px 16px; font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-secondary); border-bottom:1px solid var(--border); background:var(--surface-subtle); }
+table.grid td { padding:14px 16px; border-bottom:1px solid var(--border); vertical-align:top; }
+table.grid tr:last-child td { border-bottom:0; }
+table.grid tbody tr:hover { background:var(--selection); }
+.asset-link { border:0; background:transparent; color:var(--primary); font-weight:600; cursor:pointer; padding:0; text-align:left; }
+.asset-link:hover { text-decoration:underline; }
+.subline { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+.owner { display:flex; flex-direction:column; gap:3px; }
+.owner .id { font:12px var(--mono); color:var(--text); }
+.rev { display:flex; flex-direction:column; gap:3px; }
+.rev .n { font:700 13px var(--mono); }
+.rev .who { font-size:12px; color:var(--text-secondary); }
+.who-changed { color:var(--primary); cursor:pointer; background:none; border:0; padding:0; font-size:12px; }
+
+/* ---------- policy ---------- */
+.rule-card { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); margin-bottom:12px; overflow:hidden; }
+.rule-card.open { box-shadow:var(--shadow); }
+.rule-head { display:flex; gap:12px; align-items:center; padding:14px 16px; width:100%; border:0; background:transparent; cursor:pointer; text-align:left; }
+.rule-head:hover { background:var(--surface-subtle); }
+.rule-head .spacer { margin-left:auto; }
+.rule-title { font-weight:600; }
+/* NEW: semantic summary — names the columns and masks, not counts */
+.semantics { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+.sem-chip { display:inline-flex; align-items:center; gap:6px; font:12px var(--mono); padding:3px 9px; border-radius:999px; background:var(--surface-subtle); color:var(--text); border:1px solid var(--border); }
+.sem-chip .m { font:700 10px var(--mono); letter-spacing:.06em; text-transform:uppercase; padding:1px 6px; border-radius:999px; }
+.m-none   { background:var(--surface-subtle);   color:var(--text-secondary); }
+.m-redact { background:var(--warning-surface); color:var(--warning); }
+.m-hash   { background:var(--selection);        color:var(--selection-text); }
+.m-email  { background:var(--selection);        color:var(--selection-text); }
+.m-last   { background:var(--warning-surface); color:var(--warning); }
+.m-null   { background:var(--surface-subtle);   color:var(--text-secondary); }
+.rule-body { padding:0 16px 16px; border-top:1px solid var(--border); }
+.field-label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+.input { width:100%; border:1px solid var(--control-border); background:var(--surface); border-radius:8px; padding:9px 12px; }
+.input.two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.section-title { font-size:15px; font-weight:600; margin:18px 0 4px; }
+.section-desc { font-size:13px; color:var(--text-secondary); margin-bottom:12px; }
+
+.baseline { display:flex; gap:14px; align-items:flex-start; padding:16px 18px; border-radius:var(--radius); background:var(--success-surface); margin-bottom:16px; }
+.baseline.bypass { background:var(--warning-surface); }
+
+/* NEW: live masked-value preview */
+.preview {
+  border:1px solid color-mix(in srgb,var(--primary) 30%,var(--border));
+  background:color-mix(in srgb,var(--selection) 45%,var(--surface));
+  border-radius:var(--radius); padding:16px 18px; margin:16px 0;
+}
+.preview-head { display:flex; gap:12px; align-items:center; margin-bottom:4px; }
+.preview-head .spacer { margin-left:auto; }
+.preview-actor { font:12px var(--mono); color:var(--text-secondary); }
+table.preview-grid { width:100%; border-collapse:collapse; margin-top:12px; background:var(--surface); border-radius:8px; overflow:hidden; }
+table.preview-grid th { text-align:left; padding:8px 12px; font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-secondary); background:var(--surface-subtle); }
+table.preview-grid td { padding:9px 12px; border-top:1px solid var(--border); font:13px var(--mono); }
+.arrow { color:var(--text-secondary); padding:0 8px; }
+.raw { color:var(--text-secondary); text-decoration:line-through; text-decoration-color:var(--control-border); }
+.masked { color:var(--text); font-weight:600; }
+.masked.warn { color:var(--warning); }
+.masked.ok { color:var(--success); }
+.preview-foot { margin-top:10px; font-size:12px; color:var(--text-secondary); }
+
+.alert { display:flex; gap:10px; padding:11px 14px; border-radius:8px; font-size:13px; margin:12px 0; }
+.alert.warn { background:var(--warning-surface); color:var(--warning); }
+.alert.danger { background:var(--danger-surface); color:var(--danger); }
+.alert.info { background:var(--selection); color:var(--selection-text); }
+
+.savebar { position:sticky; bottom:12px; display:flex; gap:10px; align-items:center; padding:14px 16px; margin-top:20px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-lg); }
+.savebar .spacer { margin-left:auto; }
+.check { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--text-secondary); }
+
+/* ---------- wide / nested ---------- */
+.coverage { display:grid; gap:10px; }
+.cov-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+.cov-row .spacer { margin-left:auto; }
+.cov-name { font:12px var(--mono); min-width:0; }
+.cov-tree { font:12px var(--mono); color:var(--text-secondary); margin-left:8px; }
+.cov-bar { height:6px; border-radius:999px; background:var(--surface-subtle); overflow:hidden; min-width:120px; }
+.cov-bar > span { display:block; height:100%; background:var(--success); }
+.cov-bar.warn > span { background:var(--warning); }
+.meter { display:flex; align-items:center; gap:10px; }
+.meter b { font:700 13px var(--mono); }
+
+.maskbands { display:grid; gap:8px; }
+.band { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface); }
+.band .swatch { width:10px; height:34px; border-radius:3px; flex-shrink:0; }
+.band .body { min-width:0; }
+.band .count { margin-left:auto; font:700 14px var(--mono); white-space:nowrap; }
+.band .paths { font:11px var(--mono); color:var(--text-secondary); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.overflow-note { display:flex; gap:10px; align-items:flex-start; padding:11px 14px; border-radius:8px; background:var(--selection); color:var(--selection-text); font-size:13px; margin:12px 0; }
+
+/* collapsed-summary degradation ladder */
+.semantics { max-width:100%; }
+.semantics.clamped { max-height:52px; overflow:hidden; position:relative; }
+.semantics.clamped::after {
+  content:""; position:absolute; inset:auto 0 0 0; height:20px;
+  background:linear-gradient(transparent,var(--surface));
+  pointer-events:none;
+}
+.summary-agg { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:7px; }
+.agg {
+  display:inline-flex; align-items:center; gap:7px; font:12px var(--mono);
+  padding:4px 10px; border-radius:999px; border:1px solid var(--border);
+  background:var(--surface-subtle); color:var(--text);
+}
+.agg .n { font-weight:700; }
+.agg .lbl { color:var(--text-secondary); }
+.agg.a-danger { background:var(--danger-surface); border-color:color-mix(in srgb,var(--danger) 30%,transparent); }
+.agg.a-danger .n { color:var(--danger); }
+.agg.a-warn  { background:var(--warning-surface); border-color:color-mix(in srgb,var(--warning) 30%,transparent); }
+.agg.a-warn .n { color:var(--warning); }
+.agg.a-ok    { background:var(--success-surface); border-color:color-mix(in srgb,var(--success) 25%,transparent); }
+.agg.a-ok .n { color:var(--success); }
+.rule-title-row { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; min-width:0; }
+.rule-title-row .t { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+
+.ladder { display:grid; gap:14px; }
+.ladder-row { display:grid; grid-template-columns:150px 1fr; gap:14px; align-items:start; }
+.ladder-label { font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-secondary); padding-top:10px; }
+.ladder-sample { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+
+.lens { display:grid; gap:12px; }
+.lens-tabs { display:flex; gap:6px; flex-wrap:wrap; }
+.lens-tab { border:1px solid var(--border); background:var(--surface); color:var(--text-secondary); padding:5px 11px; border-radius:999px; cursor:pointer; font-size:12px; }
+.lens-tab[aria-selected="true"] { background:var(--selection); border-color:var(--primary); color:var(--selection-text); font-weight:600; }
+.gridmap { display:grid; grid-template-columns:minmax(210px,1fr) 1fr; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--surface); }
+.gridmap .col-head { background:var(--surface-subtle); padding:8px 12px; font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-secondary); border-bottom:1px solid var(--border); }
+.gridmap .treecol, .gridmap .valcol { max-height:280px; overflow:auto; }
+.gnode { display:flex; align-items:center; gap:6px; padding:5px 12px; font:12px var(--mono); border-bottom:1px solid var(--border); }
+.gnode.sel { background:var(--selection); color:var(--selection-text); }
+.gnode .swatch { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.gval { padding:5px 12px; border-bottom:1px solid var(--border); border-left:1px solid var(--border); font:12px var(--mono); display:flex; gap:8px; align-items:center; }
+
+.deeplist { font:11.5px/1.7 var(--mono); color:var(--text-secondary); background:var(--surface-subtle); border-radius:6px; padding:10px 12px; word-break:break-all; }
+
+.kbd { font:11px var(--mono); border:1px solid var(--control-border); border-bottom-width:2px; border-radius:4px; padding:1px 5px; background:var(--surface); }
+
+/* ---------- message semantics ---------- */
+.msgdemo { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.msgcase { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--surface); }
+.msgcase-head { padding:12px 16px; border-bottom:1px solid var(--border); background:var(--surface-subtle); }
+.msgcase-head .bad { color:var(--danger); font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+.msgcase-head .good { color:var(--success); font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+.msgcase-body { padding:16px; }
+.msgcase p.desc { font-size:13px; color:var(--text-secondary); margin-bottom:12px; }
+.msg-inplace { border-left:3px solid var(--success); background:var(--success-surface); padding:10px 13px; font-size:14px; margin:0; }
+.msg-inplace.err { border-left-color:var(--danger); background:var(--danger-surface); }
+.msg-inplace.info { border-left-color:var(--primary); background:var(--selection); color:var(--selection-text); }
+.audited { display:grid; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.audited-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:11px 14px; border-bottom:1px solid var(--border); align-items:center; }
+.audited-row:last-child { border-bottom:0; }
+.audited-row > div:first-child { min-width:0; }
+.audited-row .label { font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-secondary); }
+
+/* ---------- mobile ---------- */
+.phone { width:390px; border:1px solid var(--border); border-radius:26px; overflow:hidden; box-shadow:var(--shadow-lg); background:var(--surface); margin:0 auto; }
+.phone-head { padding:12px 14px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; }
+.phone-body { padding:14px; display:grid; gap:10px; }
+.asset-tile { border:1px solid var(--border); border-radius:var(--radius); padding:14px; background:var(--surface); box-shadow:var(--shadow-sm); }
+.asset-tile .name { font-size:16px; font-weight:600; }
+.asset-tile .meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.asset-tile .foot { display:flex; gap:8px; align-items:center; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+.asset-tile .foot .spacer { margin-left:auto; }
+.tap { color:var(--primary); font-weight:600; background:none; border:0; padding:0; cursor:pointer; }
+.stat-2col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.mobile-search { display:flex; gap:8px; align-items:center; border:1px solid var(--control-border); border-radius:8px; padding:9px 12px; background:var(--surface); }
+
+.split { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+.caption { font:11px var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--text-secondary); margin-bottom:8px; }
+.frame-note { font-size:13px; color:var(--text-secondary); margin-top:10px; max-width:560px; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns:1fr; }
+  .shell-nav { flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--border); }
+  .nav-foot { display:none; }
+  .summary-strip { grid-template-columns:1fr 1fr; }
+  .split { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="mockbar">
+  <span class="brand">MOCKUP</span>
+  <div class="mocktabs" role="tablist">
+    <button class="mocktab" role="tab" data-target="s1" aria-selected="true">1 · Inventory</button>
+    <button class="mocktab" role="tab" data-target="s2" aria-selected="false">2 · Policy + mask preview</button>
+    <button class="mocktab" role="tab" data-target="s3" aria-selected="false">3 · Mobile</button>
+    <button class="mocktab" role="tab" data-target="s4" aria-selected="false">4 · Before / after</button>
+    <button class="mocktab" role="tab" data-target="s5" aria-selected="false">5 · Wide + nested (10k fields)</button>
+    <button class="mocktab" role="tab" data-target="s6" aria-selected="false">6 · Message semantics</button>
+  </div>
+  <span class="spacer"></span>
+  <button class="ghost-btn" id="scheme">Dark</button>
+</div>
+
+<div class="mocknote">
+  <strong>Proposal, not shipped.</strong> Renders six UX directions against the existing
+  <code>theme.ts</code> tokens. Shell, typography and control language are unchanged from the current build.
+  Tab 5 supersedes the earlier framing of wide-schema disclosure — see the correction note at its foot.
+</div>
+
+<!-- ============================ 1. INVENTORY ============================ -->
+<section class="screen" data-active="true" id="s1">
+  <div class="shell">
+    <aside class="shell-nav">
+      <div class="logo">OBSCURA<span>Governance</span></div>
+      <button class="navlink" aria-current="page"><span class="ico">▤</span> Assets</button>
+      <button class="navlink"><span class="ico">⇄</span> Connections</button>
+      <button class="navlink"><span class="ico">⌁</span> Activity</button>
+      <button class="navlink"><span class="ico">⚙</span> Settings</button>
+      <div class="nav-foot">
+        <span class="pill">● Connected</span>
+        <span class="hostchip">127.0.0.1:4173</span>
+      </div>
+    </aside>
+    <main class="shell-main">
+      <header class="shell-head">
+        <button class="btn">⌕ Search</button>
+        <span class="spacer"></span>
+        <span class="avatar">A</span>
+        <span class="principal">alex@example.invalid</span>
+        <select class="btn" aria-label="Color theme"><option>System theme</option></select>
+        <button class="btn">⇥ Sign out</button>
+      </header>
+      <div class="breadcrumb"><span>Workspace</span> / <span>Assets</span></div>
+      <div class="pagehead">
+        <h1>Assets</h1>
+        <span class="spacer"></span>
+        <span class="hostchip">127.0.0.1:4173</span>
+      </div>
+      <div class="content">
+
+        <!-- NEW: summary strip fills the dead space with actionable state -->
+        <div class="summary-strip">
+          <div class="stat">
+            <div class="label">Governed</div>
+            <div class="value">42</div>
+            <div class="sub">across 6 catalogs</div>
+          </div>
+          <div class="stat alert">
+            <div class="label">No policy</div>
+            <div class="value">7</div>
+            <div class="sub">default NULL mask</div>
+          </div>
+          <div class="stat">
+            <div class="label">Changed today</div>
+            <div class="value">3</div>
+            <div class="sub">2 by you</div>
+          </div>
+          <div class="stat">
+            <div class="label">Live tokens</div>
+            <div class="value">118</div>
+            <div class="sub">oldest 3h</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="toolbar-title">
+              <h2>Governed assets</h2>
+              <p class="help">42 assets loaded</p>
+            </div>
+            <span class="spacer"></span>
+            <label class="search"><span aria-hidden="true">⌕</span>
+              <input type="search" placeholder="Search catalog or asset" aria-label="Find governed asset" />
+            </label>
+          </div>
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Asset</th><th>Catalog / format</th><th>Owners</th>
+                <th>Policy</th><th>Last change</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <button class="asset-link">customer_revenue</button>
+                  <div class="subline">retail_demo</div>
+                </td>
+                <td><span class="mono">retail_demo</span> <span class="pill neutral">iceberg</span></td>
+                <!-- NEW: owners inline, no popover, full federated identity shown -->
+                <td>
+                  <div class="owner">
+                    <span class="id">http://keycloak:8080/realms/demo|group:asset-owners</span>
+                    <span class="id muted">http://keycloak:8080/realms/demo|user:sfischer</span>
+                  </div>
+                </td>
+                <td><span class="pill">✓ Configured</span></td>
+                <!-- NEW: who changed it and when, not a bare number -->
+                <td>
+                  <div class="rev">
+                    <span class="n">rev 14</span>
+                    <button class="who-changed">sfischer · 2h ago</button>
+                    <span class="subline">3 tokens revoked</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <button class="asset-link">orders</button>
+                  <div class="subline">demo</div>
+                </td>
+                <td><span class="mono">demo</span> <span class="pill neutral">iceberg</span></td>
+                <td><div class="owner"><span class="id">demo|user:alex@example.invalid</span></div></td>
+                <td><span class="pill warn">◐ Default NULL</span></td>
+                <td>
+                  <div class="rev">
+                    <span class="n">—</span>
+                    <span class="subline">never configured</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <button class="asset-link">events</button>
+                  <div class="subline">events_prod</div>
+                </td>
+                <td><span class="mono">events_prod</span> <span class="pill neutral">delta</span></td>
+                <td><div class="owner"><span class="id">events_prod|group:platform</span></div></td>
+                <td><span class="pill">✓ Configured</span></td>
+                <td>
+                  <div class="rev">
+                    <span class="n">rev 3</span>
+                    <button class="who-changed">admin · 6d ago</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="frame-note">
+          <strong>Changes:</strong> summary strip replaces dead space; owners render inline with full
+          <code>issuer|subject</code> instead of a popover that truncates at the pipe; the bare revision
+          pill becomes <em>who / when / what</em>, which is what a reviewer actually needs to answer.
+        </p>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ==================== 2. POLICY + MASK PREVIEW ==================== -->
+<section class="screen" id="s2">
+  <div class="shell">
+    <aside class="shell-nav">
+      <div class="logo">OBSCURA<span>Governance</span></div>
+      <button class="navlink" aria-current="page"><span class="ico">▤</span> Assets</button>
+      <button class="navlink"><span class="ico">⇄</span> Connections</button>
+      <button class="navlink"><span class="ico">⌁</span> Activity</button>
+      <button class="navlink"><span class="ico">⚙</span> Settings</button>
+      <div class="nav-foot">
+        <span class="pill">● Connected</span>
+        <span class="hostchip">127.0.0.1:4173</span>
+      </div>
+    </aside>
+    <main class="shell-main">
+      <header class="shell-head">
+        <button class="btn">⌕ Search</button>
+        <span class="spacer"></span>
+        <span class="avatar">A</span>
+        <span class="principal">alex@example.invalid</span>
+        <select class="btn" aria-label="Color theme"><option>System theme</option></select>
+        <button class="btn">⇥ Sign out</button>
+      </header>
+      <div class="breadcrumb"><span>Workspace</span> / <span>Assets</span> / <span>retail_demo</span> / <b>customer_revenue</b></div>
+      <div class="pagehead"><h1>customer_revenue</h1></div>
+      <div class="content">
+
+        <div class="card" style="padding:14px 18px;margin-bottom:16px">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <span class="pill">✓ Policy configured</span>
+            <span class="pill neutral">Live revision 14</span>
+            <span class="pill neutral">iceberg</span>
+            <span style="margin-left:auto" class="pill">● Saved</span>
+          </div>
+        </div>
+
+        <div class="baseline">
+          <span style="font-size:20px;color:var(--primary)">⛉</span>
+          <div>
+            <strong>Every column starts with a NULL mask</strong>
+            <p class="help">Rules reveal selected columns with no mask, or replace the default with another mask. Row filters are independent.</p>
+          </div>
+          <span style="margin-left:auto"></span>
+          <button class="btn">Allow all to all users</button>
+        </div>
+
+        <div style="display:flex;align-items:center;margin:18px 0 12px">
+          <h2 style="font-size:17px">Rules <span class="pill neutral">3</span></h2>
+          <span style="margin-left:auto"></span>
+          <button class="btn primary">＋ New rule</button>
+        </div>
+
+        <!-- NEW: semantic collapsed summary -->
+        <article class="rule-card open">
+          <button class="rule-head">
+            <span>▾</span>
+            <span>
+              <span class="rule-title">Regional analysts</span>
+              <span class="semantics">
+                <span class="pill neutral">group:analysts</span>
+                <span class="sem-chip">customer.email <span class="m m-email">email</span></span>
+                <span class="sem-chip">customer.phone <span class="m m-last">keep_last 4</span></span>
+                <span class="sem-chip">country <span class="m m-none">no mask</span></span>
+                <span class="sem-chip">revenue <span class="m m-none">no mask</span></span>
+              </span>
+            </span>
+            <span class="spacer"></span>
+            <span class="pill warn">⚠ keep_last 4 on phone</span>
+          </button>
+
+          <div class="rule-body">
+            <div class="input two">
+              <div><label class="field-label">Rule name</label><input class="input" value="Regional analysts" /></div>
+              <div><label class="field-label">Description</label><input class="input" value="Customer reporting for the European analytics team." /></div>
+            </div>
+
+            <p class="section-title">Select allowed columns</p>
+            <p class="section-desc">These columns override the default NULL mask. They show original values unless you add a mask.</p>
+            <div class="semantics">
+              <span class="sem-chip">customer.email <span class="m m-email">email</span> ✕</span>
+              <span class="sem-chip">customer.phone <span class="m m-last">keep_last 4</span> ✕</span>
+              <span class="sem-chip">country <span class="m m-none">no mask</span> ✕</span>
+              <span class="sem-chip">revenue <span class="m m-none">no mask</span> ✕</span>
+            </div>
+
+            <!-- NEW: the core addition — what the reader actually receives -->
+            <div class="preview">
+              <div class="preview-head">
+                <span style="font-size:15px;font-weight:600">What a reader receives</span>
+                <span class="spacer"></span>
+                <span class="preview-actor">as group:analysts · synthetic row 1 of 3</span>
+              </div>
+              <p class="help">Computed live from this unsaved draft. The reader never sees the raw values on the right.</p>
+              <table class="preview-grid">
+                <thead><tr><th>Column</th><th>Stored value</th><th>Delivered to reader</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td>customer.email</td>
+                    <td class="raw">alex.moreau@example.com</td>
+                    <td><span class="arrow">→</span><span class="masked ok">a****@example.com</span></td>
+                  </tr>
+                  <tr>
+                    <td>customer.phone</td>
+                    <td class="raw">+1 (415) 555-0134</td>
+                    <td><span class="arrow">→</span><span class="masked warn">********0134</span></td>
+                  </tr>
+                  <tr>
+                    <td>country</td>
+                    <td class="raw">FR</td>
+                    <td><span class="arrow">→</span><span class="masked">FR</span></td>
+                  </tr>
+                  <tr>
+                    <td>revenue</td>
+                    <td class="raw">184320.55</td>
+                    <td><span class="arrow">→</span><span class="masked">184320.55</span></td>
+                  </tr>
+                  <tr>
+                    <td>customer.internal_notes</td>
+                    <td class="raw">—</td>
+                    <td><span class="arrow">→</span><span class="masked" style="color:var(--text-secondary)">null</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="alert warn" style="margin-bottom:0">
+                <span>⚠</span>
+                <span><strong>keep_last 4</strong> reveals the final 4 digits of the phone number.
+                If your phone fields carry area codes or extensions, consider <strong>hash</strong> or
+                <strong>email</strong> instead.</span>
+              </div>
+              <p class="preview-foot">Not yet saved. Saving publishes revision 15 to readers on their next token exchange.</p>
+            </div>
+
+            <div class="savebar">
+              <button class="btn">▷ Test saved policy</button>
+              <button class="btn">Discard all changes</button>
+              <label class="check"><input type="checkbox" /> Revoke existing tokens after saving</label>
+              <span class="spacer"></span>
+              <button class="btn primary">Save policy</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="rule-card">
+          <button class="rule-head">
+            <span>▸</span>
+            <span>
+              <span class="rule-title">Finance reconciliation</span>
+              <span class="semantics">
+                <span class="pill neutral">group:finance</span>
+                <span class="sem-chip">revenue <span class="m m-none">no mask</span></span>
+                <span class="sem-chip">country <span class="m m-none">no mask</span></span>
+                <span class="sem-chip">customer.id <span class="m m-hash">hash</span></span>
+              </span>
+            </span>
+          </button>
+        </article>
+
+        <article class="rule-card">
+          <button class="rule-head">
+            <span>▸</span>
+            <span>
+              <span class="rule-title">Support read-only</span>
+              <span class="semantics">
+                <span class="pill neutral">group:support</span>
+                <span class="sem-chip">customer.email <span class="m m-redact">redact</span></span>
+                <span class="sem-chip">customer.phone <span class="m m-null">null</span></span>
+                <span class="sem-chip">country <span class="m m-none">no mask</span></span>
+              </span>
+            </span>
+          </button>
+        </article>
+
+        <!-- NEW: how the collapsed summary degrades as column count grows -->
+        <div style="margin-top:28px">
+          <h2 style="font-size:17px;margin-bottom:4px">Collapsed summary at scale</h2>
+          <p class="help" style="margin-bottom:14px">
+            A rule can select hundreds of columns. The header must stay one-to-two lines and still
+            answer <em>"is anything exposed?"</em> — which is why the summary aggregates by
+            <strong>mask state</strong>, not by column name. Names come from the lens, on demand.
+          </p>
+
+          <div class="ladder">
+            <div class="ladder-row">
+              <div class="ladder-label">≤ 6 columns<br /><span style="font-weight:400;text-transform:none;letter-spacing:0">list them</span></div>
+              <div class="ladder-sample" style="padding:12px 14px">
+                <div class="rule-title-row"><span class="t">Regional analysts</span></div>
+                <div class="semantics">
+                  <span class="pill neutral">group:analysts</span>
+                  <span class="sem-chip">customer.email <span class="m m-email">email</span></span>
+                  <span class="sem-chip">customer.phone <span class="m m-last">keep_last 4</span></span>
+                  <span class="sem-chip">country <span class="m m-none">no mask</span></span>
+                  <span class="sem-chip">revenue <span class="m m-none">no mask</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="ladder-row">
+              <div class="ladder-label">7–20 columns</div>
+              <div class="ladder-sample" style="padding:12px 14px">
+                <div class="rule-title-row"><span class="t">Finance reconciliation</span></div>
+                <div class="semantics clamped">
+                  <span class="pill neutral">group:finance</span>
+                  <span class="sem-chip">revenue <span class="m m-none">no mask</span></span>
+                  <span class="sem-chip">tax <span class="m m-none">no mask</span></span>
+                  <span class="sem-chip">invoice.id <span class="m m-hash">hash</span></span>
+                  <span class="sem-chip">customer.id <span class="m m-hash">hash</span></span>
+                  <span class="sem-chip">billing.legal_name <span class="m m-redact">redact</span></span>
+                  <span class="sem-chip">billing.vat <span class="m m-redact">redact</span></span>
+                  <span class="sem-chip">billing.account <span class="m m-null">null</span></span>
+                  <span class="sem-chip">audit.created <span class="m m-none">no mask</span></span>
+                  <span class="sem-chip">audit.actor <span class="m m-null">null</span></span>
+                </div>
+                <div class="summary-agg">
+                  <button class="btn small">Review all 14 columns</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="ladder-row">
+              <div class="ladder-label">50+ columns</div>
+              <div class="ladder-sample" style="padding:12px 14px">
+                <div class="rule-title-row">
+                  <span class="t">Data science workspace</span>
+                  <span class="pill neutral">group:ds</span>
+                </div>
+                <div class="summary-agg">
+                  <span class="agg a-danger"><span class="n">1,204</span><span class="lbl">no mask</span></span>
+                  <span class="agg a-warn"><span class="n">88</span><span class="lbl">keep_last</span></span>
+                  <span class="agg a-ok"><span class="n">312</span><span class="lbl">hash</span></span>
+                  <span class="agg"><span class="n">46</span><span class="lbl">redact</span></span>
+                  <span class="agg"><span class="n">1,197</span><span class="lbl">null</span></span>
+                </div>
+                <div class="summary-agg" style="margin-top:8px">
+                  <button class="btn small">Inspect mask states</button>
+                  <button class="btn small">Review all 2,847 columns</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="alert info" style="margin-top:16px">
+            <span>ⓘ</span>
+            <span>
+              The aggregate is ordered by <strong>exposure</strong>, not by mask name — "no mask"
+              leads because it is the only state that returns stored values. At 50+ columns the
+              summary stops naming columns entirely, because a list that long cannot be scanned and
+              the operator's question is about <em>risk</em>, not <em>inventory</em>.
+            </span>
+          </div>
+        </div>
+
+        <p class="frame-note">
+          <strong>Changes:</strong> collapsed rules name their columns and masks instead of showing
+          "3 columns · 2 masks"; a live preview renders the delivered value beside the stored value;
+          and the summary degrades through three states — full list, clamped with overflow, then
+          mask-state aggregation — so header height stays bounded no matter the selection size.
+        </p>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ============================ 3. MOBILE ============================ -->
+<section class="screen" id="s3">
+  <div class="split">
+    <div>
+      <p class="caption">Proposed — card layout</p>
+      <div class="phone">
+        <div class="phone-head">
+          <button class="iconbtn" aria-label="Open navigation menu">☰</button>
+          <div class="logo" style="margin:0;font-size:13px">OBSCURA<span>Governance</span></div>
+          <span style="margin-left:auto"></span>
+          <button class="iconbtn" aria-label="Color theme">◐</button>
+          <span class="avatar" style="width:26px;height:26px;font-size:11px">A</span>
+        </div>
+        <div class="phone-body">
+          <h1 style="font-size:22px;line-height:30px">Assets</h1>
+          <div class="stat-2col">
+            <div class="stat" style="padding:10px 12px"><div class="label">Governed</div><div class="value" style="font-size:20px">42</div></div>
+            <div class="stat alert" style="padding:10px 12px"><div class="label">No policy</div><div class="value" style="font-size:20px">7</div></div>
+          </div>
+          <div class="mobile-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search catalog or asset" aria-label="Find governed asset" style="border:0;background:transparent;outline:none;width:100%" /></div>
+
+          <article class="asset-tile">
+            <div style="display:flex;align-items:center">
+              <span class="name">customer_revenue</span>
+              <span class="pill" style="margin-left:auto">✓ Configured</span>
+            </div>
+            <div class="meta">
+              <span class="pill neutral">retail_demo</span>
+              <span class="pill neutral">iceberg</span>
+              <span class="pill warn">rev 14 · 2h ago</span>
+            </div>
+            <p class="help" style="margin-top:10px"><span class="mono">retail_demo|group:asset-owners</span></p>
+            <div class="foot">
+              <button class="btn small">Review policy</button>
+              <span class="spacer"></span>
+              <button class="tap">Open →</button>
+            </div>
+          </article>
+
+          <article class="asset-tile">
+            <div style="display:flex;align-items:center">
+              <span class="name">orders</span>
+              <span class="pill warn" style="margin-left:auto">◐ Default NULL</span>
+            </div>
+            <div class="meta">
+              <span class="pill neutral">demo</span>
+              <span class="pill neutral">iceberg</span>
+              <span class="pill neutral">never configured</span>
+            </div>
+            <div class="foot">
+              <button class="btn small">Add policy</button>
+              <span class="spacer"></span>
+              <button class="tap">Open →</button>
+            </div>
+          </article>
+        </div>
+      </div>
+      <p class="frame-note">
+        No horizontal scroll. Policy status is the most prominent element because it is the thing an
+        incident responder needs first. The header theme control collapses to an icon instead of a
+        full-width select.
+      </p>
+    </div>
+
+    <div>
+      <p class="caption">Current — clipped table</p>
+      <div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);background:var(--surface)">
+        <div class="phone-head">
+          <button class="iconbtn">☰</button>
+          <div class="logo" style="margin:0;font-size:13px">OBSCURA<span>Governance</span></div>
+        </div>
+        <div style="padding:14px">
+          <h1 style="font-size:22px;line-height:30px">Assets</h1>
+          <div style="overflow-x:auto;margin-top:14px;border:1px solid var(--border);border-radius:8px">
+            <table class="grid" style="min-width:760px">
+              <thead><tr><th>Asset</th><th>Catalog / format</th><th>Owners</th><th>Policy</th><th>Revision</th></tr></thead>
+              <tbody><tr>
+                <td><button class="asset-link">orders</button></td>
+                <td>demo <span class="pill neutral">iceberg</span></td>
+                <td>alex@… ▾</td>
+                <td><span class="pill">✓ Configured</span></td>
+                <td><span class="pill neutral">1</span></td>
+              </tr></tbody>
+            </table>
+          </div>
+          <p class="help" style="margin-top:8px">760px table in a 390px viewport — “Catalog / Form…” is cut mid-word.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 4. BEFORE / AFTER ==================== -->
+<section class="screen" id="s4">
+  <div class="split">
+    <div>
+      <p class="caption">Before — counts only</p>
+      <article class="rule-card">
+        <button class="rule-head">
+          <span>▸</span>
+          <span>
+            <span class="rule-title">Regional analysts</span>
+            <div class="semantics" style="margin-top:7px">
+              <span class="pill neutral">4 columns</span>
+              <span class="pill neutral">group:analysts</span>
+              <span class="pill neutral">2 masks</span>
+            </div>
+          </span>
+        </button>
+      </article>
+      <p class="frame-note">
+        An auditor scanning twelve rules sees numbers, not semantics. Which columns? Which masks?
+        <code>keep_last</code> on which field? None of it is answerable without expanding each rule.
+      </p>
+    </div>
+    <div>
+      <p class="caption">After — named columns and masks</p>
+      <article class="rule-card">
+        <button class="rule-head">
+          <span>▸</span>
+          <span>
+            <span class="rule-title">Regional analysts</span>
+            <div class="semantics" style="margin-top:7px">
+              <span class="pill neutral">group:analysts</span>
+              <span class="sem-chip">customer.email <span class="m m-email">email</span></span>
+              <span class="sem-chip">customer.phone <span class="m m-last">keep_last 4</span></span>
+              <span class="sem-chip">country <span class="m m-none">no mask</span></span>
+              <span class="sem-chip">revenue <span class="m m-none">no mask</span></span>
+            </div>
+          </span>
+        </button>
+      </article>
+      <p class="frame-note">
+        Same vertical footprint, roughly the same width. The rule is now auditable without expansion,
+        and a risky mask is visible at the same moment it is authored.
+      </p>
+    </div>
+  </div>
+
+  <div style="margin-top:28px">
+    <p class="caption">Mask vocabulary</p>
+    <div class="card" style="padding:18px">
+      <div class="semantics">
+        <span class="sem-chip">column <span class="m m-none">no mask</span></span>
+        <span class="sem-chip">column <span class="m m-redact">redact</span></span>
+        <span class="sem-chip">column <span class="m m-hash">hash</span></span>
+        <span class="sem-chip">column <span class="m m-email">email</span></span>
+        <span class="sem-chip">column <span class="m m-last">keep_last 4</span></span>
+        <span class="sem-chip">column <span class="m m-null">null</span></span>
+      </div>
+      <p class="help" style="margin-top:14px">
+        Mask badges reuse <code>--success-surface</code>, <code>--warning-surface</code> and
+        <code>--selection</code> from the existing palette, so they inherit the contrast ratios the
+        e2e suite already asserts. Warning-toned badges (<code>redact</code>, <code>keep_last</code>)
+        mark configurations that disclose identifying data without fully suppressing it.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 5. WIDE + NESTED ==================== -->
+<section class="screen" id="s5">
+  <div class="shell">
+    <aside class="shell-nav">
+      <div class="logo">OBSCURA<span>Governance</span></div>
+      <button class="navlink" aria-current="page"><span class="ico">▤</span> Assets</button>
+      <button class="navlink"><span class="ico">⇄</span> Connections</button>
+      <button class="navlink"><span class="ico">⌁</span> Activity</button>
+      <button class="navlink"><span class="ico">⚙</span> Settings</button>
+      <div class="nav-foot">
+        <span class="pill">● Connected</span>
+        <span class="hostchip">127.0.0.1:4173</span>
+      </div>
+    </aside>
+    <main class="shell-main">
+      <header class="shell-head">
+        <button class="btn">⌕ Search</button>
+        <span class="spacer"></span>
+        <span class="avatar">A</span>
+        <span class="principal">alex@example.invalid</span>
+        <select class="btn" aria-label="Color theme"><option>System theme</option></select>
+        <button class="btn">⇥ Sign out</button>
+      </header>
+      <div class="breadcrumb"><span>Workspace</span> / <span>Assets</span> / <span>retail_demo</span> / <b>customer_360</b></div>
+      <div class="pagehead">
+        <h1>customer_360</h1>
+        <span class="spacer"></span>
+        <span class="pill neutral">9,847 fields · 7 levels deep</span>
+      </div>
+      <div class="content">
+
+        <div class="overflow-note">
+          <span>ⓘ</span>
+          <span>
+            Coverage below is grouped by <strong>subtree</strong>, not enumerated field. Counts come
+            from the already-materialized <code>columnLeafPaths</code> index — no backend change,
+            no extra request. Server bounds remain <code>MAX_SCHEMA_NODES 10,000</code> /
+            <code>MAX_SCHEMA_DEPTH 64</code>.
+          </span>
+        </div>
+
+        <!-- NEW: coverage summary framed as completeness, not danger -->
+        <div class="card" style="padding:16px 18px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;margin-bottom:12px">
+            <h2 style="font-size:17px">Mask coverage</h2>
+            <span class="spacer" style="margin-left:auto"></span>
+            <span class="pill neutral">1 rule grants 3 subtrees</span>
+          </div>
+          <div class="maskbands">
+            <div class="band">
+              <span class="swatch" style="background:var(--success)"></span>
+              <div class="body">
+                <strong>Fully masked</strong>
+                <div class="paths">contact.* · 724 fields · every leaf has an explicit mask</div>
+              </div>
+              <span class="count">724</span>
+              <span class="pill">complete</span>
+            </div>
+            <div class="band">
+              <span class="swatch" style="background:var(--selection);border:1px solid var(--primary)"></span>
+              <div class="body">
+                <strong>Granted, no mask configured</strong>
+                <div class="paths">identity.* · 1,204 fields · readers see stored values on request</div>
+              </div>
+              <span class="count">1,204</span>
+              <button class="btn small">Configure</button>
+            </div>
+            <div class="band">
+              <span class="swatch" style="background:var(--surface-subtle)"></span>
+              <div class="body">
+                <strong>Not granted</strong>
+                <div class="paths">analytics.* and everything else · default NULL mask</div>
+              </div>
+              <span class="count">7,919</span>
+              <span class="pill neutral">default deny</span>
+            </div>
+          </div>
+          <div class="alert info" style="margin-bottom:0">
+            <span>ⓘ</span>
+            <span>
+              Granting <code>identity.*</code> does <strong>not</strong> disclose the whole subtree.
+              A reader must request a specific path, and the grant narrows to that request
+              (<code>_matching_columns</code>). "No mask configured" means
+              <em>stored values are returned when asked for</em> — which is usually intended, and
+              sometimes not.
+            </span>
+          </div>
+        </div>
+
+        <article class="rule-card open">
+          <button class="rule-head">
+            <span>▾</span>
+            <span>
+              <span class="rule-title">Regional analysts</span>
+              <span class="semantics">
+                <span class="pill neutral">group:analysts</span>
+                <span class="sem-chip">identity.* <span class="m m-none">1,204 · no mask</span></span>
+                <span class="sem-chip">contact.* <span class="m m-last">724 · mixed</span></span>
+                <span class="sem-chip">analytics.* <span class="m m-null">not granted</span></span>
+              </span>
+            </span>
+          </button>
+          <div class="rule-body">
+
+            <p class="section-title">Protect sensitive values</p>
+            <p class="section-desc">
+              <code>identity</code> matches 1,204 fields across 3 subtrees. Apply a mask to the whole
+              subtree, or open the lens to choose individual leaves.
+            </p>
+            <div class="coverage" style="margin-bottom:16px">
+              <div class="cov-row">
+                <span class="cov-name">identity.*</span>
+                <span class="cov-tree">▸ 3 subtrees · 1,204 fields · depth 7</span>
+                <span class="meter"><b>0%</b><span class="cov-bar"><span style="width:0%"></span></span></span>
+                <span class="spacer"></span>
+                <button class="btn small">Open lens</button>
+                <button class="btn small primary">Mask all 1,204</button>
+              </div>
+              <div class="cov-row">
+                <span class="cov-name">contact.phone</span>
+                <span class="cov-tree">leaf · depth 2</span>
+                <span class="meter"><b>100%</b><span class="cov-bar warn"><span style="width:100%"></span></span></span>
+                <span class="spacer"></span>
+                <span class="pill warn">keep_last 4</span>
+              </div>
+              <div class="cov-row">
+                <span class="cov-name">analytics.*</span>
+                <span class="cov-tree">▸ 41 subtrees · 7,919 fields · depth 5</span>
+                <span class="meter"><b>100%</b><span class="cov-bar"><span style="width:100%"></span></span></span>
+                <span class="spacer"></span>
+                <span class="pill neutral">not granted · NULL</span>
+              </div>
+            </div>
+
+            <!-- NEW: value lens — bounded, on demand, one row per resolved leaf -->
+            <div class="card" style="padding:16px 18px">
+              <div style="display:flex;gap:12px;align-items:center;margin-bottom:4px">
+                <h3 style="margin:0">Value lens</h3>
+                <span class="spacer" style="margin-left:auto"></span>
+                <span class="pill neutral">virtualized · 12 of 1,204 rows mounted</span>
+              </div>
+              <p class="help">
+                Point at a subtree to resolve its rows on demand. Parent nodes show aggregate mask
+                state instead of values, so a 7-level path never renders 7 rows of raw data.
+              </p>
+              <div class="lens" style="margin-top:12px">
+                <div class="lens-tabs">
+                  <button class="lens-tab" aria-selected="true">identity</button>
+                  <button class="lens-tab" aria-selected="false">identity.contact</button>
+                  <button class="lens-tab" aria-selected="false">identity.contact.address</button>
+                  <button class="lens-tab" aria-selected="false">identity.contact.address.history</button>
+                </div>
+                <div class="gridmap">
+                  <div>
+                    <div class="col-head">Field path</div>
+                    <div class="treecol">
+                      <div class="gnode">▾ <span class="swatch" style="background:var(--surface-subtle)"></span> identity</div>
+                      <div class="gnode sel">▾ <span class="swatch" style="background:var(--surface-subtle)"></span> ├─ contact</div>
+                      <div class="gnode sel">▾ <span class="swatch" style="background:var(--surface-subtle)"></span> │ ├─ address</div>
+                      <div class="gnode sel">▸ <span class="swatch" style="background:var(--surface-subtle)"></span> │ │ └─ line1</div>
+                      <div class="gnode sel">▸ <span class="swatch" style="background:var(--surface-subtle)"></span> │ │ ├─ city</div>
+                      <div class="gnode sel">▸ <span class="swatch" style="background:var(--surface-subtle)"></span> │ │ └─ postcode</div>
+                      <div class="gnode">▸ <span class="swatch" style="background:var(--surface-subtle)"></span> ├─ email</div>
+                      <div class="gnode">▸ <span class="swatch" style="background:var(--surface-subtle)"></span> ├─ ssn</div>
+                      <div class="gnode">▸ <span class="swatch" style="background:var(--surface-subtle)"></span> └─ legal_name</div>
+                      <div class="gnode sel">… 1,195 more</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="col-head">Returned as stored — no mask in this rule</div>
+                    <div class="valcol">
+                      <div class="gval">contact.address.line1 <span class="masked">1841 Fillmore St</span></div>
+                      <div class="gval">contact.address.city <span class="masked">San Francisco</span></div>
+                      <div class="gval">contact.address.postcode <span class="masked">94115</span></div>
+                      <div class="gval">contact.email <span class="masked">a.moreau@example.com</span></div>
+                      <div class="gval">contact.ssn <span class="masked">482-11-9007</span></div>
+                      <div class="gval">legal_name <span class="masked">Alex Moreau</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="alert info" style="margin-bottom:0">
+                  <span>◐</span>
+                  <span>
+                    These six leaves have <strong>no mask</strong> in this rule, so a reader who
+                    requests them receives stored values — including <code>contact.ssn</code>. The
+                    grant only narrows to paths a reader actually asks for, so nothing leaks to
+                    siblings. Masking is a deliberate choice per field.
+                    <button class="btn small" style="margin-left:6px">
+                      Mask identity.*
+                    </button>
+                  </span>
+                </div>
+                <p class="help">
+                  Keyboard: <span class="kbd">↑</span> <span class="kbd">↓</span> move ·
+                  <span class="kbd">→</span> expand · <span class="kbd">M</span> mask selection ·
+                  <span class="kbd">A</span> mask subtree
+                </p>
+              </div>
+            </div>
+
+            <div class="alert info">
+              <span>ⓘ</span>
+              <span>
+                Deep paths use the canonical <code>.</code> / <code>$element</code> / <code>$value</code>
+                syntax and wrap at depth 7:
+                <span class="deeplist">identity.contact.address.history[].previous.line1</span>
+              </span>
+            </div>
+
+            <div class="savebar">
+              <button class="btn">▷ Test saved policy</button>
+              <button class="btn">Discard all changes</button>
+              <label class="check"><input type="checkbox" /> Revoke existing tokens after saving</label>
+              <span class="spacer"></span>
+              <button class="btn primary">Save policy</button>
+            </div>
+          </div>
+        </article>
+
+        <p class="frame-note">
+          <strong>Design rules for wide and deep schemas:</strong> never render a full inventory;
+          group coverage by subtree instead of raw counts; aggregate mask state at parent nodes and
+          resolve values only where you point; and bulk-apply from the subtree so operators never
+          enumerate 1,204 fields.
+        </p>
+        <p class="frame-note">
+          <strong>Correction from the previous revision.</strong> An earlier draft framed
+          "granted but unmasked" as a disclosure hole and used danger styling for it. That was wrong:
+          <code>resolve_access</code> intersects each grant with the reader's requested path
+          (<code>_matching_columns</code>), so a parent grant narrows to the requested leaf and never
+          spills to siblings. The kernel prevents the failure. What remains is a
+          <em>completeness</em> question — did the operator configure a mask for everything they meant
+          to? — which is why this is now neutral/amber rather than red.
+        </p>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ==================== 6. MESSAGE SEMANTICS ==================== -->
+<section class="screen" id="s6">
+  <div class="split">
+    <div>
+      <p class="caption">Current — one green notice carries everything</p>
+      <div class="card" style="padding:16px">
+        <div class="msgcase-head"><span class="bad">Problem</span></div>
+        <div class="msgcase-body">
+          <p class="desc">
+            <code>.notice</code> is <code>--success-surface</code> green. The same class and the same
+            <code>role="status"</code> are used for <em>"Owners updated."</em> and for
+            <em>"Only a platform administrator can change owners."</em> A screen reader will not
+            announce an error, and the colour says success either way. The message is also rendered
+            inside whichever card happens to be open, so an access-tab error appears under
+            "Delegated capabilities" with no causal context.
+          </p>
+          <div class="msgdemo">
+            <div>
+              <p class="help" style="margin-bottom:6px">ConnectionsView</p>
+              <p class="msg-inplace">Catalog saved. revision 7.</p>
+            </div>
+            <div>
+              <p class="help" style="margin-bottom:6px">same class, error text</p>
+              <p class="msg-inplace">Only a platform administrator can change owners.</p>
+            </div>
+          </div>
+          <p class="help" style="margin-top:12px">
+            Locations: <code>ConnectionsView.tsx:916</code>, <code>SettingsView.tsx:530</code>,
+            <code>AssetWorkspace.tsx:223</code>, <code>:1228</code> — all
+            <code>className="notice" role="status"</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="caption">Proposed — severity is a type, not a colour class</p>
+      <div class="card" style="padding:16px">
+        <div class="msgcase-head"><span class="good">Proposed</span></div>
+        <div class="msgcase-body">
+          <p class="desc">
+            One <code>&lt;Message tone="success|error|info"&gt;</code> renders the correct palette,
+            the correct ARIA role (<code>status</code> vs <code>alert</code>), and is placed by the
+            card that owns the action rather than by page position.
+          </p>
+          <div class="msgdemo">
+            <div>
+              <p class="help" style="margin-bottom:6px">success → status</p>
+              <p class="msg-inplace">Owners updated. revision 12.</p>
+            </div>
+            <div>
+              <p class="help" style="margin-bottom:6px">error → alert</p>
+              <p class="msg-inplace err" role="alert">Only a platform administrator can change owners.</p>
+            </div>
+          </div>
+          <div style="margin-top:14px">
+            <p class="help" style="margin-bottom:6px">info → status, no green</p>
+            <p class="msg-inplace info">Connection check finished: 1,204 tables visible.</p>
+          </div>
+          <div class="alert warn" style="margin-bottom:0">
+            <span>⚠</span>
+            <span>
+              <strong>Messages move into their owning card.</strong> An owners error renders in the
+              Owners card, not at the bottom of the Access tab. Position currently implies scope and
+              does not deliver it.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:26px">
+    <p class="caption">Other defects this mockup does not draw — code-verified</p>
+    <div class="audited">
+      <div class="audited-row">
+        <div><span class="label">Sign out drops unsaved edits</span></div>
+        <div>
+          <p class="help">
+            <code>Workspace.tsx:328</code> calls <code>logout()</code> with no confirm.
+            <code>invalidate()</code> clears the cache and remounts children via
+            <code>key={generation}</code>. The <code>beforeunload</code> guard does not apply.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> run <code>confirmDiscardUnsaved()</code> first — reuse the navigation guard.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Save blocked, cause hidden</span></div>
+        <div>
+          <p class="help">
+            Collapsing a rule leaves <code>pending</code> set, so Save is disabled while the only
+            explanation sits inside the collapsed card.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> show the pending count on the collapsed rule header and focus it.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Row filter dropped silently</span></div>
+        <div>
+          <p class="help">
+            "All rows" commits <code>onChange(null)</code> immediately, widening the audience with no
+            confirmation and no undo.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> confirm when discarding a non-empty filter.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Two test entry points</span></div>
+        <div>
+          <p class="help">
+            "Test Policy" and "Test saved policy" open the same modal; only the modal body reveals it
+            evaluates the saved revision.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> one control, one label.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Activity refetch looks idle</span></div>
+        <div>
+          <p class="help">
+            <code>loading</code> is ignored once data exists, so applying filters leaves the old list
+            with no busy signal.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> <code>aria-busy</code> plus an "Updating activity…" status.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Picker rows are all tabbable</span></div>
+        <div>
+          <p class="help">
+            Options use <code>tabIndex={0}</code> while the input drives
+            <code>aria-activedescendant</code> — Tab walks every row. At 10k fields that is a trap.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> roving tabindex, <code>tabIndex={-1}</code> on rows.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Validate-on-keystroke shouting</span></div>
+        <div>
+          <p class="help">
+            Settings validates provider fields per keystroke through <code>role="alert"</code>; clearing
+            a field to retype fires "Issuer URL is required."
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> validate on blur and submit.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Focus starts off-screen</span></div>
+        <div>
+          <p class="help">
+            <code>Workspace.tsx:136-139</code> focuses the hidden mobile-nav trigger on first paint.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> skip on mount.</p>
+        </div>
+      </div>
+      <div class="audited-row">
+        <div><span class="label">Token field invites password storage</span></div>
+        <div>
+          <p class="help">
+            <code>LoginPanel.tsx:66-73</code> uses <code>autoComplete="current-password"</code> for the
+            control-plane token.
+          </p>
+          <p class="help" style="margin-top:6px"><strong>Fix:</strong> <code>autoComplete="off"</code> / <code>"one-time-code"</code>.</p>
+        </div>
+      </div>
+    </div>
+    <p class="frame-note">
+      Line numbers are from the current <code>55cf23f6</code> tree and were verified against the files,
+      not inferred. Each is a small, local change — none require restructuring.
+    </p>
+  </div>
+</section>
+
+<script>
+  const tabs = document.querySelectorAll(".mocktab");
+  tabs.forEach((tab) => tab.addEventListener("click", () => {
+    tabs.forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
+    document.querySelectorAll(".screen").forEach((s) => {
+      s.dataset.active = String(s.id === tab.dataset.target);
+    });
+  }));
+  const scheme = document.getElementById("scheme");
+  scheme.addEventListener("click", () => {
+    const next = document.documentElement.dataset.scheme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.scheme = next;
+    scheme.textContent = next === "dark" ? "Light" : "Dark";
+  });
+</script>
+</body>
+</html>

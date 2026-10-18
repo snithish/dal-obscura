@@ -1,3 +1,6 @@
+import { RuleInsights } from "../policy/RuleInsights";
+import { RuleColumnSummary } from "../policy/RuleColumnSummary";
+import { Message, type MessageState } from "../../shared/Message";
 import { parseTestClaims } from "../policy/policy_test";
 import { discardChanges, useConfirmation } from "../../shared/ConfirmationProvider";
 import { useEffect, useRef, useState } from "react";
@@ -53,7 +56,7 @@ export function AssetWorkspace(props: {
   rules: PolicyRule[];
   activeRevision: number;
   saveState: SaveState;
-  notice: string;
+  notice: MessageState & { target: "policy" | "tokens" };
   fieldErrors?: Array<{ field: string; message: string; type: string }>;
   onUpdateRule: (change: (rule: PolicyRule) => PolicyRule, index: number) => void;
   onAddRule: () => void;
@@ -198,6 +201,20 @@ export function AssetWorkspace(props: {
     );
     props.onTabChange?.(next);
   }
+  const pendingRules = props.rules.filter(
+    (rule) => pending[rule.ordinal] || conditionErrors[rule.ordinal],
+  );
+  function reviewPending(ordinal: number) {
+    setExpanded((current) => new Set([...current, ordinal]));
+    requestAnimationFrame(() => {
+      const body = document.getElementById(`rule-body-${ordinal}`);
+      const target =
+        body?.querySelector<HTMLElement>(".composer-footer button") ??
+        body?.querySelector<HTMLElement>('[aria-invalid="true"]') ??
+        body?.querySelector<HTMLElement>("input");
+      target?.focus();
+    });
+  }
   return (
     <>
       <Button variant="subtle" onClick={props.onBack}>
@@ -219,11 +236,6 @@ export function AssetWorkspace(props: {
           {saveLabel(props.saveState)}
         </span>
       </div>
-      {props.notice && (
-        <div className="notice" role="status">
-          {props.notice}
-        </div>
-      )}
       {Boolean(props.fieldErrors?.length) && (
         <div ref={validationSummary} tabIndex={-1} className="validation-summary" role="alert">
           {props.fieldErrors!.map((item, index) => (
@@ -265,7 +277,7 @@ export function AssetWorkspace(props: {
               onClick={() => setTestOpen(true)}
               leftSection={<Icon name="play" size={15} />}
             >
-              Test Policy
+              Test saved policy
             </Button>
           </div>
         </div>
@@ -273,6 +285,9 @@ export function AssetWorkspace(props: {
           {tab === "policy" ? (
             <div className={`policy-layout ${schemaOpen ? "with-schema" : ""}`}>
               <div className="policy-authoring">
+                {props.notice.target === "policy" && (
+                  <Message tone={props.notice.tone}>{props.notice.text}</Message>
+                )}
                 <div className={`policy-baseline ${bypass ? "bypassed" : ""}`}>
                   <Icon name="shield-check" size={20} />
                   <div>
@@ -320,14 +335,18 @@ export function AssetWorkspace(props: {
                           type="button"
                           aria-expanded={open}
                           aria-controls={`rule-body-${rule.ordinal}`}
-                          onClick={() =>
+                          onClick={() => {
+                            if (!open && (pending[rule.ordinal] || conditionErrors[rule.ordinal])) {
+                              reviewPending(rule.ordinal);
+                              return;
+                            }
                             setExpanded((current) => {
                               const next = new Set(current);
                               if (next.has(rule.ordinal)) next.delete(rule.ordinal);
                               else next.add(rule.ordinal);
                               return next;
-                            })
-                          }
+                            });
+                          }}
                         >
                           <Icon name="chevron-down" size={18} />
                           <span>
@@ -337,7 +356,6 @@ export function AssetWorkspace(props: {
                                 <span className="context-tag">Global bypass</span>
                               ) : (
                                 <>
-                                  <span className="context-tag">{rule.columns.length} columns</span>
                                   {rule.principals.length ? (
                                     rule.principals.map((principal) => (
                                       <span className="audience-tag" key={principal}>
@@ -347,11 +365,7 @@ export function AssetWorkspace(props: {
                                   ) : (
                                     <span className="context-tag">No audience</span>
                                   )}
-                                  {Boolean(Object.keys(rule.masks).length) && (
-                                    <span className="context-tag">
-                                      {Object.keys(rule.masks).length} masks
-                                    </span>
-                                  )}
+
                                   {rule.row_filter && (
                                     <span className="context-tag">Filtered rows</span>
                                   )}
@@ -359,10 +373,11 @@ export function AssetWorkspace(props: {
                               )}
                             </span>
                           </span>
-                          {pending[rule.ordinal] && (
-                            <span className="local-edit-label">Unapplied edits</span>
+                          {(pending[rule.ordinal] || conditionErrors[rule.ordinal]) && (
+                            <span className="local-edit-label">1 rule with unapplied edits</span>
                           )}
                         </button>
+                        <RuleColumnSummary rule={rule} />
                         <div id={`rule-body-${rule.ordinal}`} className="rule-body" hidden={!open}>
                           <div className="rule-metadata">
                             <TextInput
@@ -460,6 +475,7 @@ export function AssetWorkspace(props: {
                               />
                             </>
                           )}
+                          <RuleInsights rule={rule} fields={props.asset.schema?.fields} />
                           <div className="rule-footer">
                             <Button
                               variant="subtle"
@@ -498,13 +514,16 @@ export function AssetWorkspace(props: {
                   </div>
                 )}
                 <div className="policy-save-bar">
-                  <Button
-                    variant="default"
-                    onClick={() => setTestOpen(true)}
-                    leftSection={<Icon name="play" size={15} />}
-                  >
-                    Test saved policy
-                  </Button>
+                  {pendingRules.length > 0 && (
+                    <Button
+                      variant="default"
+                      onClick={() => reviewPending(pendingRules[0].ordinal)}
+                    >
+                      Review unapplied edits in {pendingRules.length}{" "}
+                      {pendingRules.length === 1 ? "rule" : "rules"}
+                    </Button>
+                  )}
+
                   <Button
                     variant="default"
                     disabled={
@@ -559,6 +578,7 @@ export function AssetWorkspace(props: {
             <AccessView
               asset={props.asset}
               access={props.access}
+              tokenNotice={props.notice.target === "tokens" ? props.notice : undefined}
               grants={props.grants}
               session={props.session}
               onReload={props.onReloadAccess}
@@ -887,6 +907,7 @@ function CopyableCode({ title, code }: { title: string; code: string }) {
 }
 
 function AccessView({
+  tokenNotice,
   asset,
   access,
   grants,
@@ -898,6 +919,7 @@ function AccessView({
   queryClient,
   sessionScope,
 }: {
+  tokenNotice?: MessageState;
   asset: Asset;
   access?: AssetAccess;
   grants: AssetGrant[];
@@ -912,7 +934,9 @@ function AccessView({
   const { confirm } = useConfirmation();
   const [owners, setOwners] = useState(asset.owners.join(", "));
   const [rows, setRows] = useState<AssetGrant[]>(grants);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<(MessageState & { scope: "owners" | "grants" }) | null>(
+    null,
+  );
   const [ownersDirty, setOwnersDirty] = useState(false);
   const [grantsDirty, setGrantsDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -967,16 +991,23 @@ function AccessView({
   );
   const canRevokeTokens = access?.can_revoke_tokens === true;
   async function saveOwners() {
-    if (!canManageOwners) return setMessage("Only a platform administrator can change owners.");
+    if (!canManageOwners)
+      return setMessage({
+        tone: "error",
+        text: "Only a platform administrator can change owners.",
+        scope: "owners",
+      });
     if (savingRef.current) return;
     const normalized = owners
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
     if (!normalized.length) {
-      setMessage(
-        "At least one owner is required. Assign a replacement before removing the last owner.",
-      );
+      setMessage({
+        tone: "error",
+        text: "At least one owner is required. Assign a replacement before removing the last owner.",
+        scope: "owners",
+      });
       return;
     }
     savingRef.current = true;
@@ -989,11 +1020,15 @@ function AccessView({
       setOwnersDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["asset", sessionScope, asset.id] });
       void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] });
-      setMessage("Owners updated.");
+      setMessage({ tone: "success", text: "Owners updated.", scope: "owners" });
       onReload();
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(recoveryMessage(error, "Owner update was rejected; refresh before retrying."));
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(error, "Owner update was rejected; refresh before retrying."),
+          scope: "owners",
+        });
     } finally {
       finishMutation(controller);
       savingRef.current = false;
@@ -1002,9 +1037,11 @@ function AccessView({
   }
   async function saveGrants() {
     if (!canManageGrants)
-      return setMessage(
-        "Only an actor with grant-management capability can change delegated access.",
-      );
+      return setMessage({
+        tone: "error",
+        text: "Only an actor with grant-management capability can change delegated access.",
+        scope: "grants",
+      });
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
@@ -1019,15 +1056,19 @@ function AccessView({
       setGrantsDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["asset", sessionScope, asset.id] });
       setRows(normalized);
-      setMessage(
-        "Delegated capabilities updated. Changes take effect on the next authorized request.",
-      );
+      setMessage({
+        tone: "success",
+        text: "Delegated capabilities updated. Changes take effect on the next authorized request.",
+        scope: "grants",
+      });
       onReload();
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(
-          recoveryMessage(error, "Capability update was rejected; refresh before retrying."),
-        );
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(error, "Capability update was rejected; refresh before retrying."),
+          scope: "grants",
+        });
     } finally {
       finishMutation(controller);
       savingRef.current = false;
@@ -1117,6 +1158,7 @@ function AccessView({
         >
           {saving ? "Saving…" : "Save owners"}
         </Button>
+        {message?.scope === "owners" && <Message tone={message.tone}>{message.text}</Message>}
       </div>
       {canRevokeTokens && (
         <div className="form-card">
@@ -1136,6 +1178,7 @@ function AccessView({
           >
             Revoke all active tokens
           </Button>
+          {tokenNotice && <Message tone={tokenNotice.tone}>{tokenNotice.text}</Message>}
         </div>
       )}
       <div className="form-card">
@@ -1224,11 +1267,7 @@ function AccessView({
             {saving ? "Saving…" : "Save capabilities"}
           </Button>
         </div>
-        {message && (
-          <p className="notice" role="status">
-            {message}
-          </p>
-        )}
+        {message?.scope === "grants" && <Message tone={message.tone}>{message.text}</Message>}
       </div>
     </section>
   );

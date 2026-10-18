@@ -60,7 +60,12 @@ export function QueryView({
           </Button>
         </div>
       )}
-      {children}
+      {loading && (
+        <p role="status" className="help">
+          Updating {page}…
+        </p>
+      )}
+      <div aria-busy={loading}>{children}</div>
     </>
   );
 }

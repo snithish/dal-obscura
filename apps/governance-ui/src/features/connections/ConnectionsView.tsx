@@ -1,3 +1,4 @@
+import { Message, type MessageState } from "../../shared/Message";
 import { discardChanges, useConfirmation } from "../../shared/ConfirmationProvider";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
@@ -143,7 +144,9 @@ export function ConnectionsView({
   const effectiveFields = fields;
   const [config, setConfig] = useState<Record<string, string>>({});
   const { confirm } = useConfirmation();
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<
+    (MessageState & { scope: "connection" | "discovery" | "plugins" }) | null
+  >(null);
   const [lifecycleTargets, setLifecycleTargets] = useState<
     Record<string, PluginState["lifecycle"]>
   >({});
@@ -212,7 +215,11 @@ export function ConnectionsView({
     const current = catalogs.find((catalog) => catalog.name === discoveredCatalogRef.current);
     if (!current || current.revision !== discoveredRevisionRef.current) {
       clearDiscovery();
-      setMessage("Catalog configuration changed. Discover tables again.");
+      setMessage({
+        tone: "info",
+        text: "Catalog configuration changed. Discover tables again.",
+        scope: "discovery",
+      });
     }
   }, [catalogs, pluginPairs, clearDiscovery]);
   useEffect(() => {
@@ -271,14 +278,21 @@ export function ConnectionsView({
   }, [pluginId]);
   async function save() {
     if (savingRef.current) return;
-    if (!name.trim()) return setMessage("Connection name is required.");
+    if (!name.trim())
+      return setMessage({
+        tone: "error",
+        text: "Connection name is required.",
+        scope: "connection",
+      });
     const missing = effectiveFields.filter(
       (field) => field.required && !config[field.name]?.trim(),
     );
     if (missing.length)
-      return setMessage(
-        `Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`,
-      );
+      return setMessage({
+        tone: "error",
+        text: `Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`,
+        scope: "connection",
+      });
     const invalidNumber = effectiveFields.find((field) => {
       if ((field.type !== "integer" && field.type !== "number") || !config[field.name]?.trim())
         return false;
@@ -286,10 +300,17 @@ export function ConnectionsView({
       return !Number.isFinite(parsed) || (field.type === "integer" && !Number.isInteger(parsed));
     });
     if (invalidNumber)
-      return setMessage(
-        `${configFieldLabel(invalidNumber.name)} must be a valid ${invalidNumber.type} value.`,
-      );
-    if (!selectedPlugin) return setMessage("Select an admitted catalog adapter before saving.");
+      return setMessage({
+        tone: "error",
+        text: `${configFieldLabel(invalidNumber.name)} must be a valid ${invalidNumber.type} value.`,
+        scope: "connection",
+      });
+    if (!selectedPlugin)
+      return setMessage({
+        tone: "error",
+        text: "Select an admitted catalog adapter before saving.",
+        scope: "connection",
+      });
     savingRef.current = true;
     setSaving(true);
     const options: Record<string, unknown> = { ...pluginDefaults(selectedPlugin) };
@@ -324,14 +345,22 @@ export function ConnectionsView({
       if (controller.signal.aborted || operationEpoch !== connectionEditEpoch.current) return;
       setConnectionDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "connections"] });
-      setMessage("Connection saved. Discovery remains bounded to this configured catalog.");
+      setMessage({
+        tone: "success",
+        text: "Connection saved. Discovery remains bounded to this configured catalog.",
+        scope: "connection",
+      });
       setName("");
       setConfig({});
       setEditingCatalog(null);
       onReload();
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(recoveryMessage(error, "Connection was rejected by the control plane."));
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(error, "Connection was rejected by the control plane."),
+          scope: "connection",
+        });
     } finally {
       finishMutation(controller);
       savingRef.current = false;
@@ -342,18 +371,22 @@ export function ConnectionsView({
   function editCatalog(catalog: Catalog) {
     const nextPlugin = catalogPlugins.find((plugin) => plugin.plugin_id === catalog.plugin_id);
     if (!nextPlugin) {
-      setMessage(
-        `Catalog adapter ${catalog.plugin_id} is no longer admitted; refresh plugins before editing this connection.`,
-      );
+      setMessage({
+        tone: "error",
+        text: `Catalog adapter ${catalog.plugin_id} is no longer admitted; refresh plugins before editing this connection.`,
+        scope: "connection",
+      });
       return;
     }
     setEditingCatalog(catalog);
     setName(catalog.name);
     setPluginId(catalog.plugin_id);
     setConfig(formConfigForCatalog(catalog, nextPlugin));
-    setMessage(
-      `Editing ${catalog.name}. Leave secret references unchanged to keep the existing server-held credential.`,
-    );
+    setMessage({
+      tone: "info",
+      text: `Editing ${catalog.name}. Leave secret references unchanged to keep the existing server-held credential.`,
+      scope: "connection",
+    });
     connectionEditEpoch.current += 1;
     lifecycleEditEpoch.current += 1;
     setConnectionDirty(false);
@@ -370,7 +403,7 @@ export function ConnectionsView({
     setEditingCatalog(null);
     setName("");
     setConfig({});
-    setMessage("");
+    setMessage(null);
     connectionEditEpoch.current += 1;
     lifecycleEditEpoch.current += 1;
     setConnectionDirty(false);
@@ -467,7 +500,12 @@ export function ConnectionsView({
   async function govern(catalog: string, table: CatalogTable) {
     const target = table.target;
     const identifier = table.table_identifier;
-    if (!target || !identifier) return setMessage("The discovered table has no safe identifier.");
+    if (!target || !identifier)
+      return setMessage({
+        tone: "error",
+        text: "The discovered table has no safe identifier.",
+        scope: "discovery",
+      });
     const catalogRow = catalogs.find((item) => item.name === catalog);
     const catalogPluginId = catalogRow?.plugin_id;
     const choices = pluginPairs.filter(
@@ -476,12 +514,20 @@ export function ConnectionsView({
     const formatId =
       selectedFormatId || (choices.length === 1 ? choices[0].format_plugin_id : undefined);
     if (!formatId)
-      return setMessage("Select the table format explicitly before governing a discovered table.");
+      return setMessage({
+        tone: "error",
+        text: "Select the table format explicitly before governing a discovered table.",
+        scope: "discovery",
+      });
     const formatPlugin = plugins.find(
       (plugin) => plugin.kind === "table_format" && plugin.plugin_id === formatId,
     );
     if (!formatPlugin)
-      return setMessage("No admitted table-format adapter is available for this catalog.");
+      return setMessage({
+        tone: "error",
+        text: "No admitted table-format adapter is available for this catalog.",
+        scope: "discovery",
+      });
     const operationKey = `${catalog}\u0000${identifier}`;
     if (governBusyRef.current.has(operationKey)) return;
     governBusyRef.current.add(operationKey);
@@ -511,17 +557,21 @@ export function ConnectionsView({
           item.table_identifier === identifier ? { ...item, governed: true } : item,
         ),
       );
-      setMessage(
-        `Governed asset ${target} registered. Assign owners and author a policy in Assets.`,
-      );
+      setMessage({
+        tone: "success",
+        text: `Governed asset ${target} registered. Assign owners and author a policy in Assets.`,
+        scope: "discovery",
+      });
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(
-          recoveryMessage(
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(
             error,
             "Asset registration was rejected; the source table was not changed.",
           ),
-        );
+          scope: "discovery",
+        });
     } finally {
       finishMutation(controller);
       governBusyRef.current.delete(operationKey);
@@ -556,19 +606,25 @@ export function ConnectionsView({
       );
       if (controller.signal.aborted || operationEpoch !== lifecycleEditEpoch.current) return;
       setLifecycleDirty(false);
-      setMessage(`${plugin.display_name} lifecycle is now ${target}.`);
+      setMessage({
+        tone: "success",
+        text: `${plugin.display_name} lifecycle is now ${target}.`,
+        scope: "plugins",
+      });
       await queryClient.invalidateQueries({
         queryKey: ["management", sessionScope, "connections"],
       });
       onReload();
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(
-          recoveryMessage(
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(
             error,
             "Plugin lifecycle change was rejected; the previous state remains active.",
           ),
-        );
+          scope: "plugins",
+        });
     } finally {
       finishMutation(controller);
       lifecycleBusyRef.current.delete(key);
@@ -578,6 +634,7 @@ export function ConnectionsView({
   const pluginCards = plugins.length > 0 && (
     <div className="form-card">
       <h3>Admitted adapters</h3>
+      {message?.scope === "plugins" && <Message tone={message.tone}>{message.text}</Message>}
       <div className="plugin-list">
         {plugins.map((plugin) => {
           const key = `${plugin.kind}:${plugin.plugin_id}`;
@@ -726,6 +783,7 @@ export function ConnectionsView({
           Refresh table discovery
         </Button>
       </div>
+      {message?.scope === "discovery" && <Message tone={message.tone}>{message.text}</Message>}
       {discoveryError && (
         <div className="discovery-error">
           <p role="alert">{discoveryError}</p>
@@ -913,7 +971,7 @@ export function ConnectionsView({
         >
           {saving ? "Saving…" : editingCatalog ? "Save catalog changes" : "Save connection"}
         </Button>
-        {message && <p className="notice">{message}</p>}
+        {message?.scope === "connection" && <Message tone={message.tone}>{message.text}</Message>}
       </div>
       {discoveredChoices.length > 1 && (
         <div className="form-card">
@@ -1007,6 +1065,11 @@ export function ConnectionsView({
           <strong>No catalogs configured</strong>
           <p>Connect an admitted catalog adapter to begin asset onboarding.</p>
         </div>
+      )}
+      {message?.scope === "discovery" && !tableBrowser && (
+        <section className="form-card" aria-label="Catalog discovery feedback">
+          <Message tone={message.tone}>{message.text}</Message>
+        </section>
       )}
       {tableBrowser}
     </section>

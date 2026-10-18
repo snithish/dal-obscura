@@ -1,3 +1,4 @@
+import { type MessageState } from "../../shared/Message";
 import { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { AssetWorkspace } from "../assets/AssetWorkspace";
 import { useSessionScope } from "../identity/SessionBoundary";
@@ -67,11 +68,13 @@ export function PolicyEditorController({
   const [previewGroups, setPreviewGroups] = useState("us-analysts");
   const [previewProvider, setPreviewProvider] = useState("");
   const [previewClaims, setPreviewClaims] = useState("{}");
-  const [notice, setNotice] = useState(
-    asset.policy_rules?.length
+  const [notice, setNotice] = useState<MessageState & { target: "policy" | "tokens" }>({
+    tone: "info",
+    target: "policy",
+    text: asset.policy_rules?.length
       ? "Loaded the current live policy."
       : "No policy rules are configured. All columns return NULL until a rule overrides their masks.",
-  );
+  });
 
   useLayoutEffect(() => {
     onDirtyChange(formDirty || saveState === "unsaved" || saveState === "failed");
@@ -95,6 +98,8 @@ export function PolicyEditorController({
     void queryClient.invalidateQueries({
       queryKey: ["asset-inventory", sessionCacheKey],
     });
+    void queryClient.invalidateQueries({ queryKey: ["inventory-summary", sessionCacheKey] });
+    void queryClient.invalidateQueries({ queryKey: ["inventory-changes", sessionCacheKey] });
     void queryClient.invalidateQueries({
       queryKey: ["management", sessionCacheKey],
     });
@@ -105,34 +110,56 @@ export function PolicyEditorController({
     setFormDirty(false);
     setPreview(null);
     setPreviewError("");
-    setNotice("Discarded all local changes. Showing the last saved policy.");
+    setNotice({
+      tone: "info",
+      text: "Discarded all local changes. Showing the last saved policy.",
+      target: "policy",
+    });
   }
   function allowAllPolicy() {
     draft.dispatch({ type: "allowAll" });
     setPreview(null);
-    setNotice(
-      "Allow all is staged. Save policy to bypass all masks and row filters for authenticated readers.",
-    );
+    setNotice({
+      tone: "info",
+      text: "Allow all is staged. Save policy to bypass all masks and row filters for authenticated readers.",
+      target: "policy",
+    });
   }
   function updateRule(change: (rule: PolicyRule) => PolicyRule, targetIndex: number) {
     draft.update(targetIndex, change);
     setPreview(null);
-    setNotice("Policy changed locally. Test saved policy to evaluate the last saved version.");
+    setNotice({
+      tone: "info",
+      text: "Policy changed locally. Test saved policy to evaluate the last saved version.",
+      target: "policy",
+    });
   }
   function addRule() {
     draft.dispatch({ type: "add" });
     setPreview(null);
-    setNotice("New rule added locally. Add at least one principal before saving.");
+    setNotice({
+      tone: "info",
+      text: "New rule added locally. Add at least one principal before saving.",
+      target: "policy",
+    });
   }
   function duplicateRule(index: number) {
     draft.dispatch({ type: "duplicate", index });
     setPreview(null);
-    setNotice("Rule duplicated locally. Check its principals and fields before saving.");
+    setNotice({
+      tone: "info",
+      text: "Rule duplicated locally. Check its principals and fields before saving.",
+      target: "policy",
+    });
   }
   function removeRule(index: number) {
     draft.dispatch({ type: "remove", index });
     setPreview(null);
-    setNotice("Rule removed locally. Save policy to apply the change.");
+    setNotice({
+      tone: "info",
+      text: "Rule removed locally. Save policy to apply the change.",
+      target: "policy",
+    });
   }
   async function savePolicy(revokeExistingTokens = false) {
     const submission = draft.beginSave();
@@ -160,18 +187,22 @@ export function PolicyEditorController({
         saved.policy_revision,
         Boolean(submission.rules.length),
       );
-      setNotice(
-        revokeExistingTokens
+      setNotice({
+        tone: "success",
+        text: revokeExistingTokens
           ? `Live policy saved; revoked ${saved.revoked_token_count} active token(s).`
           : "Live policy saved. Existing tokens remain valid until expiry unless an owner revokes them.",
-      );
+        target: "policy",
+      });
       invalidateAssetQueries(assetId);
     } catch (error) {
       if (isAbortError(error) || !isCurrent(sessionGeneration)) return;
       if (draft.failed(submission, (error as ApiFailure).fieldErrors ?? [])) {
-        setNotice(
-          recoveryMessage(error, "Save failed. Your unsaved changes remain in this browser."),
-        );
+        setNotice({
+          tone: "error",
+          text: recoveryMessage(error, "Save failed. Your unsaved changes remain in this browser."),
+          target: "policy",
+        });
       }
     } finally {
       if (isCurrent(sessionGeneration)) draft.dispatch({ type: "cancelSave", submission });
@@ -187,7 +218,11 @@ export function PolicyEditorController({
 
   async function runPreview() {
     if (saveState === "saving") {
-      setNotice("Policy save is in progress. Try the saved-policy test again when it completes.");
+      setNotice({
+        tone: "info",
+        text: "Policy save is in progress. Try the saved-policy test again when it completes.",
+        target: "policy",
+      });
       return;
     }
     if (previewPendingRef.current) return;
@@ -227,9 +262,11 @@ export function PolicyEditorController({
       )
         return;
       setPreview(result);
-      setNotice(
-        `Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`,
-      );
+      setNotice({
+        tone: "info",
+        text: `Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`,
+        target: "policy",
+      });
     } catch (error) {
       if (isAbortError(error) || !isCurrent(sessionGeneration)) return;
       if (
@@ -268,11 +305,19 @@ export function PolicyEditorController({
     try {
       const result = await controlPlane.revokeAssetTokens(asset.id, request.signal);
       if (!isCurrent(sessionGeneration) || request.signal.aborted) return;
-      setNotice(`Revoked ${result.revoked_token_count} active token(s).`);
+      setNotice({
+        tone: "success",
+        text: `Revoked ${result.revoked_token_count} active token(s).`,
+        target: "tokens",
+      });
       invalidateAssetQueries(asset.id);
     } catch (error) {
       if (isCurrent(sessionGeneration) && !isAbortError(error))
-        setNotice(recoveryMessage(error, "Could not revoke this asset's tokens."));
+        setNotice({
+          tone: "error",
+          text: recoveryMessage(error, "Could not revoke this asset's tokens."),
+          target: "tokens",
+        });
     } finally {
       request.finish();
       if (isCurrent(sessionGeneration)) {

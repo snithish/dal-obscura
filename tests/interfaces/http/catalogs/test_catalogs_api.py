@@ -294,7 +294,7 @@ def test_workspace_catalog_upsert_rejects_a_stale_revision(client_factory):
     )
     assert updated.status_code == 200
     assert stale.status_code == 409
-    assert "Catalog revision changed" in stale.json()["detail"]
+    assert "Catalog revision changed" in stale.json()["error"]["message"]
     assert stale.json()["error"]["current_revision"] == 1
 
 
@@ -349,7 +349,7 @@ def test_workspace_catalog_rejects_credentials_embedded_in_uri(client_factory):
     )
 
     assert response.status_code == 400
-    assert "secret reference" in response.json()["detail"]
+    assert "secret reference" in response.json()["error"]["message"]
 
 
 def test_workspace_catalog_rejects_malformed_uri_with_structured_error(client_factory):
@@ -381,7 +381,7 @@ def test_workspace_catalog_rejects_nested_dynamic_loader_options(client_factory)
     )
 
     assert response.status_code == 400
-    assert "cannot select an implementation class" in response.json()["detail"]
+    assert "cannot select an implementation class" in response.json()["error"]["message"]
 
 
 def test_workspace_catalog_rejects_unbounded_option_shape(client_factory):
@@ -397,7 +397,7 @@ def test_workspace_catalog_rejects_unbounded_option_shape(client_factory):
     )
 
     assert response.status_code == 400
-    assert "too deeply nested" in response.json()["detail"]
+    assert "too deeply nested" in response.json()["error"]["message"]
 
 
 def test_workspace_catalog_rejects_oversized_option_list(client_factory):
@@ -409,7 +409,7 @@ def test_workspace_catalog_rejects_oversized_option_list(client_factory):
     )
 
     assert response.status_code == 400
-    assert "list is too large" in response.json()["detail"]
+    assert "list is too large" in response.json()["error"]["message"]
 
 
 def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_refs(client_factory):
@@ -430,7 +430,7 @@ def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_r
     )
 
     assert rejected.status_code == 400
-    assert "secret reference" in rejected.json()["detail"]
+    assert "secret reference" in rejected.json()["error"]["message"]
     assert accepted.status_code == 200, accepted.json()
 
 
@@ -456,7 +456,7 @@ def test_workspace_catalog_enforces_configured_egress_allowlist(http_client, db_
     )
 
     assert rejected.status_code == 400
-    assert "egress allowlist" in rejected.json()["detail"]
+    assert "egress allowlist" in rejected.json()["error"]["message"]
     assert accepted.status_code == 200, accepted.json()
 
 
@@ -602,7 +602,7 @@ def test_workspace_catalog_discovery_does_not_echo_provider_errors(client_factor
 
     assert response.status_code == 400
     payload = response.json()
-    assert payload["detail"] == "Catalog discovery failed"
+    assert payload["error"]["message"] == "Catalog discovery failed"
     assert payload["error"]["code"] == "validation_error"
     assert payload["error"]["request_id"]
     assert "catalog-password" not in response.text

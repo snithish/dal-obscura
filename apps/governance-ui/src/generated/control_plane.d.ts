@@ -661,12 +661,6 @@ export interface components {
          * @description Public HTTP error envelope documented for generated clients.
          */
         ApiErrorResponse: {
-            /** Detail */
-            detail: string | {
-                [key: string]: unknown;
-            }[] | {
-                [key: string]: unknown;
-            };
             error: components["schemas"]["ApiError"];
         };
         /**

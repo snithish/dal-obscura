@@ -32,7 +32,16 @@ test("failed inventory search keeps results and offers retry", async ({ page }) 
   await page.goto("/#assets");
   await expect(page.getByRole("button", { name: "orders", exact: true })).toBeVisible();
   await page.route("**/v1/assets/page**", (route) =>
-    route.fulfill({ status: 503, json: { detail: "Directory unavailable" } }),
+    route.fulfill({
+      status: 503,
+      json: {
+        error: {
+          code: "request_rejected",
+          message: "Directory unavailable",
+          request_id: "test-request",
+        },
+      },
+    }),
   );
   await page.getByLabel("Find governed asset").fill("orders");
   await expect(page.getByRole("button", { name: "Retry asset search" })).toBeVisible();
@@ -108,7 +117,12 @@ test("browser history restores asset tabs and guards unfinished forms", async ({
 test("unavailable deep link can return to inventory", async ({ page }) => {
   await authenticatedApi(page);
   await page.route("**/v1/assets/missing**", (route) =>
-    route.fulfill({ status: 404, json: { detail: "Asset not found" } }),
+    route.fulfill({
+      status: 404,
+      json: {
+        error: { code: "request_rejected", message: "Asset not found", request_id: "test-request" },
+      },
+    }),
   );
   await page.goto("/?asset=missing#assets");
   await expect(page.getByRole("heading", { name: "Asset unavailable" })).toBeVisible();

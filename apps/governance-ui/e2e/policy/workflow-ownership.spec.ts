@@ -56,7 +56,7 @@ test("navigation during preview cannot publish the old asset's result on return"
   const pending = deferredResponse();
   await authenticatedApi(page, { initialPolicyRules: [rule], deferredEvaluate: pending });
   await page.goto(editorUrl);
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Test policy", exact: true });
   await modal.getByLabel("Principal", { exact: true }).fill("previous-route-reader");
   await modal.getByRole("button", { name: "Test saved policy", exact: true }).click();
@@ -64,7 +64,7 @@ test("navigation during preview cannot publish the old asset's result on return"
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   await page.getByRole("button", { name: "orders", exact: true }).click();
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   await expect(modal.getByLabel("Principal", { exact: true })).toHaveValue("analyst.alex");
   pending.release();
   await pending.completed;

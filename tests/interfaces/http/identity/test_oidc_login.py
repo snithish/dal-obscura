@@ -247,7 +247,7 @@ def test_oidc_login_is_bounded_per_client_and_returns_retry_after(http_client, d
     assert blocked.status_code == 429
     assert blocked.headers["retry-after"] == "30"
     blocked_payload = blocked.json()
-    assert blocked_payload["detail"] == "Login temporarily unavailable"
+    assert blocked_payload["error"]["message"] == "Login temporarily unavailable"
     assert blocked_payload["error"]["code"] == "rate_limited"
     assert blocked_payload["error"]["request_id"]
 

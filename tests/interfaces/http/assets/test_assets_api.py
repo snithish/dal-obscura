@@ -120,7 +120,7 @@ def test_asset_cannot_remove_its_last_owner_without_reassignment(client_factory)
 
     assert assigned.status_code == 200
     assert removed.status_code == 400
-    assert "last owner" in removed.json()["detail"]
+    assert "last owner" in removed.json()["error"]["message"]
 
 
 def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail(client_factory):
@@ -186,9 +186,9 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail(client_
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
     assert legacy_response.status_code == 400
-    assert "field path" in legacy_response.json()["detail"].lower()
+    assert "field path" in legacy_response.json()["error"]["message"].lower()
     assert missing_id_response.status_code == 400
-    assert "field id" in missing_id_response.json()["detail"].lower()
+    assert "field id" in missing_id_response.json()["error"]["message"].lower()
     assert response.status_code == 200
     assert response.json() == {
         "asset_id": asset["id"],
@@ -512,7 +512,7 @@ def test_asset_metadata_precondition_rejects_stale_writer(client_factory) -> Non
 
     assert first.status_code == 200
     assert stale.status_code == 409
-    assert "Asset revision changed" in stale.json()["detail"]
+    assert "Asset revision changed" in stale.json()["error"]["message"]
 
 
 def test_asset_binding_precondition_rejects_stale_update(client_factory) -> None:
@@ -611,7 +611,7 @@ def test_asset_binding_precondition_rejects_nonzero_revision_on_create(client_fa
     )
 
     assert response.status_code == 409
-    assert "expected 7, current 0" in response.json()["detail"]
+    assert "expected 7, current 0" in response.json()["error"]["message"]
     assert client.get("/v1/assets", headers=ADMIN_HEADERS).json() == []
 
 

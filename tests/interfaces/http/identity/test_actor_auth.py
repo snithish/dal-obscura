@@ -94,12 +94,12 @@ def test_cookie_session_requires_csrf_header_for_mutations(http_client, db_engin
     assert session.status_code == 200
     assert session.json()["principal"] == "asset-owner"
     assert rejected.status_code == 403
-    assert rejected.json()["detail"] == "CSRF validation failed"
+    assert rejected.json()["error"]["message"] == "CSRF validation failed"
     # A valid CSRF token reaches the resource authorization boundary. The
     # actor has no visibility of this synthetic asset, so the API deliberately
     # conceals it as a not-found response rather than leaking its existence.
     assert csrf.status_code == 404
-    assert csrf.json()["detail"] != "CSRF validation failed"
+    assert csrf.json()["error"]["message"] != "CSRF validation failed"
 
 
 def test_cookie_session_rejects_a_forged_csrf_cookie(http_client, db_engine):
@@ -113,7 +113,7 @@ def test_cookie_session_rejects_a_forged_csrf_cookie(http_client, db_engine):
     response = client.get("/v1/session", headers={"cookie": cookie_header})
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "CSRF validation failed"
+    assert response.json()["error"]["message"] == "CSRF validation failed"
 
 
 def test_legacy_browser_cookies_are_not_authenticated(http_client, db_engine):
@@ -192,7 +192,7 @@ def test_cookie_mutation_origin_and_host_matrix(
 
     assert response.status_code == expected_status
     if expected_status == 403:
-        assert response.json()["detail"] == "Origin validation failed"
+        assert response.json()["error"]["message"] == "Origin validation failed"
 
 
 def test_static_bootstrap_token_can_be_disabled_when_oidc_admin_is_available(
@@ -280,7 +280,7 @@ def test_local_bootstrap_login_rejects_invalid_bearer(client_factory):
 
     assert response.status_code == 401
     payload = response.json()
-    assert payload["detail"] == "Invalid bootstrap credential"
+    assert payload["error"]["message"] == "Invalid bootstrap credential"
     assert payload["error"]["code"] == "authentication_required"
     assert payload["error"]["request_id"]
 
@@ -297,7 +297,7 @@ def test_local_bootstrap_login_is_unavailable_when_disabled(http_client, db_engi
 
     assert response.status_code == 404
     payload = response.json()
-    assert payload["detail"] == "Local bootstrap login is disabled"
+    assert payload["error"]["message"] == "Local bootstrap login is disabled"
     assert payload["error"]["code"] == "not_found"
     assert payload["error"]["request_id"]
 

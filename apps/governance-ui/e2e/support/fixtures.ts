@@ -12,7 +12,13 @@ export async function authenticatedApi(page: Page, options: AuthenticatedApiOpti
   await page.route("**/v1/**", (route) =>
     route.fulfill({
       status: 404,
-      json: { detail: "synthetic fixture route missing" },
+      json: {
+        error: {
+          code: "request_rejected",
+          message: "synthetic fixture route missing",
+          request_id: "test-request",
+        },
+      },
     }),
   );
   await installAssetApi(page, options);

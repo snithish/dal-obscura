@@ -45,13 +45,6 @@ function pathSegments(path: SchemaPath | undefined): string[] | undefined {
   );
 }
 
-/** Typed schema ancestry; display strings are never split on dots. */
-export function schemaPathCovers(parent: string, child: string, options: ColumnOption[]): boolean {
-  if (parent === child) return true;
-  const byName = new Map(options.map((option) => [option.value, option]));
-  return columnOptionCovers(byName.get(parent), byName.get(child));
-}
-
 /** Typed ancestry without rebuilding lookup maps for every rendered row. */
 export function columnOptionCovers(
   parent: ColumnOption | undefined,
@@ -191,23 +184,6 @@ export function columnLeafPaths(options: ColumnOption[]): Map<string, string[]> 
   return result;
 }
 
-export function selectColumnsShortcut(
-  options: ColumnOption[],
-  mode: "all" | "except" | "prefix",
-  value = "",
-): string[] {
-  const excluded = options.find((option) => option.value === value);
-  return leafColumnOptions(options)
-    .filter(
-      (option) =>
-        mode === "all" ||
-        (mode === "except"
-          ? !columnOptionCovers(excluded, option)
-          : option.value.startsWith(value)),
-    )
-    .map((option) => option.value);
-}
-
 export function expandColumnSelections(options: ColumnOption[], values: string[]): string[] {
   const leaves = columnLeafPaths(options);
   return [
@@ -218,4 +194,58 @@ export function expandColumnSelections(options: ColumnOption[], values: string[]
       }),
     ),
   ];
+}
+
+/** Existing typed descendant index supplies both grants and inherited masks. */
+export function createRuleCoverage(rule: PolicyRule, options: ColumnOption[]) {
+  const descendants = columnLeafPaths(options);
+  const columns = [...new Set(rule.columns.flatMap((column) => descendants.get(column) ?? []))];
+  const selected = new Set(columns);
+  const candidates = new Map<string, Mask[]>();
+  for (const [path, mask] of Object.entries(rule.masks)) {
+    for (const leaf of descendants.get(path) ?? []) {
+      if (!selected.has(leaf)) continue;
+      const current = candidates.get(leaf) ?? [];
+      current.push(mask);
+      candidates.set(leaf, current);
+    }
+  }
+  const masks: Record<string, Mask> = {};
+  const conflicts = new Set<string>();
+  for (const [leaf, entries] of candidates) {
+    if (entries.length === 1) {
+      masks[leaf] = entries[0];
+      continue;
+    }
+    if (entries.some((mask) => mask.type === "null")) {
+      masks[leaf] = { type: "null" };
+      continue;
+    }
+    if (
+      entries.every(
+        (mask) =>
+          mask.type === "keep_last" &&
+          typeof mask.value === "number" &&
+          Number.isInteger(mask.value) &&
+          mask.value >= 0,
+      )
+    ) {
+      masks[leaf] = {
+        type: "keep_last",
+        value: Math.min(...entries.map((mask) => Number(mask.value))),
+      };
+      continue;
+    }
+    const first = entries[0];
+    if (entries.some((mask) => mask.type !== first.type || mask.value !== first.value)) {
+      conflicts.add(leaf);
+      continue;
+    }
+    masks[leaf] = first;
+  }
+  return {
+    rule: { ...rule, columns: columns.filter((column) => !conflicts.has(column)), masks },
+    conflicts,
+    descendants,
+  };
 }

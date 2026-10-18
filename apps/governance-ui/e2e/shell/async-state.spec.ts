@@ -158,7 +158,7 @@ test("late policy evaluations cannot replace a newer unsaved edit", async ({ pag
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Test policy", exact: true })
     .getByRole("button", { name: "Test saved policy", exact: true })
@@ -173,7 +173,7 @@ test("late policy evaluations cannot replace a newer unsaved edit", async ({ pag
 
   deferredEvaluate.release();
   await deferredEvaluate.completed;
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   await expect(
     page
       .getByRole("dialog", { name: "Test policy", exact: true })

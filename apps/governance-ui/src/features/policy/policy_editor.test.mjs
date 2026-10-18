@@ -5,7 +5,7 @@ import {
   authoritativeColumnOptions,
   groupMasks,
   removeColumnSelections,
-  schemaPathCovers,
+  columnOptionCovers,
 } from "./policy_editor.ts";
 
 const node = (human_path, segments, children = []) => ({
@@ -45,8 +45,8 @@ const rule = () => ({
 test("authoritative options retain removed selections and distinguish typed paths from dotted names", () => {
   const options = authoritativeColumnOptions(fields, ["missing"]);
   assert.equal(options.at(-1).valid, false);
-  assert.equal(schemaPathCovers("profile", "profile.email", options), true);
-  assert.equal(schemaPathCovers("a.b", "profile.email", options), false);
+  assert.equal(columnOptionCovers(options[0], options[1]), true);
+  assert.equal(columnOptionCovers(options[2], options[1]), false);
   assert.deepEqual(authoritativeColumnOptions(undefined, ["stale"])[0].value, "stale");
 });
 
@@ -142,26 +142,6 @@ test("mask groups treat exemption lists as sets", () => {
     groups.map(({ mask }) => ({ type: mask.type, exemptions: [...mask.exempt_principals].sort() })),
     [{ type: "hash", exemptions: ["a", "b"] }],
   );
-});
-
-test("nested selection shortcuts expand leaves and exclude entire subtrees", async () => {
-  const { selectColumnsShortcut } = await import("./policy_editor.ts");
-  const option = (value, names) => ({
-    value,
-    label: value,
-    valid: true,
-    type: "string",
-    path: { version: 1, segments: names.map((name) => ({ kind: "field", name })) },
-  });
-  const options = [
-    option("a", ["a"]),
-    option("a.b", ["a", "b"]),
-    option("a.c", ["a", "c"]),
-    option('["a.b"]', ["a.b"]),
-  ];
-  assert.deepEqual(selectColumnsShortcut(options, "all"), ["a.b", "a.c", '["a.b"]']);
-  assert.deepEqual(selectColumnsShortcut(options, "except", "a"), ['["a.b"]']);
-  assert.deepEqual(selectColumnsShortcut(options, "prefix", "a."), ["a.b", "a.c"]);
 });
 
 test("parent selection expands nested collection leaves for individual exemptions", async () => {

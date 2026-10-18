@@ -265,9 +265,9 @@ def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_mate
     )
 
     assert unsupported.status_code == 400
-    assert "only built-in OIDC" in unsupported.json()["detail"]
+    assert "only built-in OIDC" in unsupported.json()["error"]["message"]
     assert inline_secret.status_code == 400
-    assert "static JWKS" in inline_secret.json()["detail"]
+    assert "static JWKS" in inline_secret.json()["error"]["message"]
 
 
 def test_workspace_auth_providers_normalize_malformed_endpoint_errors(client_factory):

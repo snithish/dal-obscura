@@ -214,7 +214,13 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
       ) {
         return route.fulfill({
           status: 404,
-          json: { detail: "Plugin lifecycle target not found" },
+          json: {
+            error: {
+              code: "request_rejected",
+              message: "Plugin lifecycle target not found",
+              request_id: "test-request",
+            },
+          },
         });
       }
       pluginStates = pluginStates.map((state) =>

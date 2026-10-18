@@ -90,13 +90,6 @@ h3 {
 .save-dot.failed {
   background: var(--danger);
 }
-.notice {
-  background: var(--success-surface);
-  border-left: 3px solid var(--success);
-  padding: 10px 13px;
-  font-size: 14px;
-  margin: 10px 0 20px;
-}
 .asset-tabs {
   display: flex;
   gap: 22px;
@@ -2139,4 +2132,146 @@ td small {
   align-items: center;
   flex-wrap: wrap;
   font-size: 12px;
+}
+
+.message {
+  border-left: 3px solid;
+  padding: 10px 13px;
+  font-size: 14px;
+  margin: 10px 0 20px;
+}
+.msg-success {
+  background: var(--success-surface);
+  border-color: var(--success);
+  color: var(--success);
+}
+.msg-error {
+  background: var(--danger-surface);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.msg-info {
+  background: var(--selection);
+  border-color: var(--selection-text);
+  color: var(--selection-text);
+}
+.rule-column-summary {
+  padding: 0 16px 12px;
+  min-width: 0;
+}
+.rule-column-chips,
+.rule-column-tallies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.rule-column-chips.clamped {
+  max-height: 52px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 65%, transparent);
+}
+.rule-column-tallies {
+  max-height: 76px;
+  overflow: auto;
+}
+.sem-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 7px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  max-width: 100%;
+  font-size: 12px;
+}
+.sem-chip code {
+  overflow-wrap: anywhere;
+}
+.sem-chip.tally-stored {
+  background: var(--danger-surface);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.sem-chip.tally-partial {
+  background: var(--warning-surface);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+.rule-insights {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.value-lens-list {
+  overflow: auto;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+}
+.value-lens-head,
+.value-lens-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+.value-lens-head {
+  margin-top: 12px;
+  font-weight: 600;
+}
+.value-lens-row {
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.value-lens-row code,
+.value-lens-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lens-swatch {
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  border-left: 4px solid var(--control-border);
+  padding: 4px;
+}
+.inventory-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.inventory-summary > div {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.inventory-summary strong {
+  font-size: 26px;
+}
+.inventory-summary small {
+  color: var(--text-secondary);
+}
+.inventory-owner-details {
+  padding-left: 0;
+  list-style: none;
+}
+.inventory-owner-details code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.asset-last-change summary {
+  cursor: pointer;
+}
+.asset-last-change summary > span,
+.asset-last-change div > * {
+  display: block;
+  overflow-wrap: anywhere;
 }

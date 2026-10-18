@@ -1,3 +1,4 @@
+import { Message, type MessageState } from "../../shared/Message";
 import { discardChanges, useConfirmation } from "../../shared/ConfirmationProvider";
 import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, TextInput } from "@mantine/core";
@@ -54,7 +55,9 @@ export function SettingsView({
   const [providerTexts, setProviderTexts] = useState<Record<string, string>>({});
   const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
   const { confirm } = useConfirmation();
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<
+    (MessageState & { scope: "runtime" | "providers" }) | null
+  >(null);
   const [pathRuleRoots, setPathRuleRoots] = useState<string[]>([]);
   const [runtimeDirty, setRuntimeDirty] = useState(false);
   const [providersDirty, setProvidersDirty] = useState(false);
@@ -141,12 +144,20 @@ export function SettingsView({
   async function save() {
     if (savingRef.current) return;
     if (form.ticket_ttl_seconds < 1 || form.max_tickets < 1 || form.max_ticket_exchanges < 1) {
-      setMessage("Enter positive values for all runtime limits before saving.");
+      setMessage({
+        tone: "error",
+        text: "Enter positive values for all runtime limits before saving.",
+        scope: "runtime",
+      });
       return;
     }
     const pathRules = serializePathRules(pathRuleRoots);
     if (!pathRules) {
-      setMessage("Every storage path root must be non-empty before saving.");
+      setMessage({
+        tone: "error",
+        text: "Every storage path root must be non-empty before saving.",
+        scope: "runtime",
+      });
       return;
     }
     savingRef.current = true;
@@ -158,16 +169,22 @@ export function SettingsView({
       if (controller.signal.aborted || operationEpoch !== runtimeEditEpoch.current) return;
       setRuntimeDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
-      setMessage("Runtime settings saved to live configuration.");
+      setMessage({
+        tone: "success",
+        text: "Runtime settings saved to live configuration.",
+        scope: "runtime",
+      });
       onReload();
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(
-          recoveryMessage(
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(
             error,
             "Settings update was rejected; the previous values remain active.",
           ),
-        );
+          scope: "runtime",
+        });
     } finally {
       finishMutation(controller);
       savingRef.current = false;
@@ -177,8 +194,24 @@ export function SettingsView({
 
   async function saveProviders() {
     if (savingRef.current) return;
-    if (Object.keys(providerErrors).length) {
-      setMessage("Fix the highlighted identity provider fields before saving.");
+    let valid = true;
+    for (const [index, provider] of providerRows.entries()) {
+      const issuer = providerTexts[`${provider.id}:issuer`] ?? providerText(provider, "issuer");
+      if (!updateProviderText(index, "issuer", issuer, true)) valid = false;
+      for (const [field, value] of Object.entries(providerTexts)) {
+        if (
+          field.startsWith(`${provider.id}:`) &&
+          !updateProviderText(index, field.slice(provider.id.length + 1), value, true)
+        )
+          valid = false;
+      }
+    }
+    if (!valid || Object.keys(providerErrors).length) {
+      setMessage({
+        tone: "error",
+        text: "Fix the highlighted identity provider fields before saving.",
+        scope: "providers",
+      });
       return;
     }
     if (
@@ -192,9 +225,11 @@ export function SettingsView({
         destructive: true,
       }))
     ) {
-      setMessage(
-        "Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.",
-      );
+      setMessage({
+        tone: "info",
+        text: "Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.",
+        scope: "providers",
+      });
       return;
     }
     savingRef.current = true;
@@ -216,18 +251,22 @@ export function SettingsView({
       setProvidersDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       void queryClient.invalidateQueries({ queryKey: ["identity-attributes", sessionScope] });
-      setMessage(
-        "Identity provider settings saved to live configuration. Restart data-plane workers to reload their provider chain.",
-      );
+      setMessage({
+        tone: "success",
+        text: "Identity provider settings saved to live configuration. Restart data-plane workers to reload their provider chain.",
+        scope: "providers",
+      });
       onReload();
     } catch (error) {
       if (!isAbortError(error))
-        setMessage(
-          recoveryMessage(
+        setMessage({
+          tone: "error",
+          text: recoveryMessage(
             error,
             "Identity provider update was rejected; the serving provider chain remains unchanged.",
           ),
-        );
+          scope: "providers",
+        });
     } finally {
       finishMutation(controller);
       savingRef.current = false;
@@ -235,15 +274,27 @@ export function SettingsView({
     }
   }
 
-  function updateProviderText(index: number, key: string, value: string) {
+  function updateProviderText(
+    index: number,
+    key: string,
+    value: string,
+    validate = false,
+  ): boolean {
     const provider = providerRows[index];
-    if (!provider) return;
-    markDirty("providers");
+    if (!provider) return false;
+    if (!validate) markDirty("providers");
     const fieldKey = `${provider.id}:${key}`;
     setProviderTexts((current) => ({ ...current, [fieldKey]: value }));
-    const setError = (message: string): void => {
-      setProviderErrors((current) => ({ ...current, [fieldKey]: message }));
+    const setError = (message: string): false => {
+      if (validate) setProviderErrors((current) => ({ ...current, [fieldKey]: message }));
+      return false;
     };
+    if (!validate)
+      setProviderErrors((current) => {
+        const next = { ...current };
+        delete next[fieldKey];
+        return next;
+      });
     let parsed: unknown = value;
     if (key === "group_claims" || key === "algorithms") {
       parsed = value
@@ -251,8 +302,7 @@ export function SettingsView({
         .map((item) => item.trim())
         .filter(Boolean);
       if (key === "algorithms" && !(parsed as string[]).length) {
-        setError("Enter at least one signing algorithm.");
-        return;
+        return setError("Enter at least one signing algorithm.");
       }
     } else if (key === "attribute_claims") {
       const entries = value
@@ -263,11 +313,7 @@ export function SettingsView({
       for (const entry of entries) {
         const separator = entry.indexOf("=");
         if (separator <= 0 || separator === entry.length - 1) {
-          setProviderErrors((current) => ({
-            ...current,
-            [fieldKey]: "Use name=claim.path entries separated by commas.",
-          }));
-          return;
+          return setError("Use name=claim.path entries separated by commas.");
         }
         mapping[entry.slice(0, separator).trim()] = entry.slice(separator + 1).trim();
       }
@@ -277,8 +323,7 @@ export function SettingsView({
       else {
         const numeric = Number(value);
         if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
-          setError("Enter a non-negative integer.");
-          return;
+          return setError("Enter a non-negative integer.");
         }
         const bounds: Record<string, [number, number]> = {
           leeway_seconds: [0, 300],
@@ -287,16 +332,14 @@ export function SettingsView({
         };
         const [minimum, maximum] = bounds[key];
         if (numeric < minimum || numeric > maximum) {
-          setError(`Enter a value between ${minimum} and ${maximum}.`);
-          return;
+          return setError(`Enter a value between ${minimum} and ${maximum}.`);
         }
         parsed = numeric;
       }
     } else if (key === "issuer" || key === "jwks_url") {
       const trimmed = value.trim();
       if (!trimmed && key === "issuer") {
-        setError("Issuer URL is required.");
-        return;
+        return setError("Issuer URL is required.");
       }
       if (trimmed) {
         try {
@@ -308,12 +351,10 @@ export function SettingsView({
             url.search ||
             url.hash
           ) {
-            setError("Use an HTTP(S) URL without credentials, query data, or a fragment.");
-            return;
+            return setError("Use an HTTP(S) URL without credentials, query data, or a fragment.");
           }
         } catch {
-          setError("Enter a valid HTTP(S) URL.");
-          return;
+          return setError("Enter a valid HTTP(S) URL.");
         }
       }
       parsed = trimmed;
@@ -342,6 +383,7 @@ export function SettingsView({
           : item,
       ),
     );
+    return true;
   }
 
   function updateProviderEnabled(index: number, enabled: boolean) {
@@ -374,7 +416,11 @@ export function SettingsView({
         revision: providerRevision ?? 0,
       },
     ]);
-    setMessage("New OIDC provider added. Enter an issuer URL before saving.");
+    setMessage({
+      tone: "info",
+      text: "New OIDC provider added. Enter an issuer URL before saving.",
+      scope: "providers",
+    });
   }
 
   function removeProvider(index: number) {
@@ -526,11 +572,7 @@ export function SettingsView({
         >
           {saving ? "Saving…" : "Save runtime settings"}
         </Button>
-        {message && (
-          <p className="notice" role="status">
-            {message}
-          </p>
-        )}
+        {message?.scope === "runtime" && <Message tone={message.tone}>{message.text}</Message>}
       </div>
       <div className="form-card">
         <div className="form-card-head">
@@ -570,6 +612,9 @@ export function SettingsView({
                       aria-describedby={error ? `${fieldKey}-error` : undefined}
                       onChange={(event) =>
                         updateProviderText(index, key, event.currentTarget.value)
+                      }
+                      onBlur={(event) =>
+                        updateProviderText(index, key, event.currentTarget.value, true)
                       }
                     />
                     {options.help && !error && <small>{options.help}</small>}
@@ -702,6 +747,7 @@ export function SettingsView({
         >
           {saving ? "Saving…" : "Save identity providers"}
         </Button>
+        {message?.scope === "providers" && <Message tone={message.tone}>{message.text}</Message>}
       </div>
     </section>
   );

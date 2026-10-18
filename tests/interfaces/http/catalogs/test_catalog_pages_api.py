@@ -92,7 +92,10 @@ def test_catalog_cursor_rejects_scope_changes_before_provider_io(client_factory,
         params={"limit": limit, "cursor": cursor},
     )
     assert response.status_code == 400, response.text
-    assert response.json()["detail"] == "Discovery cursor is invalid or expired; restart discovery"
+    assert (
+        response.json()["error"]["message"]
+        == "Discovery cursor is invalid or expired; restart discovery"
+    )
     assert registry.requests == [(None, 2)]
 
 
@@ -199,4 +202,6 @@ def test_catalog_changes_during_provider_io_reject_the_page(client_factory):
     registry.on_list = change_catalog
     response = client.get("/v1/catalogs/analytics/tables", headers=ADMIN_HEADERS)
     assert response.status_code == 409
-    assert response.json()["detail"] == "Catalog changed during discovery; restart discovery"
+    assert (
+        response.json()["error"]["message"] == "Catalog changed during discovery; restart discovery"
+    )

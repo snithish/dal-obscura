@@ -117,7 +117,7 @@ export const InvalidRuntimeLimits: Story = {
     await userEvent.clear(canvas.getByLabelText("Ticket TTL (seconds)"));
     await userEvent.type(canvas.getByLabelText("Ticket TTL (seconds)"), "0");
     await userEvent.click(canvas.getByRole("button", { name: "Save runtime settings" }));
-    await expect(canvas.getByRole("status")).toHaveTextContent("positive values");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("positive values");
   },
 };
 
@@ -125,6 +125,7 @@ export const InvalidProviderNumber: Story = {
   play: async ({ canvas }) => {
     await userEvent.clear(canvas.getByLabelText("Maximum JWKS keys"));
     await userEvent.type(canvas.getByLabelText("Maximum JWKS keys"), "1.5");
+    await userEvent.tab();
     await expect(canvas.getByRole("alert")).toHaveTextContent("non-negative integer");
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },
@@ -134,6 +135,8 @@ export const InvalidProviderIssuer: Story = {
   play: async ({ canvas }) => {
     const field = canvas.getByLabelText("Issuer URL");
     await userEvent.clear(field);
+    await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+    await userEvent.tab();
     await expect(canvas.getByRole("alert")).toHaveTextContent("Issuer URL is required");
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },

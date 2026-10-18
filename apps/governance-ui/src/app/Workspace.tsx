@@ -1,3 +1,5 @@
+import { InventoryInsights } from "../features/assets/InventoryInsights";
+import { Message } from "../shared/Message";
 import { useWorkspaceNavigation } from "./navigation/useWorkspaceNavigation";
 import { discardChanges, useConfirmation } from "../shared/ConfirmationProvider";
 import { useCallback, lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -133,9 +135,10 @@ export function Workspace() {
 
   const navigateTo = navigation.navigate;
 
+  const wasMobileNavOpen = useRef(false);
   useEffect(() => {
-    if (mobileNavOpen) return;
-    mobileNavTrigger.current?.focus();
+    if (wasMobileNavOpen.current && !mobileNavOpen) mobileNavTrigger.current?.focus();
+    wasMobileNavOpen.current = mobileNavOpen;
   }, [mobileNavOpen]);
 
   function runPaletteCommand(command: Page | "help") {
@@ -247,13 +250,14 @@ export function Workspace() {
         Browse governed data. Open an asset to manage its policy, access, and consumers.
       </p>
       {assetInventoryError && (
-        <div role="alert" className="notice">
+        <Message tone="error">
           {assetInventoryError}{" "}
           <Button variant="subtle" onClick={() => void inventory.refresh()}>
             Retry asset search
           </Button>
-        </div>
+        </Message>
       )}
+      <InventoryInsights />
       <AssetInventory
         assets={assets}
         search={assetSearch}
@@ -325,7 +329,9 @@ export function Workspace() {
       onMobileNavOpen={() => setMobileNavOpen(true)}
       onMobileNavClose={() => setMobileNavOpen(false)}
       onThemeChange={setTheme}
-      onLogout={() => void logout()}
+      onLogout={async () => {
+        if (await confirmDiscardUnsaved()) await logout();
+      }}
       onSearch={() => {
         setPaletteQuery("");
         setPaletteOpen(true);

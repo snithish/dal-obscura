@@ -1,3 +1,4 @@
+import { discardChanges, useConfirmation } from "../../../shared/ConfirmationProvider";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, NativeSelect, Textarea, TextInput } from "@mantine/core";
 import type { SchemaNode } from "../../../data/api";
@@ -49,6 +50,7 @@ export function RowFilterEditor({
   onChange: (value: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
+  const { confirm } = useConfirmation();
   const [filtering, setFiltering] = useState(Boolean(value));
   const [mode, setMode] = useState<Mode>(value ? "sql" : "builder");
   const [sql, setSql] = useState(value ?? "");
@@ -147,7 +149,12 @@ export function RowFilterEditor({
           type="button"
           aria-pressed={!filtering}
           disabled={disabled}
-          onClick={() => {
+          onClick={async () => {
+            if (
+              (value || dirty) &&
+              !(await confirm(discardChanges("row filter", "allow all rows")))
+            )
+              return;
             setFiltering(false);
             ownCommit.current = value === null ? undefined : null;
             onChange(null);

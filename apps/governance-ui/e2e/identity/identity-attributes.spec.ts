@@ -90,7 +90,7 @@ test("provider policy test sends raw claims and shows normalized identity eviden
     }),
   );
   await page.goto(`/?asset=${assetId}#assets`);
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Test policy", exact: true });
   await modal.getByLabel("Identity input", { exact: true }).click();
   await page.getByRole("option", { name: /Provider 1/ }).click();

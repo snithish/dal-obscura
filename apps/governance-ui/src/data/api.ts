@@ -6,7 +6,6 @@ type ApiSchemas = components["schemas"];
 // differs: an inventory asset is partially hydrated, and a draft rule always
 // has concrete selections and an ordinal.
 export type Mask = ApiSchemas["PolicyMaskSchema"];
-export type SchemaField = ApiSchemas["SchemaFieldResponse"];
 export type SchemaPath = ApiSchemas["FieldPathResponse"];
 export type SchemaNode = ApiSchemas["SchemaNodeResponse"];
 export type AssetSchema = ApiSchemas["AssetSchemaResponse"];
@@ -39,23 +38,9 @@ export type CatalogTable = ApiSchemas["DiscoveredTableResponse"];
 export type UiAuthConfig = ApiSchemas["UiAuthConfigResponse"];
 export type SessionOptions = ApiSchemas["SessionOptionsResponse"];
 export type AuditEvent = ApiSchemas["AuditEventResponse"];
-export type AuditEventPage = {
-  items: AuditEvent[];
-  next_cursor: string | null;
-};
-export type Catalog = Pick<
-  ApiSchemas["CatalogInventoryResponse"],
-  "id" | "name" | "plugin_id" | "options"
-> &
-  Partial<
-    Pick<
-      ApiSchemas["CatalogInventoryResponse"],
-      "status" | "revision" | "discovered_table_count" | "governed_asset_count"
-    >
-  >;
+export type Catalog = ApiSchemas["CatalogInventoryResponse"];
 export type CatalogDiagnostic = ApiSchemas["CatalogDiagnosticResponse"];
 export type AssetGrant = ApiSchemas["AssetGrantResponse"];
-export type AssetCapability = ApiSchemas["AssetCapabilityResponse"];
 export type AssetAccess = ApiSchemas["AssetAccessResponse"];
 export type RuntimeSettings = Omit<ApiSchemas["RuntimeSettingsResponse"], "revision"> & {
   revision?: number;
@@ -136,9 +121,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const detail =
       typeof errorEnvelope.message === "string"
         ? errorEnvelope.message
-        : typeof envelope.detail === "string"
-          ? envelope.detail
-          : `Request failed (${response.status})`;
+        : `Request failed (${response.status})`;
     const failure = new Error(detail) as ApiFailure;
     failure.status = response.status;
     if (typeof errorEnvelope.code === "string") failure.code = errorEnvelope.code;
@@ -181,12 +164,8 @@ export const controlPlane = {
     request<ApiSchemas["UiAuthConfigResponse"]>("/v1/ui-auth-config", {
       signal,
     }),
-  getSessionOptions: async (signal?: AbortSignal) => {
-    const options = await request<ApiSchemas["SessionOptionsResponse"]>("/v1/session/options", {
-      signal,
-    });
-    return { ...options, oidc: options.oidc ?? null } satisfies SessionOptions;
-  },
+  getSessionOptions: (signal?: AbortSignal) =>
+    request<ApiSchemas["SessionOptionsResponse"]>("/v1/session/options", { signal }),
   bootstrapLogin: (token: string, signal?: AbortSignal) =>
     request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/session/bootstrap", {
       method: "POST",
@@ -221,13 +200,8 @@ export const controlPlane = {
         signal,
       }),
     ),
-  getAssetAccess: async (assetId: string, signal?: AbortSignal) => {
-    const access = await request<ApiSchemas["AssetAccessResponse"]>(
-      `${assetPath(assetId)}/access`,
-      { signal },
-    );
-    return { ...access, issuer: access.issuer ?? null } satisfies AssetAccess;
-  },
+  getAssetAccess: (assetId: string, signal?: AbortSignal) =>
+    request<ApiSchemas["AssetAccessResponse"]>(`${assetPath(assetId)}/access`, { signal }),
   listGrants: (assetId: string, signal?: AbortSignal) =>
     request<ApiSchemas["AssetGrantResponse"][]>(`${assetPath(assetId)}/grants`, { signal }),
   saveOwners: (
@@ -262,7 +236,7 @@ export const controlPlane = {
     request<ApiSchemas["AssetSchemaResponse"]>(`${assetPath(assetId)}/schema`, {
       signal,
     }),
-  listAuditEventsPage: async (
+  listAuditEventsPage: (
     params: {
       limit?: number;
       cursor?: string;
@@ -289,17 +263,9 @@ export const controlPlane = {
     if (params.createdAfter) query.set("created_after", params.createdAfter);
     if (params.createdBefore) query.set("created_before", params.createdBefore);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    const page = await request<ApiSchemas["AuditEventPageResponse"]>(
-      `/v1/audit/events/page${suffix}`,
-      { signal: params.signal },
-    );
-    return {
-      items: page.items.map((event) => ({
-        ...event,
-        correlation_id: event.correlation_id ?? null,
-      })),
-      next_cursor: page.next_cursor ?? null,
-    } satisfies AuditEventPage;
+    return request<ApiSchemas["AuditEventPageResponse"]>(`/v1/audit/events/page${suffix}`, {
+      signal: params.signal,
+    });
   },
   listCatalogs: (signal?: AbortSignal) =>
     request<ApiSchemas["CatalogInventoryResponse"][]>("/v1/catalogs", {
@@ -310,17 +276,11 @@ export const controlPlane = {
       `/v1/catalogs/${encodeURIComponent(name)}/tables?${new URLSearchParams({ limit: "50", ...(cursor ? { cursor } : {}) })}`,
       { signal },
     ),
-  diagnoseCatalog: async (name: string, signal?: AbortSignal) => {
-    const diagnostic = await request<ApiSchemas["CatalogDiagnosticResponse"]>(
+  diagnoseCatalog: (name: string, signal?: AbortSignal) =>
+    request<ApiSchemas["CatalogDiagnosticResponse"]>(
       `/v1/catalogs/${encodeURIComponent(name)}/diagnostics`,
       { signal },
-    );
-    return {
-      ...diagnostic,
-      sample_tables: diagnostic.sample_tables ?? undefined,
-      table_count: diagnostic.table_count ?? undefined,
-    } satisfies CatalogDiagnostic;
-  },
+    ),
   getRuntimeSettings: (signal?: AbortSignal) =>
     request<ApiSchemas["RuntimeSettingsResponse"] | null>("/v1/settings/runtime", { signal }),
   getAuthProviders: (signal?: AbortSignal) =>
@@ -330,12 +290,7 @@ export const controlPlane = {
       signal,
     }),
   saveAuthProviders: (
-    providers: Array<{
-      ordinal: number;
-      module: string;
-      args: Record<string, unknown>;
-      enabled: boolean;
-    }>,
+    providers: NonNullable<ApiSchemas["AuthProvidersRequest"]["providers"]>,
     expectedRevision?: number,
     signal?: AbortSignal,
   ) =>
@@ -347,21 +302,8 @@ export const controlPlane = {
       }),
       signal,
     }),
-  listPlugins: async (signal?: AbortSignal) => {
-    const plugins = await request<ApiSchemas["PluginListResponse"]>("/v1/plugins", { signal });
-    return {
-      ...plugins,
-      states: plugins.states.map((state) => ({
-        ...state,
-        lifecycle: state.lifecycle ?? undefined,
-        reason: state.reason ?? undefined,
-      })),
-    } satisfies {
-      plugins: PluginDescriptor[];
-      states: PluginState[];
-      pairs: PluginPair[];
-    };
-  },
+  listPlugins: (signal?: AbortSignal) =>
+    request<ApiSchemas["PluginListResponse"]>("/v1/plugins", { signal }),
   setPluginLifecycle: (
     kind: PluginDescriptor["kind"],
     pluginId: string,
@@ -376,13 +318,8 @@ export const controlPlane = {
     request<ApiSchemas["WorkspaceSummaryResponse"]>("/v1/workspace/summary", {
       signal,
     }),
-  getObservations: async (signal?: AbortSignal) => {
-    const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>(
-      "/v1/workspace/observations",
-      { signal },
-    );
-    return observations satisfies WorkspaceObservations;
-  },
+  getObservations: (signal?: AbortSignal) =>
+    request<ApiSchemas["WorkspaceObservationsResponse"]>("/v1/workspace/observations", { signal }),
   saveCatalog: (
     name: string,
     pluginId: string,
@@ -529,16 +466,7 @@ function normalizeInventoryAsset(asset: ApiSchemas["AssetInventoryResponse"]): A
 
 function normalizeDetailAsset(asset: ApiSchemas["AssetDetailResponse"]): Asset {
   return {
-    id: asset.id,
-    revision: asset.revision,
-    policy_revision: asset.policy_revision,
-    catalog: asset.catalog,
-    name: asset.name,
-    backend: asset.backend,
-    table_identifier: asset.table_identifier,
-    owners: asset.owners,
-    policy_status: asset.policy_status,
-    schema_fields: asset.schema_fields,
+    ...asset,
     policy_rules: asset.policy_rules.map(normalizePolicyRule),
   };
 }

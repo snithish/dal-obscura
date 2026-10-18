@@ -96,7 +96,6 @@ def _structured_error_response(status_code: int, detail: str) -> JSONResponse:
     response = JSONResponse(
         status_code=status_code,
         content={
-            "detail": detail,
             "error": {
                 "code": _http_error_code(status_code),
                 "message": detail,
@@ -180,7 +179,6 @@ def create_app(  # noqa: C901
             status_code=exc.status_code,
             headers=headers,
             content={
-                "detail": detail,
                 "error": error,
             },
         )
@@ -231,7 +229,6 @@ def create_app(  # noqa: C901
         return JSONResponse(
             status_code=422,
             content={
-                "detail": "Request validation failed",
                 "error": {
                     "code": "validation_error",
                     "message": "Request validation failed",

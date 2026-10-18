@@ -71,7 +71,16 @@ test("failed logout hides private drafts before revocation and supports retry", 
     if (++attempts === 1) {
       pending.markStarted(page, route.request());
       await pending.wait();
-      return route.fulfill({ status: 503, json: { detail: "Synthetic revocation failure" } });
+      return route.fulfill({
+        status: 503,
+        json: {
+          error: {
+            code: "request_rejected",
+            message: "Synthetic revocation failure",
+            request_id: "test-request",
+          },
+        },
+      });
     }
     return route.fulfill({ json: { authenticated: false } });
   });
@@ -80,6 +89,9 @@ test("failed logout hides private drafts before revocation and supports retry", 
   await page.getByRole("button", { name: "New rule", exact: true }).click();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeVisible();
+  expect(attempts).toBe(0);
+  await page.getByRole("button", { name: "Discard changes", exact: true }).click();
   await pending.started;
   await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
   await expect(page.getByText("Unsaved changes")).toHaveCount(0);

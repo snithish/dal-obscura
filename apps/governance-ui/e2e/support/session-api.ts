@@ -25,7 +25,16 @@ export async function signedOutApi(
       });
     if (path === "/v1/ui-auth-config")
       return route.fulfill({ json: { authority: options.oidc?.authority ?? null } });
-    return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
+    return route.fulfill({
+      status: 401,
+      json: {
+        error: {
+          code: "request_rejected",
+          message: "Sign in required",
+          request_id: "test-request",
+        },
+      },
+    });
   });
 }
 
@@ -53,7 +62,16 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
     if (path === "/v1/session/options")
       return route.fulfill({ json: { bootstrap_enabled: false, oidc: null } });
     if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
-    return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
+    return route.fulfill({
+      status: 401,
+      json: {
+        error: {
+          code: "request_rejected",
+          message: "Sign in required",
+          request_id: "test-request",
+        },
+      },
+    });
   });
 }
 

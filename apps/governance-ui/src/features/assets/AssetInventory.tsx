@@ -1,4 +1,5 @@
-import { Button, Popover, Table, Text, TextInput } from "@mantine/core";
+import { AssetLastChange } from "./InventoryInsights";
+import { Button, Table, Text, TextInput } from "@mantine/core";
 import type { Asset } from "../../data/api";
 import { Icon } from "../../shared/Icon";
 
@@ -47,7 +48,7 @@ export function AssetInventory(props: AssetInventoryProps) {
                 <Table.Th>Catalog / format</Table.Th>
                 <Table.Th>Owners</Table.Th>
                 <Table.Th>Policy</Table.Th>
-                <Table.Th className="inventory-revision">Revision</Table.Th>
+                <Table.Th className="inventory-revision">Last policy change</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -70,29 +71,13 @@ export function AssetInventory(props: AssetInventoryProps) {
                   </Table.Td>
                   <Table.Td>
                     {asset.owners.length ? (
-                      <Popover position="bottom-start" width={360} withArrow>
-                        <Popover.Target>
-                          <button type="button" className="inventory-owner-button">
-                            <Icon name="key-round" size={14} />
-                            <span>{asset.owners[0].split("|").at(-1)}</span>
-                            {asset.owners.length > 1 && (
-                              <span className="context-tag">+{asset.owners.length - 1}</span>
-                            )}
-                            <Icon name="chevron-down" size={13} />
-                          </button>
-                        </Popover.Target>
-                        <Popover.Dropdown>
-                          <strong>Asset owners</strong>
-                          <p className="help">Full principal identities</p>
-                          <ul className="inventory-owner-details">
-                            {asset.owners.map((owner) => (
-                              <li key={owner}>
-                                <code>{owner}</code>
-                              </li>
-                            ))}
-                          </ul>
-                        </Popover.Dropdown>
-                      </Popover>
+                      <ul className="inventory-owner-details">
+                        {asset.owners.map((owner) => (
+                          <li key={owner}>
+                            <code>{owner}</code>
+                          </li>
+                        ))}
+                      </ul>
                     ) : (
                       <span className="muted">Not provided</span>
                     )}
@@ -109,7 +94,7 @@ export function AssetInventory(props: AssetInventoryProps) {
                     </span>
                   </Table.Td>
                   <Table.Td className="inventory-revision">
-                    <span className="revision-tag">{asset.policy_revision ?? 0}</span>
+                    <AssetLastChange assetId={asset.id} revision={asset.policy_revision ?? 0} />
                   </Table.Td>
                 </Table.Tr>
               ))}

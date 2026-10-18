@@ -239,7 +239,7 @@ test("forced-colors mode keeps authenticated workflows discoverable", async ({ p
 
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  const policyControl = page.getByRole("button", { name: "Test Policy", exact: true });
+  const policyControl = page.getByRole("button", { name: "Test saved policy", exact: true });
   await policyControl.focus();
   await expect(policyControl).toBeFocused();
   await expect
@@ -386,7 +386,16 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       const name = id === assetA ? "alpha-orders" : "beta-orders";
       const suffix = match[2] ?? "";
       if (sessionCalls > 1 && id === assetA)
-        return route.fulfill({ status: 403, json: { detail: "Asset access revoked" } });
+        return route.fulfill({
+          status: 403,
+          json: {
+            error: {
+              code: "request_rejected",
+              message: "Asset access revoked",
+              request_id: "test-request",
+            },
+          },
+        });
       if (id === assetA && suffix === "schema" && !schemaDeferred) {
         schemaDeferred = true;
         staleSchema.markStarted(page, request);
@@ -421,7 +430,16 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       return route.fulfill({ json: { authenticated: true } });
     if (path === "/v1/logout" && request.method() === "POST")
       return route.fulfill({ json: { authenticated: false } });
-    return route.fulfill({ status: 404, json: { detail: "fixture route missing" } });
+    return route.fulfill({
+      status: 404,
+      json: {
+        error: {
+          code: "request_rejected",
+          message: "fixture route missing",
+          request_id: "test-request",
+        },
+      },
+    });
   });
 
   await page.goto("/#assets");

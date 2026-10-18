@@ -250,7 +250,6 @@ test("excluding a subtree then restoring one child keeps sibling exclusions", as
 
 test("inventory aligns links and reveals the complete owner identity", async ({ page }) => {
   await page.goto("/#assets");
-  await page.getByRole("button", { name: /group:asset-owners/ }).click();
   await expect(
     page.getByText("http://localhost:20080/realms/dal-obscura-demo|group:asset-owners", {
       exact: true,

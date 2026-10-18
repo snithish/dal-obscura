@@ -66,7 +66,7 @@ export function LoginPanel({
             <TextInput
               label="Local control-plane token"
               type="password"
-              autoComplete="current-password"
+              autoComplete="off"
               value={bootstrapToken ?? ""}
               onChange={(event) => onBootstrapToken(event.target.value)}
               placeholder="Paste the configured local token"

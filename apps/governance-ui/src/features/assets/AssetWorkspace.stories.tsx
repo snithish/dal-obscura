@@ -115,7 +115,11 @@ const meta = {
     rules: [rule],
     activeRevision: 1,
     saveState: "saved" as const,
-    notice: "Current live policy loaded from the workspace.",
+    notice: {
+      tone: "info",
+      target: "policy",
+      text: "Current live policy loaded from the workspace.",
+    },
     onUpdateRule: noop,
     onAddRule: noop,
     onRemoveRule: noop,
@@ -282,8 +286,7 @@ export const PreventLastOwnerRemoval: Story = {
     const owners = canvas.getByLabelText("Owner principals");
     await userEvent.clear(owners);
     await userEvent.click(canvas.getByRole("button", { name: "Save owners" }));
-    const statuses = canvas.getAllByRole("status");
-    await expect(statuses[statuses.length - 1]).toHaveTextContent("At least one owner is required");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("At least one owner is required");
   },
 };
 
@@ -320,7 +323,7 @@ export const SchemaUnavailable: Story = {
     await expect(
       canvas.getByText("No overrides. Every column returns NULL for authenticated readers."),
     ).toBeVisible();
-    await expect(canvas.getByRole("button", { name: /^Test Policy$/ })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: /^Test saved policy$/ })).toBeVisible();
   },
 };
 

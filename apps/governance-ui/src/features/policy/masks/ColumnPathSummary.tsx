@@ -2,7 +2,15 @@ import { useMemo, useState } from "react";
 import { TextInput } from "@mantine/core";
 
 /** Inspect exact paths without mounting the entire field inventory. */
-export function ColumnPathSummary({ columns, label }: { columns: string[]; label: string }) {
+export function ColumnPathSummary({
+  columns,
+  label,
+  preview = true,
+}: {
+  columns: string[];
+  label: string;
+  preview?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -15,13 +23,15 @@ export function ColumnPathSummary({ columns, label }: { columns: string[]; label
   const start = current * 50;
   return (
     <>
-      <div className="policy-paths column-path-preview">
-        {columns.slice(0, 5).map((column) => (
-          <code key={column} title={column}>
-            {column}
-          </code>
-        ))}
-      </div>
+      {preview && (
+        <div className="policy-paths column-path-preview">
+          {columns.slice(0, 5).map((column) => (
+            <code key={column} title={column}>
+              {column}
+            </code>
+          ))}
+        </div>
+      )}
       {columns.length > 5 && (
         <details
           className="column-path-summary"

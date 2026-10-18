@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -44,5 +42,4 @@ class ApiError(BaseModel):
 class ApiErrorResponse(BaseModel):
     """Public HTTP error envelope documented for generated clients."""
 
-    detail: str | list[dict[str, Any]] | dict[str, Any]
     error: ApiError

@@ -163,7 +163,7 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(
     )
     assert invalid.status_code == 400
     invalid_payload = invalid.json()
-    assert invalid_payload["detail"] == "Synthetic evaluation rows are invalid"
+    assert invalid_payload["error"]["message"] == "Synthetic evaluation rows are invalid"
     assert invalid_payload["error"]["code"] == "validation_error"
     assert invalid_payload["error"]["request_id"]
 

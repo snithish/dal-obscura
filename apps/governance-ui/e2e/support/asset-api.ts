@@ -146,12 +146,24 @@ export async function installAssetApi(page: Page, options: AuthenticatedApiOptio
         if (options.conflictSave)
           return route.fulfill({
             status: 409,
-            json: { detail: "Live policy changed; reload before saving." },
+            json: {
+              error: {
+                code: "request_rejected",
+                message: "Live policy changed; reload before saving.",
+                request_id: "test-request",
+              },
+            },
           });
         if (payload.expected_revision !== detail.policy_revision)
           return route.fulfill({
             status: 409,
-            json: { detail: "Live policy changed; reload before saving." },
+            json: {
+              error: {
+                code: "request_rejected",
+                message: "Live policy changed; reload before saving.",
+                request_id: "test-request",
+              },
+            },
           });
         // The repository returns rules in ordinal order, independently of the
         // request array order. Match that persistence contract in UI tests.

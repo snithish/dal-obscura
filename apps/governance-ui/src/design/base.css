@@ -478,19 +478,19 @@ pre,
   font-size: 13px;
 }
 .asset-inventory-table th:nth-child(1) {
-  width: 31%;
+  width: 27%;
 }
 .asset-inventory-table th:nth-child(2) {
-  width: 19%;
+  width: 17%;
 }
 .asset-inventory-table th:nth-child(3) {
-  width: 25%;
+  width: 27%;
 }
 .asset-inventory-table th:nth-child(4) {
-  width: 16%;
+  width: 13%;
 }
 .asset-inventory-table th:nth-child(5) {
-  width: 9%;
+  width: 16%;
 }
 .asset-inventory-table td:nth-child(n) {
   min-width: 0;
@@ -499,7 +499,8 @@ pre,
   border-bottom: 0;
 }
 .asset-inventory-table .inventory-revision {
-  text-align: right;
+  white-space: normal;
+  text-align: left;
 }
 .inventory-asset-link {
   display: block;
@@ -522,33 +523,8 @@ pre,
   align-items: center;
   gap: 7px;
 }
-.inventory-owner-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-subtle);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-}
-.inventory-owner-button > span:first-of-type {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.inventory-owner-button > svg {
-  flex-shrink: 0;
-}
-.inventory-owner-button:hover {
-  border-color: var(--primary);
-}
 .inventory-owner-details {
-  margin: 12px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: grid;

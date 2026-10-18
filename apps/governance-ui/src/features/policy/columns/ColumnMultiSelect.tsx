@@ -5,8 +5,10 @@ import { columnLeafPaths, columnOptionCovers, leafColumnOptions } from "../polic
 import type { ColumnOption } from "../policy_editor";
 import { Icon } from "../../../shared/Icon";
 
-const ROW_HEIGHT = 48;
-const VIEW_HEIGHT = 288;
+import {
+  COLUMN_ROW_HEIGHT as ROW_HEIGHT,
+  COLUMN_VIEW_HEIGHT as VIEW_HEIGHT,
+} from "./virtualization";
 
 export function ColumnMultiSelect({
   label,
@@ -146,8 +148,23 @@ export function ColumnMultiSelect({
     setScrollTop(0);
     setActive(0);
   }, [search, mode, selectedOnly]);
+  const focusActive = useRef(false);
+  useEffect(() => {
+    if (focusActive.current && open) {
+      viewport.current
+        ?.querySelector<HTMLElement>(`[data-option-index="${active}"]`)
+        ?.focus({ preventScroll: true });
+      focusActive.current = false;
+    }
+  }, [active, scrollTop, open]);
   const moveActive = (index: number) => {
+    focusActive.current = true;
     setActive(index);
+    const row = viewport.current?.querySelector<HTMLElement>(`[data-option-index="${index}"]`);
+    if (row) {
+      row.focus({ preventScroll: true });
+      focusActive.current = false;
+    }
     if (viewport.current) {
       const top = index * ROW_HEIGHT;
       if (top < viewport.current.scrollTop) viewport.current.scrollTop = top;
@@ -184,7 +201,7 @@ export function ColumnMultiSelect({
   const close = () => {
     setOpen(false);
     setSearch("");
-    setMode(null);
+    if (mode !== "except") setMode(null);
     setSelectedOnly(false);
     setConflict("");
     setReviewOpen(false);
@@ -199,7 +216,7 @@ export function ColumnMultiSelect({
     setReviewOpen(false);
     setReviewSearch("");
   };
-  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       moveActive(Math.max(0, Math.min(filtered.length - 1, active + 1)));
@@ -346,8 +363,9 @@ export function ColumnMultiSelect({
           <div className="picker-mode-panel">
             <strong>Choose columns to exclude</strong>
             <p>
-              Choose fields or subtrees to leave NULL. Applies to the current schema only; future
-              fields stay NULL. Review exclusions before applying.
+              Closing the picker keeps unapplied exclusions for this editing session. Choose fields
+              or subtrees to leave NULL. Applies to the current schema only; future fields stay
+              NULL. Review exclusions before applying.
             </p>
           </div>
         )}
@@ -367,7 +385,6 @@ export function ColumnMultiSelect({
               role="combobox"
               aria-expanded={open}
               aria-controls={`${id}-options`}
-              aria-activedescendant={filtered[active] ? `${id}-option-${active}` : undefined}
               aria-label={`Search ${label.toLowerCase()}`}
               placeholder="Search by column name or type"
               leftSection={<Icon name="search" size={17} />}
@@ -415,7 +432,9 @@ export function ColumnMultiSelect({
                         key={option.value}
                         type="button"
                         role="option"
-                        tabIndex={0}
+                        data-option-index={index}
+                        tabIndex={index === active ? 0 : -1}
+                        onKeyDown={onSearchKeyDown}
                         aria-disabled={disabled || (!option.valid && !value.includes(option.value))}
                         aria-selected={checked}
                         aria-posinset={index + 1}
@@ -426,7 +445,7 @@ export function ColumnMultiSelect({
                           top: index * ROW_HEIGHT,
                           height: ROW_HEIGHT,
                         }}
-                        onMouseEnter={() => setActive(index)}
+                        onFocus={() => setActive(index)}
                         onClick={() => toggle(option)}
                       >
                         <span className="column-check" aria-hidden="true">

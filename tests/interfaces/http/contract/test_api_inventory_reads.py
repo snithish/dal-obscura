@@ -39,7 +39,8 @@ def test_control_plane_rejects_invalid_content_length_with_structured_error(clie
 
     assert response.status_code == 400
     payload = response.json()
-    assert payload["detail"] == "Invalid content length"
+    assert set(payload) == {"error"}
+    assert payload["error"]["message"] == "Invalid content length"
     assert payload["error"]["code"] == "validation_error"
     assert payload["error"]["request_id"] == response.headers["x-request-id"]
 

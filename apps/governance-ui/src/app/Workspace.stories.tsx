@@ -50,7 +50,13 @@ const meta = {
                 capabilities: [],
                 platform_admin: false,
               } satisfies ApiSchemas["SessionResponse"])
-            : { detail: "Signed out" },
+            : {
+                error: {
+                  code: "request_rejected",
+                  message: "Signed out",
+                  request_id: "test-request",
+                },
+              },
           { status: signedIn ? 200 : 403 },
         );
       if (path === "/v1/session/options")
@@ -59,7 +65,20 @@ const meta = {
           oidc: null,
         } satisfies ApiSchemas["SessionOptionsResponse"]);
       if (path === "/v1/ui-auth-config")
-        return Response.json({ detail: "No OIDC" }, { status: 404 });
+        return Response.json(
+          { error: { code: "request_rejected", message: "No OIDC", request_id: "test-request" } },
+          { status: 404 },
+        );
+      if (path === "/v1/workspace/summary")
+        return Response.json({
+          asset_count: 1,
+          missing_policy_count: 0,
+          catalog_count: 1,
+          enabled_auth_provider_count: 0,
+          runtime_configured: true,
+          unowned_asset_count: 0,
+        });
+      if (path === "/v1/audit/events/page") return Response.json({ items: [], next_cursor: null });
       if (path === "/v1/assets/page")
         return Response.json({
           items: [asset],

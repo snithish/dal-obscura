@@ -225,7 +225,16 @@ test("management refresh failure preserves the loaded connections view", async (
   await page.goto("/#connections");
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
   await page.route("**/v1/catalogs", async (route) =>
-    route.fulfill({ status: 503, json: { detail: "catalog backend unavailable" } }),
+    route.fulfill({
+      status: 503,
+      json: {
+        error: {
+          code: "request_rejected",
+          message: "catalog backend unavailable",
+          request_id: "test-request",
+        },
+      },
+    }),
   );
 
   await page.getByRole("button", { name: "Refresh" }).click();

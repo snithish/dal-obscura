@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useInfiniteQuery, type QueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 import {
   controlPlane,
   type Session,
@@ -38,14 +38,19 @@ async function loadActivity(
   });
   if (cursor) {
     const result = await audit;
-    return { events: result.items, eventsNextCursor: result.next_cursor };
+    return { events: result.items, eventsNextCursor: result.next_cursor ?? null };
   }
   const [result, summary, observations] = await Promise.all([
     audit,
     controlPlane.getSummary(signal),
     controlPlane.getObservations(signal),
   ]);
-  return { events: result.items, eventsNextCursor: result.next_cursor, summary, observations };
+  return {
+    events: result.items,
+    eventsNextCursor: result.next_cursor ?? null,
+    summary,
+    observations,
+  };
 }
 
 export function useActivityQueries(
@@ -54,10 +59,20 @@ export function useActivityQueries(
   session: Session | null,
   filters: AuditFilters,
 ) {
-  const query = useInfiniteQuery(
+  const query = useInfiniteQuery<
+    ActivityData,
+    Error,
+    InfiniteData<ActivityData, string | null>,
+    readonly unknown[],
+    string | null
+  >(
     {
       queryKey: ["management", scope, "activity", filters],
       enabled: Boolean(session),
+      placeholderData: (
+        previous: InfiniteData<ActivityData, string | null> | undefined,
+        previousQuery,
+      ) => (previousQuery?.queryKey[1] === scope ? previous : undefined),
       initialPageParam: null as string | null,
       queryFn: ({ signal, pageParam }) => loadActivity(filters, pageParam, signal),
       getNextPageParam: (last) => last.eventsNextCursor,

@@ -63,7 +63,7 @@ def test_asset_owner_cannot_delegate_grant_management(client_factory):
 
     assert grant.status_code == 200
     assert response.status_code == 403
-    assert "Only platform admins" in response.json()["detail"]
+    assert "Only platform admins" in response.json()["error"]["message"]
 
 
 def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority(client_factory):
@@ -104,7 +104,7 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority(clie
 
     assert delegated.status_code == 200
     assert self_escalation.status_code == 403
-    assert "already hold" in self_escalation.json()["detail"]
+    assert "already hold" in self_escalation.json()["error"]["message"]
     assert delegation.status_code == 200
     editor_access = client.get(f"/v1/assets/{asset}/access", headers=_bearer("outsider-token"))
     assert editor_access.status_code == 200

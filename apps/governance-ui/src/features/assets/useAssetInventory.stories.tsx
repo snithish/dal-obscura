@@ -42,7 +42,16 @@ const meta = {
       if (url.pathname !== "/v1/assets/page")
         throw new Error(`Unexpected synthetic request: ${url}`);
       if (url.searchParams.has("search"))
-        return Response.json({ detail: "Search unavailable" }, { status: 503 });
+        return Response.json(
+          {
+            error: {
+              code: "request_rejected",
+              message: "Search unavailable",
+              request_id: "test-request",
+            },
+          },
+          { status: 503 },
+        );
       return Response.json({
         items: [
           {
@@ -75,7 +84,11 @@ export const FailedSearch: Story = {
       expect(canvas.getByRole("alert")).toHaveTextContent("temporarily unavailable"),
     );
     await expect(canvas.getByRole("status")).toHaveTextContent("Orders");
-    window.fetch = async () => Response.json({ detail: "Unavailable" }, { status: 503 });
+    window.fetch = async () =>
+      Response.json(
+        { error: { code: "request_rejected", message: "Unavailable", request_id: "test-request" } },
+        { status: 503 },
+      );
     await userEvent.click(canvas.getByRole("button", { name: "Change login" }));
     await waitFor(() => expect(canvas.getByRole("status")).toHaveTextContent("Empty inventory"));
     await waitFor(() =>

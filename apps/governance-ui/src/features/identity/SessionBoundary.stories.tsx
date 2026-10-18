@@ -56,9 +56,22 @@ const meta = {
     window.fetch = fn(async (input: RequestInfo | URL) => {
       const path = new URL(String(input), window.location.href).pathname;
       if (path === "/v1/session")
-        return new Response(JSON.stringify(signedIn ? session : { detail: "Signed out" }), {
-          status: signedIn ? 200 : 403,
-        });
+        return new Response(
+          JSON.stringify(
+            signedIn
+              ? session
+              : {
+                  error: {
+                    code: "request_rejected",
+                    message: "Signed out",
+                    request_id: "test-request",
+                  },
+                },
+          ),
+          {
+            status: signedIn ? 200 : 403,
+          },
+        );
       if (path === "/v1/logout") {
         signedIn = false;
         return Response.json({ logout_url: null });
@@ -66,7 +79,16 @@ const meta = {
       if (path === "/v1/session/options")
         return Response.json({ bootstrap_enabled: false, oidc: null });
       if (path === "/v1/ui-auth-config")
-        return Response.json({ detail: "Not configured" }, { status: 404 });
+        return Response.json(
+          {
+            error: {
+              code: "request_rejected",
+              message: "Not configured",
+              request_id: "test-request",
+            },
+          },
+          { status: 404 },
+        );
       throw new Error(`Unexpected synthetic request: ${path}`);
     });
     return () => {

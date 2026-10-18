@@ -4,7 +4,7 @@ import { authenticatedApi, deferredResponse } from "../support/fixtures";
 test("policy testing validates locally and clears stale persona results", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Test policy", exact: true });
   const run = modal.getByRole("button", { name: "Test saved policy", exact: true });
   await modal.getByLabel("Synthetic persona claims").fill("[]");
@@ -42,7 +42,7 @@ test("policy test shows running state and actionable server errors inside modal"
     });
   });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Test policy", exact: true });
   await modal.getByRole("button", { name: "Test saved policy", exact: true }).click();
   await deferred.started;
@@ -55,7 +55,7 @@ test("a late policy test cannot show results for a different persona", async ({ 
   const deferredEvaluate = deferredResponse();
   await authenticatedApi(page, { deferredEvaluate });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
-  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Test policy", exact: true });
   await modal.getByRole("button", { name: "Test saved policy", exact: true }).click();
   await deferredEvaluate.started;
