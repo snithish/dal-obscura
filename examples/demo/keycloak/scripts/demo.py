@@ -337,7 +337,6 @@ def check_browser(
                 "test",
                 "--config",
                 "playwright.live.config.ts",
-                "e2e/live-oidc-demo.spec.ts",
                 "--workers=1",
             ],
             env,

@@ -323,6 +323,8 @@ def run_control_plane(values: Mapping[str, str], database_url: str, admin_token:
             return 1
         uvicorn.run(
             app,
+            # The application needs the socket peer to enforce its proxy trust policy.
+            proxy_headers=False,
             host=values.get("DAL_OBSCURA_CONTROL_PLANE_HOST", "127.0.0.1"),
             port=port,
             log_level=values.get("DAL_OBSCURA_CONTROL_PLANE_LOG_LEVEL", "info").lower(),

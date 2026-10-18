@@ -25,10 +25,14 @@ application dependencies; CLI entrypoints delegate resource setup to bootstrap.
 Request handlers cannot choose providers or borrow SQL sessions.
 
 HTTP request and response models belong with their route feature. Only strict
-request handling and error envelopes are shared. Operator commands separate
+request handling and error envelopes are shared. HTTP failures expose one `error`
+envelope with a code, message, request ID and optional field or revision evidence.
+Generated clients consume that contract directly. Operator commands separate
 argument dispatch from image preparation, control transport, deployment and Flight
 verification. Startup configuration validation belongs to bootstrap, while catalog
 option validation belongs to governance and keeps its security bounds together.
+The HTTP server preserves the socket peer address. The application interprets
+forwarded client addresses against its configured proxy trust policy.
 
 The Flight command codec serializes and parses protobuf bytes independently of
 server request admission. Flight handlers apply validation and limits around that
