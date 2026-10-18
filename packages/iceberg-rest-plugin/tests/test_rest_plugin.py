@@ -154,10 +154,8 @@ def test_rest_catalog_rejects_non_string_provider_identifier_segments(monkeypatc
         plugin.list_tables(_context(), limit=10)
 
 
-@pytest.mark.parametrize("snapshot_shape", ["property", "method"])
-def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle(
-    snapshot_shape, monkeypatch
-):
+@pytest.mark.parametrize("snapshot_id", [42, None])
+def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle(snapshot_id, monkeypatch):
     plugin = RestCatalog(_config(), _context())
 
     class FakeSnapshot:
@@ -165,7 +163,10 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle(
 
     class FakeTable:
         metadata_location = "https://storage.example/metadata/v1.json"
-        current_snapshot = FakeSnapshot()
+
+        def current_snapshot(self):
+            return FakeSnapshot() if snapshot_id is not None else None
+
         io = type("IO", (), {"properties": {"s3.access-key-id": "secret"}})()
 
     class FakeCatalog:
@@ -173,12 +174,10 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle(
             assert identifier == ("default", "users")
             return FakeTable()
 
-    if snapshot_shape == "method":
-        FakeTable.current_snapshot = lambda self: FakeSnapshot()
     install_provider(monkeypatch, FakeCatalog())
     handle = plugin.resolve_table(TableIdentifier(namespace=("default",), name="users"), _context())
     assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}
-    assert handle.snapshot_id == "42"
+    assert handle.snapshot_id == ("42" if snapshot_id is not None else None)
 
 
 def test_rest_catalog_rechecks_cancellation_after_table_load(monkeypatch) -> None:
@@ -223,6 +222,9 @@ def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch):
     created = []
 
     class Provider:
+        def close(self):
+            pass
+
         def list_namespaces(self, namespace):
             return [("default",)]
 
@@ -258,6 +260,30 @@ def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch):
         plugin.close()
 
 
+def test_rest_catalog_closes_owned_http_session_once(monkeypatch):
+    closed = []
+    original_close = RequestsSession.close
+
+    def close(session):
+        closed.append(session)
+        original_close(session)
+
+    monkeypatch.setattr(RequestsSession, "close", close)
+    monkeypatch.setattr(
+        RequestsSession,
+        "request",
+        lambda self, method, url, **kwargs: response(
+            {"defaults": {}, "overrides": {}} if url.endswith("/config") else {"namespaces": []}
+        ),
+    )
+    plugin = RestCatalog(_config(), _context())
+    assert plugin.list_namespaces(_context()) == ()
+    plugin.close()
+    plugin.close()
+    assert closed
+    assert len(closed) == len(set(closed))
+
+
 def test_rest_catalog_close_releases_provider_session_and_is_terminal(monkeypatch) -> None:
     plugin = RestCatalog(_config(), _context())
     closed = []
@@ -267,7 +293,8 @@ def test_rest_catalog_close_releases_provider_session_and_is_terminal(monkeypatc
             closed.append(True)
 
     class FakeCatalog:
-        _session = Session()
+        def close(self):
+            Session().close()
 
     install_provider(monkeypatch, FakeCatalog())
     plugin.list_namespaces(_context())
@@ -279,7 +306,7 @@ def test_rest_catalog_close_releases_provider_session_and_is_terminal(monkeypatc
         plugin.list_tables(_context(), limit=1)
 
 
-def test_rest_catalog_close_attempts_session_when_provider_close_fails(monkeypatch) -> None:
+def test_rest_catalog_preserves_provider_close_failure_and_is_terminal(monkeypatch) -> None:
     closed: list[str] = []
     plugin = RestCatalog(_config(), _context())
 
@@ -288,10 +315,9 @@ def test_rest_catalog_close_attempts_session_when_provider_close_fails(monkeypat
             closed.append("session")
 
     class FailingCatalog:
-        _session = Session()
-
         def close(self):
             closed.append("catalog")
+            Session().close()
             raise RuntimeError("catalog close failed")
 
     install_provider(monkeypatch, FailingCatalog())
@@ -343,7 +369,7 @@ def test_rest_catalog_rejects_invalid_configuration(options, message):
 def install_provider(monkeypatch, provider):
     class ProviderRestCatalog:
         def __init__(self, *args, **kwargs):
-            self._session = getattr(provider, "_session", None)
+            pass
 
         def list_namespaces(self, namespace):
             return (

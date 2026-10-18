@@ -185,9 +185,10 @@ class RestCatalog(CatalogPlugin):
         with self._request_budget(context):
             table = self._load_catalog(context).load_table((*identifier.namespace, identifier.name))
             context.check_active()
-            metadata_location = getattr(table, "metadata_location", None)
+            metadata_location = table.metadata_location
             if not isinstance(metadata_location, str) or not metadata_location:
                 raise ValueError("REST catalog table has no metadata location")
+            snapshot = table.current_snapshot()
             return TableHandle(
                 catalog_plugin_id=DESCRIPTOR.plugin_id,
                 catalog_instance_id=self._config.instance_id,
@@ -195,7 +196,7 @@ class RestCatalog(CatalogPlugin):
                 identifier=identifier,
                 format_plugin_id="iceberg",
                 handle_version=1,
-                snapshot_id=_snapshot_id(table),
+                snapshot_id=str(snapshot.snapshot_id) if snapshot is not None else None,
                 metadata={"metadata_location": metadata_location},
             )
 
@@ -210,23 +211,7 @@ class RestCatalog(CatalogPlugin):
             self._catalog = None
             if catalog is None:
                 return
-            first_error: Exception | None = None
-            close = getattr(catalog, "close", None)
-            if callable(close):
-                try:
-                    close()
-                except Exception as exc:
-                    first_error = exc
-            session = getattr(catalog, "_session", None)
-            close = getattr(session, "close", None)
-            if callable(close):
-                try:
-                    close()
-                except Exception as exc:
-                    if first_error is None:
-                        first_error = exc
-            if first_error is not None:
-                raise first_error
+            catalog.close()
 
     @active
     def _load_catalog(self, context: ExecutionContext) -> PyIcebergRestCatalog:
@@ -281,14 +266,6 @@ def _continuation_offset(value: str | None) -> int:
     if not value.isdigit() or len(value) > 6:
         raise ValueError("REST catalog continuation token is invalid")
     return int(value)
-
-
-def _snapshot_id(table: object) -> str | None:
-    snapshot = getattr(table, "current_snapshot", None)
-    if callable(snapshot):
-        snapshot = snapshot()
-    value = getattr(snapshot, "snapshot_id", snapshot)
-    return str(value) if value is not None else None
 
 
 def _validate_optional_uri(value: object, label: str, *, http_only: bool = False) -> None:
