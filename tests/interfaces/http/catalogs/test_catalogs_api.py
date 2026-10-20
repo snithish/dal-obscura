@@ -107,15 +107,15 @@ def test_catalog_release_failure_rolls_back_earlier_changes_and_audit(
         {"warehouse": {"plugin_id": ICEBERG_CATALOG_ID}},
     ],
 )
-def test_catalog_release_requires_bounded_explicit_revision_fences(publication_client, drafts):
-    client = publication_client
+def test_catalog_release_requires_bounded_explicit_revision_fences(client_factory, drafts):
+    client = client_factory()
     response = client.post("/v1/catalogs/publish", json={"catalogs": drafts}, headers=ADMIN_HEADERS)
     assert response.status_code == 422
     assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json() == []
 
 
-def test_catalog_release_publication_requires_authenticated_admin(publication_client):
-    client = publication_client
+def test_catalog_release_publication_requires_authenticated_admin(client_factory):
+    client = client_factory()
     response = client.post(
         "/v1/catalogs/publish",
         json={"catalogs": {"warehouse": {"plugin_id": ICEBERG_CATALOG_ID, "expected_revision": 0}}},
@@ -221,36 +221,6 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace(client_factory):
     }
 
 
-def test_workspace_catalog_upsert_accepts_plugin_defaults_without_backend_fields(client_factory):
-    client = client_factory()
-
-    response = client.put(
-        "/v1/catalogs/analytics",
-        json={"plugin_id": "iceberg.catalog", "options": {"uri": "sqlite:///catalog.db"}},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 200
-    catalog = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()[0]
-    assert catalog["plugin_id"] == "iceberg.catalog"
-    assert catalog["options"] == {"uri": "sqlite:///catalog.db"}
-
-
-def test_workspace_catalog_rejects_python_module_identity(client_factory):
-    client = client_factory()
-
-    response = client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ("dal_obscura.adapters.providers.catalogs.IcebergCatalog"),
-            "options": {"uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 422
-
-
 def test_workspace_catalog_rejects_retired_module_field(client_factory):
     client = client_factory()
 
@@ -263,17 +233,27 @@ def test_workspace_catalog_rejects_retired_module_field(client_factory):
     assert response.status_code == 422
 
 
-def test_workspace_catalog_upsert_rejects_a_stale_revision(client_factory):
+def test_workspace_catalog_upsert_preserves_revision_fences(client_factory):
     client = client_factory()
     first = client.put(
         "/v1/catalogs/analytics",
         json={
             "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+            "options": {"uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
     )
     assert first.status_code == 200
+    before = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
+    assert before[0]["plugin_id"] == ICEBERG_CATALOG_ID
+    assert before[0]["options"] == {"uri": "sqlite:///catalog.db"}
+    missing = client.put(
+        "/v1/catalogs/analytics",
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"uri": "sqlite:///changed.db"}},
+        headers=ADMIN_HEADERS,
+    )
+    assert missing.status_code == 428
+    assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json() == before
     updated = client.put(
         "/v1/catalogs/analytics",
         json={
@@ -298,32 +278,7 @@ def test_workspace_catalog_upsert_rejects_a_stale_revision(client_factory):
     assert stale.json()["error"]["current_revision"] == 1
 
 
-def test_workspace_catalog_update_requires_revision_precondition(client_factory):
-    client = client_factory()
-    created = client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    assert created.status_code == 200
-
-    missing = client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog-new.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    assert missing.status_code == 428
-    assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()[0]["revision"] == 0
-
-
-def test_workspace_catalog_rejects_non_admitted_plugin_id(client_factory):
+def test_workspace_catalog_rejects_invalid_plugin_identifier(client_factory):
     client = client_factory()
 
     response = client.put(
@@ -334,22 +289,6 @@ def test_workspace_catalog_rejects_non_admitted_plugin_id(client_factory):
 
     assert response.status_code == 422
     assert response.json()["error"]["field_errors"][0]["field"] == "plugin_id"
-
-
-def test_workspace_catalog_rejects_credentials_embedded_in_uri(client_factory):
-    client = client_factory()
-
-    response = client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"uri": "https://catalog-user:catalog-password@catalog.example/api"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 400
-    assert "secret reference" in response.json()["error"]["message"]
 
 
 def test_workspace_catalog_rejects_malformed_uri_with_structured_error(client_factory):
@@ -366,50 +305,6 @@ def test_workspace_catalog_rejects_malformed_uri_with_structured_error(client_fa
     assert payload["error"]["code"] == "validation_error"
     assert payload["error"]["message"] == "Catalog option 'options.uri' contains an invalid URI"
     assert payload["error"]["request_id"]
-
-
-def test_workspace_catalog_rejects_nested_dynamic_loader_options(client_factory):
-    client = client_factory()
-
-    response = client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"properties": {"py-catalog-impl": "example.CustomCatalog"}},
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 400
-    assert "cannot select an implementation class" in response.json()["error"]["message"]
-
-
-def test_workspace_catalog_rejects_unbounded_option_shape(client_factory):
-    client = client_factory()
-
-    deeply_nested: object = "value"
-    for _ in range(18):
-        deeply_nested = {"nested": deeply_nested}
-    response = client.put(
-        "/v1/catalogs/analytics",
-        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"properties": deeply_nested}},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 400
-    assert "too deeply nested" in response.json()["error"]["message"]
-
-
-def test_workspace_catalog_rejects_oversized_option_list(client_factory):
-    client = client_factory()
-    response = client.put(
-        "/v1/catalogs/analytics",
-        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"properties": ["x"] * 257}},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 400
-    assert "list is too large" in response.json()["error"]["message"]
 
 
 def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_refs(client_factory):

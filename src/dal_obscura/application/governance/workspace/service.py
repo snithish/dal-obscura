@@ -1,9 +1,9 @@
-"""Workspace-level control-plane service functions."""
+"""Workspace commands own authorization, transactions and audit records."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
@@ -32,23 +32,9 @@ def required_workspace(store: GovernanceUnitOfWork) -> WorkspaceState:
     return context
 
 
-def get_workspace_summary(
-    store: GovernanceUnitOfWork,
-    actor: ControlPlaneActor | None = None,
-) -> dict[str, object]:
-    """Returns a summary of the current workspace."""
-
-    return store.workspace.get_workspace_summary(
-        None if actor is None or actor.platform_admin else actor.owner_principals()
-    )
-
-
-def get_workspace_runtime_settings(store: GovernanceUnitOfWork) -> dict[str, object] | None:
+def _runtime_settings(store: GovernanceUnitOfWork) -> dict[str, object] | None:
     """Returns runtime ticket settings for the workspace when configured."""
 
-    context = store.workspace.get_workspace()
-    if context is None:
-        return None
     settings = store.workspace.get_runtime_settings()
     if settings is None:
         return None
@@ -63,43 +49,6 @@ def get_workspace_runtime_settings(store: GovernanceUnitOfWork) -> dict[str, obj
     }
 
 
-def get_workspace_observations(
-    store: GovernanceUnitOfWork,
-    actor: ControlPlaneActor,
-) -> dict[str, object]:
-    """Returns bounded control-plane observations for the current workspace.
-
-    This endpoint deliberately reports what the control-plane database knows;
-    it never presents a configuration revision as proof that a Flight worker
-    is healthy or has reloaded changed startup settings.
-    """
-
-    observed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    context = store.workspace.get_workspace()
-    if context is None:
-        return {
-            "available": False,
-            "observed_at": observed_at,
-            "source": "control-plane-db",
-            "data_plane": {"status": "unobserved", "reason": "workspace_not_configured"},
-        }
-    if not actor.platform_admin:
-        visible_assets = store.assets.list_workspace_assets_for_principals(actor.owner_principals())
-        if not visible_assets:
-            return {
-                "available": False,
-                "observed_at": observed_at,
-                "source": "control-plane-db",
-                "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
-            }
-    return {
-        "available": True,
-        "observed_at": observed_at,
-        "source": "control-plane-db",
-        "data_plane": {"status": "unobserved", "reason": "flight_health_probe_not_configured"},
-    }
-
-
 def list_workspace_auth_providers(store: GovernanceUnitOfWork) -> list[dict[str, object]]:
     """Lists configured authentication providers for the workspace."""
 
@@ -107,105 +56,6 @@ def list_workspace_auth_providers(store: GovernanceUnitOfWork) -> list[dict[str,
     if context is None:
         return []
     return [redact_auth_provider(item) for item in store.workspace.list_auth_providers()]
-
-
-def workspace_auth_provider_revision(store: GovernanceUnitOfWork) -> int:
-    context = store.workspace.get_workspace()
-    return 0 if context is None else store.workspace.get_auth_provider_revision()
-
-
-def replace_workspace_auth_providers(
-    store: GovernanceUnitOfWork,
-    providers: list[dict[str, Any]],
-    *,
-    expected_revision: int | None = None,
-    actor_principal: str = "system",
-    correlation_id: str | None = None,
-) -> list[dict[str, object]]:
-    """Replaces the workspace authentication provider chain."""
-
-    validate_auth_provider_payloads(providers)
-    store.workspace.ensure_workspace()
-    store.workspace.replace_auth_providers(providers=providers, expected_revision=expected_revision)
-    store.audit.record_workspace_audit_event(
-        actor_principal=actor_principal,
-        action="workspace.auth_providers.update",
-        resource_type="workspace",
-        resource_id="workspace",
-        details={
-            "provider_count": len(providers),
-            "enabled_count": sum(1 for provider in providers if provider.get("enabled", True)),
-        },
-        correlation_id=correlation_id,
-    )
-    return list_workspace_auth_providers(store)
-
-
-def upsert_workspace_runtime_settings(
-    store: GovernanceUnitOfWork,
-    ttl: int,
-    max_tickets: int,
-    max_ticket_exchanges: int,
-    path_rules: list[dict[str, Any]] | None = None,
-    expected_revision: int | None = None,
-    *,
-    actor_principal: str = "system",
-    correlation_id: str | None = None,
-) -> dict[str, object]:
-    """Creates or updates workspace runtime ticket settings."""
-
-    if path_rules is not None and not isinstance(path_rules, list):
-        raise ValidationFailure("Runtime path rules must be a list")
-    raw_path_rules = path_rules or []
-    if any(not isinstance(rule, dict) for rule in raw_path_rules):
-        raise ValidationFailure("Runtime path rules must contain objects")
-    normalized_path_rules = [dict(rule) for rule in raw_path_rules]
-    if any(
-        set(rule) != {"root"}
-        or not isinstance(rule.get("root"), str)
-        or not str(rule["root"]).strip()
-        for rule in normalized_path_rules
-    ):
-        raise ValidationFailure("Runtime path rules require exactly one non-empty string root")
-    try:
-        PathRuleEnforcer(normalized_path_rules)
-    except (TypeError, ValueError) as exc:
-        raise ValidationFailure("Runtime path rules are invalid") from exc
-    store.workspace.ensure_workspace()
-    store.workspace.upsert_runtime_settings(
-        ticket_ttl_seconds=ttl,
-        max_tickets=max_tickets,
-        max_ticket_exchanges=max_ticket_exchanges,
-        path_rules=normalized_path_rules,
-        expected_revision=expected_revision,
-    )
-    store.audit.record_workspace_audit_event(
-        actor_principal=actor_principal,
-        action="workspace.runtime.update",
-        resource_type="workspace",
-        resource_id="workspace",
-        details={
-            "ticket_ttl_seconds": ttl,
-            "max_tickets": max_tickets,
-            "max_ticket_exchanges": max_ticket_exchanges,
-            "path_rules": normalized_path_rules,
-        },
-        correlation_id=correlation_id,
-    )
-    settings = store.workspace.get_runtime_settings()
-    if settings is None:
-        return {}
-    raw_path_rules = settings.get("path_rules", [])
-    path_rules = (
-        cast(list[dict[str, Any]], raw_path_rules) if isinstance(raw_path_rules, list) else []
-    )
-    return {
-        "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
-        "max_tickets": settings["max_tickets"],
-        "max_ticket_exchanges": settings["max_ticket_exchanges"],
-        "path_rules": list(path_rules),
-        "revision": settings["revision"],
-    }
 
 
 class WorkspaceCommands:
@@ -219,13 +69,44 @@ class WorkspaceCommands:
         self, *, actor: ControlPlaneActor, correlation_id: str | None
     ) -> dict[str, object]:
         with self._work_factory() as work:
-            return get_workspace_summary(work, actor)
+            return work.workspace.get_workspace_summary(
+                None if actor.platform_admin else actor.owner_principals()
+            )
 
     def get_workspace_observations(
         self, *, actor: ControlPlaneActor, correlation_id: str | None
     ) -> dict[str, object]:
+        """Report database observations, which cannot establish Flight worker health."""
         with self._work_factory() as work:
-            return get_workspace_observations(work, actor)
+            observed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+            context = work.workspace.get_workspace()
+            if context is None:
+                return {
+                    "available": False,
+                    "observed_at": observed_at,
+                    "source": "control-plane-db",
+                    "data_plane": {"status": "unobserved", "reason": "workspace_not_configured"},
+                }
+            if not actor.platform_admin:
+                visible_assets = work.assets.list_workspace_assets_for_principals(
+                    actor.owner_principals()
+                )
+                if not visible_assets:
+                    return {
+                        "available": False,
+                        "observed_at": observed_at,
+                        "source": "control-plane-db",
+                        "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
+                    }
+            return {
+                "available": True,
+                "observed_at": observed_at,
+                "source": "control-plane-db",
+                "data_plane": {
+                    "status": "unobserved",
+                    "reason": "flight_health_probe_not_configured",
+                },
+            }
 
     def list_identity_attributes(
         self, asset_id: UUID, *, actor: ControlPlaneActor, correlation_id: str | None
@@ -238,7 +119,9 @@ class WorkspaceCommands:
     ) -> dict[str, object] | None:
         _require_admin(actor)
         with self._work_factory() as work:
-            return get_workspace_runtime_settings(work)
+            if work.workspace.get_workspace() is None:
+                return None
+            return _runtime_settings(work)
 
     def list_workspace_auth_providers(
         self, *, actor: ControlPlaneActor, correlation_id: str | None
@@ -252,7 +135,8 @@ class WorkspaceCommands:
     ) -> int:
         _require_admin(actor)
         with self._work_factory() as work:
-            return workspace_auth_provider_revision(work)
+            context = work.workspace.get_workspace()
+            return 0 if context is None else work.workspace.get_auth_provider_revision()
 
     def replace_workspace_auth_providers(
         self,
@@ -264,13 +148,25 @@ class WorkspaceCommands:
     ) -> list[dict[str, object]]:
         _require_admin(actor)
         with self._work_factory() as work:
-            result = replace_workspace_auth_providers(
-                work,
-                providers,
-                expected_revision=expected_revision,
+            validate_auth_provider_payloads(providers)
+            work.workspace.ensure_workspace()
+            work.workspace.replace_auth_providers(
+                providers=providers, expected_revision=expected_revision
+            )
+            work.audit.record_workspace_audit_event(
                 actor_principal=actor.identity_key(),
+                action="workspace.auth_providers.update",
+                resource_type="workspace",
+                resource_id="workspace",
+                details={
+                    "provider_count": len(providers),
+                    "enabled_count": sum(
+                        1 for provider in providers if provider.get("enabled", True)
+                    ),
+                },
                 correlation_id=correlation_id,
             )
+            result = list_workspace_auth_providers(work)
             work.commit()
             return result
 
@@ -287,16 +183,47 @@ class WorkspaceCommands:
     ) -> dict[str, object]:
         _require_admin(actor)
         with self._work_factory() as work:
-            result = upsert_workspace_runtime_settings(
-                work,
-                ttl,
-                max_tickets,
-                max_ticket_exchanges,
-                path_rules,
-                expected_revision,
+            if path_rules is not None and not isinstance(path_rules, list):
+                raise ValidationFailure("Runtime path rules must be a list")
+            raw_path_rules = path_rules or []
+            if any(not isinstance(rule, dict) for rule in raw_path_rules):
+                raise ValidationFailure("Runtime path rules must contain objects")
+            normalized_path_rules = [dict(rule) for rule in raw_path_rules]
+            if any(
+                set(rule) != {"root"}
+                or not isinstance(rule.get("root"), str)
+                or not str(rule["root"]).strip()
+                for rule in normalized_path_rules
+            ):
+                raise ValidationFailure(
+                    "Runtime path rules require exactly one non-empty string root"
+                )
+            try:
+                PathRuleEnforcer(normalized_path_rules)
+            except (TypeError, ValueError) as exc:
+                raise ValidationFailure("Runtime path rules are invalid") from exc
+            work.workspace.ensure_workspace()
+            work.workspace.upsert_runtime_settings(
+                ticket_ttl_seconds=ttl,
+                max_tickets=max_tickets,
+                max_ticket_exchanges=max_ticket_exchanges,
+                path_rules=normalized_path_rules,
+                expected_revision=expected_revision,
+            )
+            work.audit.record_workspace_audit_event(
                 actor_principal=actor.identity_key(),
+                action="workspace.runtime.update",
+                resource_type="workspace",
+                resource_id="workspace",
+                details={
+                    "ticket_ttl_seconds": ttl,
+                    "max_tickets": max_tickets,
+                    "max_ticket_exchanges": max_ticket_exchanges,
+                    "path_rules": normalized_path_rules,
+                },
                 correlation_id=correlation_id,
             )
+            result = _runtime_settings(work)
             work.commit()
             fallback: dict[str, object] = {
                 "ticket_ttl_seconds": ttl,

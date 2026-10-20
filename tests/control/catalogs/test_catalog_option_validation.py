@@ -11,14 +11,41 @@ from dal_obscura.application.governance.catalogs.validation import (
 from dal_obscura.application.governance.errors import ValidationFailure
 
 
-def test_catalog_options_reject_non_finite_numbers() -> None:
-    with pytest.raises(ValidationFailure, match="numbers must be finite"):
-        validate_catalog_options({"properties": {"timeout": float("nan")}})
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        pytest.param(
+            {"properties": {"timeout": float("nan")}}, "numbers must be finite", id="non-finite"
+        ),
+        pytest.param(
+            {"catalog_name": "provider-name"},
+            "Unsupported catalog option: catalog_name",
+            id="unsupported-option",
+        ),
+        pytest.param(
+            {"uri": "https://catalog-user:catalog-password@catalog.example/api"},
+            "secret reference",
+            id="uri-credentials",
+        ),
+        pytest.param(
+            {"properties": {"py-catalog-impl": "example.CustomCatalog"}},
+            "cannot select an implementation class",
+            id="dynamic-loader",
+        ),
+        pytest.param({"properties": ["x"] * 257}, "list is too large", id="list-budget"),
+    ],
+)
+def test_catalog_options_reject_unsafe_configuration(options, message):
+    with pytest.raises(ValidationFailure, match=message):
+        validate_catalog_options(options)
 
 
-def test_catalog_options_reject_unsupported_catalog_option() -> None:
-    with pytest.raises(ValidationFailure, match="Unsupported catalog option: catalog_name"):
-        validate_catalog_options({"catalog_name": "provider-name"})
+def test_catalog_options_reject_excessive_nesting():
+    nested: object = "value"
+    for _ in range(18):
+        nested = {"nested": nested}
+    with pytest.raises(ValidationFailure, match="too deeply nested"):
+        validate_catalog_options({"properties": nested})
 
 
 @pytest.mark.parametrize("host", ["127.0.0.1", "10.0.0.8", "::1"])

@@ -41,7 +41,6 @@ from dal_obscura.adapters.sql.database.db import (  # noqa: E402
     session_factory,
 )
 from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory  # noqa: E402
-from dal_obscura.application.governance.assets import service as asset_service  # noqa: E402
 from dal_obscura.application.governance.policies import service as policy_service  # noqa: E402
 from dal_obscura.kernel.identity.actor import ControlPlaneActor  # noqa: E402
 
@@ -563,12 +562,10 @@ def _provision_control_plane(
                 expected_revision=None,
                 revoke_existing_tokens=False,
             )
-            asset_service.replace_asset_owners(
-                work,
-                asset,
-                ["user:fixture-owner@example.com"],
+            work.assets.replace_asset_owners(
+                asset_id=asset,
+                owners=["user:fixture-owner@example.com"],
                 expected_revision=0,
-                actor=None,
             )
             work.workspace.replace_auth_providers(
                 providers=[

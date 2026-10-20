@@ -26,7 +26,6 @@ from dal_obscura.adapters.sql.database.db import (
     session_factory,
 )
 from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory
-from dal_obscura.application.governance.assets import service as asset_service
 from dal_obscura.application.governance.policies import service as policy_service
 from dal_obscura.interfaces.flight_contract import encode_plan_command
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
@@ -238,10 +237,9 @@ def control_plane_setup(
             table_identifier="default.users",
             options={},
         )
-        asset_service.replace_asset_schema_fields(
-            work,
-            asset,
-            [
+        work.assets.replace_asset_schema_fields(
+            asset_id=asset,
+            fields=[
                 {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64"},
                 {
                     "name": "email",
@@ -315,12 +313,10 @@ def control_plane_setup(
             expected_revision=None,
             revoke_existing_tokens=False,
         )
-        asset_service.replace_asset_owners(
-            work,
-            asset,
-            ["user:e2e-owner@example.com"],
+        work.assets.replace_asset_owners(
+            asset_id=asset,
+            owners=["user:e2e-owner@example.com"],
             expected_revision=1,
-            actor=None,
         )
         work.workspace.replace_auth_providers(
             providers=[
