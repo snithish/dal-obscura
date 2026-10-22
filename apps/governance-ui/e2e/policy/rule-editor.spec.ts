@@ -47,5 +47,9 @@ test("revision conflicts preserve column edits", async ({ page }) => {
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("button", { name: "Save policy", exact: true }).click();
   await expect(page.getByText(/resource changed on the server/i).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Allowed columns: 2 selected/ })).toBeVisible();
+  await page.getByRole("button", { name: "Allowed columns: 2 selected", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "Choose allowed columns" });
+  await expect(
+    picker.getByRole("option", { selected: true }).locator(".column-option-name"),
+  ).toHaveText(["email", "phone"]);
 });

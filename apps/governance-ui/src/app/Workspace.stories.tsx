@@ -1,3 +1,4 @@
+import { localStoryUrl } from "../design/storyNetworkGuard";
 import { StrictMode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
@@ -32,7 +33,7 @@ const meta = {
     window.history.replaceState(null, "", window.location.pathname + "#assets");
     let signedIn = true;
     window.fetch = async (input) => {
-      const path = new URL(String(input), window.location.href).pathname;
+      const path = localStoryUrl(input).pathname;
       if (path === "/v1/logout") {
         signedIn = false;
         return Response.json({ logout_url: null });
@@ -124,6 +125,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const AssetNavigation: Story = {
   play: async ({ canvas }) => {
+    await expect(fetch("https://idp.example.invalid/v1/session")).rejects.toThrow(
+      "Unexpected story network request",
+    );
     await userEvent.click(await canvas.findByRole("button", { name: /orders/ }));
     await expect(
       await canvas.findByRole("button", { name: "Back to assets" }, { timeout: 5000 }),

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyMaskToTargets,
+  createRuleCoverage,
+  expandColumnSelections,
   authoritativeColumnOptions,
   groupMasks,
   removeColumnSelections,
@@ -144,8 +146,7 @@ test("mask groups treat exemption lists as sets", () => {
   );
 });
 
-test("parent selection expands nested collection leaves for individual exemptions", async () => {
-  const { expandColumnSelections } = await import("./policy_editor.ts");
+test("parent selection expands nested collection leaves for individual exemptions", () => {
   const parent = {
     value: "contacts",
     label: "contacts",
@@ -233,4 +234,40 @@ test("mask coverage distinguishes literal names, collection segments, and histor
     literal: { type: "redact" },
     orphan: { type: "null" },
   });
+});
+
+test("coverage expands typed parents and preserves child masks and conflicts", () => {
+  const field = (name, segments) => ({
+    value: name,
+    label: name,
+    type: "string",
+    valid: true,
+    path: {
+      version: 1,
+      segments: segments.map((name, index) => ({ kind: "field", name, field_id: index + 1 })),
+    },
+  });
+  const options = [
+    field("person", ["person"]),
+    field("person.email", ["person", "email"]),
+    field("person.phone", ["person", "phone"]),
+    field("person.literal.dot", ["person.literal.dot"]),
+  ];
+  const rule = {
+    ordinal: 1,
+    effect: "allow",
+    principals: ["*"],
+    columns: ["person"],
+    masks: { "person.phone": { type: "hash" } },
+    row_filter: null,
+  };
+  const covered = createRuleCoverage(rule, options);
+  assert.deepEqual(covered.rule.columns, ["person.email", "person.phone"]);
+  assert.deepEqual(covered.rule.masks, { "person.phone": { type: "hash" } });
+  const conflict = createRuleCoverage(
+    { ...rule, masks: { person: { type: "email" }, "person.phone": { type: "hash" } } },
+    options,
+  );
+  assert.deepEqual([...conflict.conflicts], ["person.phone"]);
+  assert.deepEqual(conflict.rule.columns, ["person.email"]);
 });

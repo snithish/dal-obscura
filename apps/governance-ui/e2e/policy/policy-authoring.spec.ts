@@ -150,8 +150,12 @@ test("named rules stack, collapse without losing edits, and persist metadata", a
   await expect(cards.nth(1).getByRole("button", { name: /^Regional restriction/ })).toBeVisible();
 });
 
-test("both test buttons open the same modal and retain persona inputs", async ({ page }) => {
+test("one saved-policy test entry reopens the modal with retained persona inputs", async ({
+  page,
+}) => {
   await expect(page.getByRole("tab", { name: "Tests", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Test saved policy", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Test Policy", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Test saved policy", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Test policy", exact: true });
   await modal.getByLabel("Principal", { exact: true }).fill("user:alice");

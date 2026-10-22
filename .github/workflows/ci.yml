@@ -112,7 +112,10 @@ jobs:
       - name: Run deterministic contracts
         run: >-
           uv run --no-sync pytest tests/policy tests/read tests/identity tests/connectors
-          tests/architecture tests/plugins/test_registry.py -q
+          tests/architecture tests/acceptance tests/plugins/test_registry.py
+          tests/plugins/test_lock_builder.py tests/plugins/test_lockfile.py
+          tests/plugins/test_package_inspection.py tests/plugins/test_plugin_api_package.py
+          tests/test_logging_config.py tests/test_memory_probe.py tests/test_observability.py -o pythonpath= -q
 
   secure-local-smoke:
     name: Secure local HTTPS and mTLS demo
@@ -211,7 +214,8 @@ jobs:
           uv run --no-sync python scripts/require_no_skips.py
           --junitxml "$RUNNER_TEMP/integration.xml" --
           uv run --no-sync pytest tests/interfaces tests/sources tests/storage tests/runtime tests/control
-          tests/examples tests/test_e2e_smoke.py -q
+          tests/examples tests/test_e2e_smoke.py tests/integration/test_io_boundary.py
+          tests/test_support_build_connector_fixture.py -o pythonpath= -q
 
       - name: Run Python and DuckDB consumer qualification
         env:

@@ -16,54 +16,7 @@ for (const [name, id, expected] of [
   );
 }
 
-test("asset detail preserves mask exemption metadata", async () => {
-  const originalFetch = globalThis.fetch;
-  const originalDocument = globalThis.document;
-  globalThis.document = { cookie: "" };
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        id: "asset-42",
-        revision: 1,
-        policy_revision: 2,
-        catalog: "analytics",
-        name: "orders",
-        backend: "iceberg",
-        table_identifier: "orders",
-        owners: [],
-        owner_count: 0,
-        policy_status: "configured",
-        options: {},
-        schema_fields: [],
-        policy_rules: [
-          {
-            name: "Analysts",
-            description: "Email access",
-            ordinal: 0,
-            effect: "allow",
-            principals: ["group:analysts"],
-            columns: ["email"],
-            masks: { email: { type: "hash", exempt_principals: ["group:privacy-reviewers"] } },
-            row_filter: null,
-            when: {},
-          },
-        ],
-      }),
-      { headers: { "content-type": "application/json" } },
-    );
-  try {
-    const asset = await controlPlane.getAsset("asset-42");
-    assert.deepEqual(asset.policy_rules[0].masks.email.exempt_principals, [
-      "group:privacy-reviewers",
-    ]);
-  } finally {
-    globalThis.fetch = originalFetch;
-    if (originalDocument === undefined) delete globalThis.document;
-    else globalThis.document = originalDocument;
-  }
-});
-
-test("asset detail adapts optional wire selections into an editable rule", async () => {
+test("asset detail adapts optional selections and preserves mask exemptions", async () => {
   const originalFetch = globalThis.fetch;
   const originalDocument = globalThis.document;
   globalThis.document = { cookie: "" };
@@ -82,12 +35,30 @@ test("asset detail adapts optional wire selections into an editable rule", async
       options: {},
       owners: [],
       schema_fields: [],
-      policy_rules: [rule],
+      policy_rules: [
+        rule,
+        {
+          ordinal: 10,
+          effect: "allow",
+          principals: ["group:analysts"],
+          columns: ["email"],
+          masks: { email: { type: "hash", exempt_principals: ["group:privacy-reviewers"] } },
+        },
+      ],
     });
   try {
     const asset = await controlPlane.getAsset("asset-42");
-    assert.deepEqual(asset.policy_rules, [
-      { ...rule, ordinal: 0, principals: [], columns: [], masks: {}, row_filter: null, when: {} },
+    assert.deepEqual(asset.policy_rules[0], {
+      ...rule,
+      ordinal: 0,
+      principals: [],
+      columns: [],
+      masks: {},
+      row_filter: null,
+      when: {},
+    });
+    assert.deepEqual(asset.policy_rules[1].masks.email.exempt_principals, [
+      "group:privacy-reviewers",
     ]);
   } finally {
     globalThis.fetch = originalFetch;

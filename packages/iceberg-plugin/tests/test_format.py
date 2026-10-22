@@ -155,7 +155,11 @@ def test_native_task_rejects_overlapping_ranges(table):
         plugin.execute(ScanTask(task), context())
 
 
-def test_storage_allowlist_rejects_metadata_before_io(table):
+def test_storage_allowlist_rejects_metadata_before_io(table, monkeypatch):
+    def unexpected_io(*args, **kwargs):
+        pytest.fail("Metadata I/O preceded path admission")
+
+    monkeypatch.setattr("pyiceberg.io.pyarrow.PyArrowFileIO.new_input", unexpected_io)
     plugin = IcebergFormatPlugin(
         handle(table),
         replace(context(), check_path=PathRuleEnforcer([{"root": "/unrelated"}]).check),

@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 import { uxApi, uxAssetId } from "../e2e/support/ux-fixture";
 import { authenticatedApi } from "../e2e/support/fixtures";
 
-const phase = process.env.DAL_OBSCURA_REVIEW_PHASE ?? "after";
+import { reviewPhase as phase } from "./phase";
 const output = resolve("../../docs/ui-review/governance-ux-plan");
 test("inventory, policy and error feedback visual review", async ({ page }) => {
   mkdirSync(output, { recursive: true });

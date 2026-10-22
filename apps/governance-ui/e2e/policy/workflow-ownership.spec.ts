@@ -39,6 +39,7 @@ test("duplicate saves keep one submission and a late success preserves exact new
   await pending.completed;
   await expect(page.getByText("Live revision 2", { exact: true })).toBeVisible();
   await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
+  await expect(page.getByText("Live policy saved.")).toHaveCount(0);
   await expect(page.getByLabel("Rule name", { exact: true })).toHaveValue("Newer local name");
   const next = page.waitForRequest(
     (request) => request.method() === "PUT" && request.url().endsWith("/policy"),

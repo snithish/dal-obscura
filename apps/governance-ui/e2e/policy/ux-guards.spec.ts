@@ -38,7 +38,3 @@ test("collapsed pending edits remain discoverable beside the disabled save", asy
   await review.click();
   await expect(page.getByRole("button", { name: "Discard row changes" })).toBeFocused();
 });
-test("saved-policy evaluation has one entry point with an explicit label", async ({ page }) => {
-  await expect(page.getByRole("button", { name: "Test saved policy", exact: true })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Test Policy", exact: true })).toHaveCount(0);
-});

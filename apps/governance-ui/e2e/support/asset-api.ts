@@ -202,7 +202,8 @@ export async function installAssetApi(page: Page, options: AuthenticatedApiOptio
           },
         });
       }
-      return route.fulfill({ json: detail });
+      if (!suffix && request.method() === "GET") return route.fulfill({ json: detail });
+      return route.fallback();
     }
     return route.fallback();
   });

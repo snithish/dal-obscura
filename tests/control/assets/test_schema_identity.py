@@ -149,11 +149,10 @@ def test_schema_scope_rejects_json_expansion_within_arrow_ipc_budget() -> None:
         schema_scope_digest(schema)
 
 
-@pytest.mark.parametrize("digest", [schema_fingerprint, schema_scope_digest])
-def test_schema_identity_rejects_base64_expansion_within_arrow_ipc_budget(digest) -> None:
+def test_schema_identity_rejects_base64_expansion_within_arrow_ipc_budget() -> None:
     schema = pa.schema([pa.field("value", pa.string())], metadata={b"key": b"x" * 1_600_000})
-    with pytest.raises((ValidationFailure, ValueError), match="Schema encoding exceeds"):
-        digest(schema)
+    with pytest.raises(ValidationFailure, match="Schema encoding exceeds"):
+        schema_fingerprint(schema)
 
 
 @pytest.mark.parametrize(

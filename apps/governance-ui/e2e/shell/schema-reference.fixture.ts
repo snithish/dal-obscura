@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 import type { SchemaNode } from "../../src/data/api";
 import { uxApi, uxAssetId } from "../support/ux-fixture";
 
@@ -60,6 +60,5 @@ export async function openDeepReference(page: Page) {
   await viewport.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
-  await expect(sidebar.locator(".schema-reference-row").last()).toBeInViewport();
   return sidebar;
 }

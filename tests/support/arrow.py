@@ -39,25 +39,6 @@ def id_email_region_batch(
     )
 
 
-def nested_user_schema() -> pa.Schema:
-    return pa.schema(
-        [
-            pa.field("id", pa.int64()),
-            pa.field("region", pa.string()),
-            pa.field("active", pa.bool_()),
-            pa.field(
-                "user",
-                pa.struct(
-                    [
-                        pa.field("email", pa.string()),
-                        pa.field("address", pa.struct([pa.field("zip", pa.int64())])),
-                    ]
-                ),
-            ),
-        ]
-    )
-
-
 def list_of_struct_metadata_type(*, large: bool = False) -> pa.DataType:
     preference_type = pa.struct(
         [

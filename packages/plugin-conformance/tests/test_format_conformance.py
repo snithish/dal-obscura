@@ -289,3 +289,27 @@ def test_runner_closes_plan_when_iterator_construction_and_cleanup_fail():
     )
     assert any("cannot start planning" in reason for reason in result.failures)
     assert closed == ["plan", "plugin"]
+
+
+def test_runner_preserves_schema_error_when_output_cleanup_fails():
+    closed = []
+
+    class BrokenBatches:
+        def close(self):
+            closed.append("batches")
+            raise RuntimeError("batch cleanup sentinel")
+
+    class WrongSchema(_ConformingFormat):
+        def execute(self, task, context):
+            return pa.schema([("wrong", pa.string())]), BrokenBatches()
+
+        def close(self):
+            closed.append("plugin")
+
+    result = run_format_checks(
+        cast(TableFormatPlugin, WrongSchema()),
+        ScanRequest(pa.schema([("id", pa.int64())]), 1),
+        _context(),
+    )
+    assert result.failures == ["format: format output schema differs from the declared schema"]
+    assert closed == ["batches", "plugin"]

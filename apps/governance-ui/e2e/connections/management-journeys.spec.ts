@@ -193,6 +193,16 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await expect(
     page.getByText("Connection saved. Discovery remains bounded to this configured catalog."),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Password secret reference").fill("");
+  const preserved = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().endsWith("/catalogs/analytics"),
+  );
+  await page.getByRole("button", { name: "Save catalog changes", exact: true }).click();
+  expect((await preserved).postDataJSON().options.password).toEqual({
+    secret: "catalog/analytics",
+    scope: "catalog:analytics",
+  });
 });
 
 test("administrator chooses an admitted table format before governing discovery", async ({

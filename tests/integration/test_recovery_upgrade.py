@@ -133,36 +133,6 @@ def test_backup_helper_does_not_encrypt_a_failed_dump(tmp_path: Path) -> None:
     assert not output.with_name(output.name + ".sha256").exists()
 
 
-def test_restore_helper_rejects_corrupt_checksum_before_provider_tools(tmp_path: Path) -> None:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    _fake_command(bin_dir, "age", "cat >/dev/null; exit 99")
-    _fake_command(bin_dir, "pg_restore", "exit 99")
-    _fake_command(bin_dir, "dal-obscura-maintenance", "exit 99")
-    backup = tmp_path / "backup.age"
-    backup.write_bytes(b"synthetic-backup")
-    backup.with_name(backup.name + ".sha256").write_text("0" * 64 + f"  {backup}\n")
-    identity = tmp_path / "identity"
-    identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
-    identity.chmod(0o600)
-    script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
-    result = subprocess.run(
-        ["sh", str(script), str(backup)],
-        env={
-            **os.environ,
-            "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
-            "DAL_OBSCURA_AGE_IDENTITY": str(identity),
-            "DAL_OBSCURA_RESTORE_CONFIRM": "I_UNDERSTAND_ISOLATED_RESTORE",
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 1
-    assert "checksum verification failed" in result.stderr
-
-
 def test_restore_helper_rejects_world_readable_identity_before_decryption(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -238,8 +208,11 @@ def test_restore_helper_verifies_relative_backup_from_checksum_directory(
     assert "restore completed" in result.stdout
 
 
-def test_restore_helper_cannot_validate_a_decoy_checksum_path(tmp_path: Path) -> None:
-    """A sidecar cannot redirect verification to a different local file."""
+@pytest.mark.parametrize("checksum_case", ["corrupt", "decoy-path"])
+def test_restore_helper_rejects_invalid_checksum_before_provider_tools(
+    tmp_path: Path, checksum_case: str
+) -> None:
+    """Neither a bad digest nor a sidecar redirect can admit the selected backup."""
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -252,9 +225,12 @@ def test_restore_helper_cannot_validate_a_decoy_checksum_path(tmp_path: Path) ->
     backup.write_bytes(b"synthetic-backup")
     decoy = artifact_dir / "decoy.age"
     decoy.write_bytes(b"different-content")
-    backup.with_name(backup.name + ".sha256").write_text(
+    checksum = (
         f"{hashlib.sha256(decoy.read_bytes()).hexdigest()}  {decoy}\n"
+        if checksum_case == "decoy-path"
+        else "0" * 64 + f"  {backup}\n"
     )
+    backup.with_name(backup.name + ".sha256").write_text(checksum)
     identity = tmp_path / "identity"
     identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
     identity.chmod(0o600)

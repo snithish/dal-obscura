@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from tests.support.control.workspace import (
     ADMIN_HEADERS,
     DEFAULT_AUTH_MODULE,
@@ -97,34 +99,16 @@ def test_workspace_runtime_settings_accepts_path_rules_and_audits_roots(client_f
     assert runtime_events[0]["details"]["path_rules"] == [{"root": "s3://warehouse"}]
 
 
-def test_workspace_runtime_settings_rejects_unsafe_path_rules(client_factory):
+@pytest.mark.parametrize("root", ["s3://warehouse/*", 123], ids=["wildcard", "non-string"])
+def test_workspace_runtime_settings_rejects_invalid_path_roots(client_factory, root):
     client = client_factory()
-
     response = client.put(
         "/v1/settings/runtime",
         json={
             "ticket_ttl_seconds": 1200,
             "max_tickets": 32,
             "max_ticket_exchanges": 3,
-            "path_rules": [{"root": "s3://warehouse/*"}],
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "validation_error"
-
-
-def test_workspace_runtime_settings_rejects_non_string_path_root(client_factory):
-    client = client_factory()
-
-    response = client.put(
-        "/v1/settings/runtime",
-        json={
-            "ticket_ttl_seconds": 1200,
-            "max_tickets": 32,
-            "max_ticket_exchanges": 3,
-            "path_rules": [{"root": 123}],
+            "path_rules": [{"root": root}],
         },
         headers=ADMIN_HEADERS,
     )

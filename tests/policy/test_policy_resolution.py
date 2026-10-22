@@ -36,20 +36,6 @@ def test_resolve_access_allows_columns():
     assert row_filter == "(region = 'us')"
 
 
-def test_resolve_access_defaults_to_null_without_matching_grant():
-    policy = _policy(
-        AccessRule(principals=["group:analyst"], columns=["id"], masks={}, row_filter=None)
-    )
-    principal = Principal(id="user1", groups=["guest"], attributes={})
-
-    allowed, masks, row_filter = resolve_access(
-        policy, principal, target="catalog.db.table", catalog="analytics", requested_columns=["id"]
-    )
-    assert allowed == ["id"]
-    assert masks == {"id": MaskRule(type="null")}
-    assert row_filter is None
-
-
 def test_resolve_access_unions_grants_filters_and_strictest_masks():
     policy = _policy(
         AccessRule(

@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from dal_obscura.interfaces.flight.tls import _tls_material
 from dal_obscura.runtime.configuration import (
     load_data_plane_runtime_config,
 )
+
+
+@pytest.fixture(autouse=True)
+def clean_runtime_environment(monkeypatch: pytest.MonkeyPatch):
+    for name in os.environ:
+        if name.startswith("DAL_OBSCURA_"):
+            monkeypatch.delenv(name)
 
 
 def test_runtime_config_defaults(monkeypatch: pytest.MonkeyPatch):

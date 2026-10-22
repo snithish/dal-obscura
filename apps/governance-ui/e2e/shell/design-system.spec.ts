@@ -34,27 +34,57 @@ function parseRgb(value: string): Rgb {
 }
 
 async function renderedContrastSamples(page: Page, selector: string) {
-  return page.locator(selector).evaluateAll((elements) =>
-    elements.map((element) => {
-      const color = getComputedStyle(element).color;
+  return page.locator(selector).evaluateAll((elements) => {
+    const rgba = (value: string) => {
+      const channels = value
+        .match(/rgba?\(([^)]+)\)/)?.[1]
+        .split(",")
+        .map(Number);
+      if (!channels || channels.length < 3) throw new Error("Unsupported computed color: " + value);
+      return [channels[0], channels[1], channels[2], channels[3] ?? 1];
+    };
+    const over = (foreground: number[], background: number[]) =>
+      foreground
+        .slice(0, 3)
+        .map((channel, index) => channel * foreground[3] + background[index] * (1 - foreground[3]));
+    const rgb = (channels: number[]) => "rgb(" + channels.join(",") + ")";
+    return elements.map((element) => {
+      const backgrounds: number[][] = [];
       let current: Element | null = element;
-      let background = "rgb(255, 255, 255)";
       while (current) {
-        const candidate = getComputedStyle(current).backgroundColor;
-        const channels = candidate
-          .match(/rgba?\(([^)]+)\)/)?.[1]
-          .split(",")
-          .map((channel) => Number(channel.trim()));
-        if (channels && (channels.length < 4 || channels[3] > 0)) {
-          background = candidate;
-          break;
-        }
+        backgrounds.push(rgba(getComputedStyle(current).backgroundColor));
         current = current.parentElement;
       }
-      return { role: element.tagName.toLowerCase(), color, background };
-    }),
-  );
+      let background = [255, 255, 255];
+      for (const layer of backgrounds.reverse()) background = over(layer, background);
+      const color = over(rgba(getComputedStyle(element).color), background);
+      return {
+        role: element.tagName.toLowerCase(),
+        color: rgb(color),
+        background: rgb(background),
+      };
+    });
+  });
 }
+
+test("contrast sampling composites translucent text and ancestor backgrounds", async ({ page }) => {
+  await page.setContent(
+    '<body style="background:black"><div style="background:rgba(255,255,255,0.1)"><span id="sample" style="color:black">Sample</span></div></body>',
+  );
+  const [sample] = await renderedContrastSamples(page, "#sample");
+  expect(contrastRatio(parseRgb(sample.color), parseRgb(sample.background))).toBeCloseTo(
+    1.2004565,
+    5,
+  );
+  await page.locator("#sample").evaluate((element) => {
+    element.style.color = "rgba(255,255,255,0.5)";
+  });
+  const [translucent] = await renderedContrastSamples(page, "#sample");
+  expect(contrastRatio(parseRgb(translucent.color), parseRgb(translucent.background))).toBeCloseTo(
+    5.2192379,
+    4,
+  );
+});
 
 test("built shell has a fresh style nonce and working library controls under CSP", async ({
   page,

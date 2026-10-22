@@ -12,11 +12,31 @@ for (const operation of ["asset load", "policy save"] as const) {
       route.fulfill({ json: { authenticated: true } }),
     );
     await page.route("**/v1/logout", (route) => route.fulfill({ json: { authenticated: false } }));
+    const schema = (name: string) => ({
+      asset_id: "00000000-0000-4000-8000-000000000001",
+      catalog: "demo",
+      target: "demo.orders",
+      schema_version: 1,
+      schema_fingerprint: name,
+      stable_field_ids: true,
+      supported_masks: ["null"],
+      fields: [
+        {
+          field_id: 1,
+          name,
+          human_path: name,
+          type: "string",
+          nullable: false,
+          kind: "scalar",
+          path: { version: 1, segments: [{ kind: "field", name, field_id: 1 }] },
+        },
+      ],
+    });
     if (operation === "asset load") {
       await page.route("**/v1/assets/*/schema", async (route) => {
         pending.markStarted(page, route.request());
         await pending.wait();
-        await route.fallback();
+        await route.fulfill({ json: schema("alice_private") });
       });
     }
     await page.goto("/#assets");
@@ -31,6 +51,11 @@ for (const operation of ["asset load", "policy save"] as const) {
     await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
     // A fresh fixture and different actor must not inherit Alice's pending data.
     await authenticatedApi(page);
+    if (operation === "asset load") {
+      await page.route("**/v1/assets/*/schema", (route) =>
+        route.fulfill({ json: schema("bob_public") }),
+      );
+    }
     await page.route("**/v1/session/bootstrap", (route) =>
       route.fulfill({ json: { authenticated: true } }),
     );
@@ -50,6 +75,12 @@ for (const operation of ["asset load", "policy save"] as const) {
     await expect(page.getByText("bob@example.invalid", { exact: true })).toBeVisible();
     pending.release();
     await pending.completed;
+    if (operation === "asset load") {
+      await page.getByRole("button", { name: "Show schema", exact: true }).click();
+      const sidebar = page.getByRole("complementary", { name: "Asset schema" });
+      await expect(sidebar.getByText("bob_public", { exact: true })).toBeVisible();
+      await expect(sidebar.getByText("alice_private", { exact: true })).toHaveCount(0);
+    }
     await expect(page.getByText("Live revision 1", { exact: true })).toBeVisible();
     await expect(page.getByText("Live revision 2", { exact: true })).toHaveCount(0);
     await expect(

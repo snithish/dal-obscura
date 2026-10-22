@@ -20,6 +20,7 @@ def test_browser_session_is_opaque_and_revocable(engine_factory) -> None:
         principal="owner@example.com",
         groups=("asset-owners",),
         platform_admin=False,
+        issuer="https://issuer-a.example/",
     )
     factory = session_factory(engine)
 
@@ -61,24 +62,6 @@ def test_browser_session_expiry_is_enforced(engine_factory, monkeypatch) -> None
     )
     with factory() as session:
         assert BrowserSessionStore(session).resolve(token) is None
-
-
-def test_browser_session_preserves_identity_provider_scope(engine_factory) -> None:
-    engine = engine_factory("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    actor = ControlPlaneActor(
-        principal="alice",
-        groups=("asset-owners",),
-        issuer="https://issuer-a.example/",
-    )
-    factory = session_factory(engine)
-
-    with factory() as session:
-        token = BrowserSessionStore(session).issue(actor, ttl_seconds=3600)
-        session.commit()
-
-    with factory() as session:
-        assert BrowserSessionStore(session).resolve(token) == actor
 
 
 def test_browser_session_csrf_secret_is_bound_to_session(engine_factory) -> None:

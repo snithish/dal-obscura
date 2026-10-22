@@ -158,7 +158,7 @@ def test_live_config_preserves_external_plugin_identity():
         admitted_schema=None,
         asset_id=None,
     )
-    catalog = PublishedCatalog("analytics", "manifest", 0, {"root": "/srv/data"})
+    catalog = PublishedCatalog("analytics", "manifest", 17, {"root": "/srv/data"})
     resolved = capture_catalog(
         replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
         plugin_registry=AdmissionPlugins(
@@ -167,26 +167,6 @@ def test_live_config_preserves_external_plugin_identity():
     )
     assert resolved.plugin_id == "manifest"
     assert resolved.options == {"root": "/srv/data"}
-
-
-def test_live_config_preserves_catalog_plugin_revision():
-    asset = PublishedAssetSnapshot(
-        catalog=PublishedCatalog("analytics", "manifest", 0, {}),
-        target="default.users",
-        source=PublishedSource("parquet.dataset", "default.users", {}),
-        policy=AssetPolicy(1, "analytics", "default.users", []),
-        admitted_schema=None,
-        asset_id=None,
-    )
-    catalog = PublishedCatalog("analytics", "manifest", 17, {"root": "/srv/data"})
-
-    resolved = capture_catalog(
-        replace(asset, catalog=replace(catalog, plugin_id=asset.catalog.plugin_id)),
-        plugin_registry=AdmissionPlugins(
-            ("catalog", "manifest"), ("table_format", "parquet.dataset")
-        ),
-    )
-
     assert resolved.revision == 17
 
 

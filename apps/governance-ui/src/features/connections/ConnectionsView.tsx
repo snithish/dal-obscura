@@ -285,7 +285,10 @@ export function ConnectionsView({
         scope: "connection",
       });
     const missing = effectiveFields.filter(
-      (field) => field.required && !config[field.name]?.trim(),
+      (field) =>
+        field.required &&
+        !config[field.name]?.trim() &&
+        !(field.secret && preserveSecretReference(editingCatalog?.options[field.name])),
     );
     if (missing.length)
       return setMessage({

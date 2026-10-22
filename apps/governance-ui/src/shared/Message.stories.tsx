@@ -26,4 +26,4 @@ export const Information: Story = {
   },
 };
 
-export const DarkError: Story = { ...Error, globals: { theme: "dark" } };
+export const DarkError: Story = { args: Error.args, globals: { theme: "dark" } };

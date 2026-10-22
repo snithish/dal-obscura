@@ -16,15 +16,10 @@ test("provider validation waits for blur and clears while retyping", async ({ pa
   await issuer.fill("https://new.example.invalid");
   await expect(page.getByText("Issuer URL is required.", { exact: true })).toHaveCount(0);
 });
-test("bootstrap token discourages password autofill and desktop focus skips hidden nav", async ({
-  page,
-}) => {
+test("bootstrap token discourages password autofill", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
   await expect(page.getByRole("heading", { name: "Governed assets" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Open navigation menu", includeHidden: true }),
-  ).not.toBeFocused();
   await page.route("**/v1/session/options", (route) =>
     route.fulfill({ json: { bootstrap_enabled: true, oidc: null } }),
   );
@@ -36,6 +31,10 @@ test("activity refresh exposes busy state while retaining loaded rows", async ({
   await authenticatedApi(page, { admin: true, configuredAudit: true });
   await page.goto("/#activity");
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
+  await page.getByLabel("Action").fill("asset.policy.replace");
+  await page.getByRole("button", { name: "Apply filters", exact: true }).click();
+  const row = page.locator("strong").filter({ hasText: "asset.policy.replace" });
+  await expect(row).toBeVisible();
   await page.route("**/v1/audit/events/page?*", async (route) => {
     pending.markStarted(page, route.request());
     await pending.wait();
@@ -47,9 +46,12 @@ test("activity refresh exposes busy state while retaining loaded rows", async ({
   try {
     await expect(page.getByRole("status").filter({ hasText: "Updating activity…" })).toBeVisible();
     await expect(page.locator('[aria-busy="true"]')).toBeVisible();
+    await expect(row).toBeVisible();
   } finally {
     pending.release();
   }
+  await pending.completed;
+  await expect(row).toHaveCount(0);
 });
 
 test("submitting a new untouched provider validates its required issuer locally", async ({

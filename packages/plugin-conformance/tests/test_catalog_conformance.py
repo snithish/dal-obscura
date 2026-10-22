@@ -195,7 +195,8 @@ def test_catalog_runner_rejects_duplicate_and_cyclic_pages(plugin_type, message)
     assert any(message in failure for failure in result.failures)
 
 
-def test_catalog_runner_stops_before_requesting_after_cancellation():
+@pytest.mark.parametrize("cancel_during", ["namespaces", "terminal-page"])
+def test_catalog_runner_stops_before_requesting_after_cancellation(cancel_during):
     users = TableIdentifier(namespace=("default",), name="users")
     cancelled = Event()
     requested = 0
@@ -204,7 +205,8 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
         descriptor = _catalog_descriptor()
 
         def list_namespaces(self, context):
-            cancelled.set()
+            if cancel_during == "namespaces":
+                cancelled.set()
             return (("default",),)
 
         def close(self):
@@ -214,11 +216,12 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
             del context, continuation, limit
             nonlocal requested
             requested += 1
-            return DiscoveryPage((users,), continuation="next")
+            cancelled.set()
+            return DiscoveryPage((users,))
 
     result = run_catalog_checks(
         cast(CatalogPlugin, _CancelledCatalog()), _catalog_context(cancel_check=cancelled.is_set)
     )
     assert result.to_dict()["status"] == "failed"
     assert any("cancelled" in failure for failure in result.failures)
-    assert requested == 0
+    assert requested == (0 if cancel_during == "namespaces" else 1)

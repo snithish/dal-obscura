@@ -65,18 +65,6 @@ def _policy_rules() -> list[dict[str, object]]:
     ]
 
 
-def test_python_sdk_read_batches_does_not_materialize_flight_stream():
-    batch = id_email_region_batch([1], ["a@example.com"], ["us"])
-    sdk = DalObscuraClient.from_flight_client(
-        _StreamingFlightClient(batch),
-        auth_token="token",
-    )
-
-    result = list(sdk.read_batches(catalog="analytics", target="users", columns=["id"]))
-
-    assert result == [batch]
-
-
 def test_python_sdk_batch_stream_closes_reader_when_consumer_stops_early():
     batch = id_email_region_batch([1], ["a@example.com"], ["us"])
     client = _StreamingFlightClient(batch)
@@ -89,7 +77,7 @@ def test_python_sdk_batch_stream_closes_reader_when_consumer_stops_early():
     assert client.reader.closed is True
 
 
-def test_python_sdk_resolves_refreshed_token_for_plan_and_ticket_stream():
+def test_python_sdk_streams_batches_without_materializing_and_refreshes_tokens():
     batch = id_email_region_batch([1], ["a@example.com"], ["us"])
     client = _StreamingFlightClient(batch)
     tokens = iter(["plan-token", "stream-token"])

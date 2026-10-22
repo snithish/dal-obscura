@@ -260,74 +260,41 @@ def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch):
         plugin.close()
 
 
-def test_rest_catalog_closes_owned_http_session_once(monkeypatch):
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_rest_catalog_closes_owned_http_session_once_and_is_terminal(monkeypatch, close_fails):
     closed = []
+    requested = []
+    owned = None
     original_close = RequestsSession.close
 
     def close(session):
         closed.append(session)
         original_close(session)
-
-    monkeypatch.setattr(RequestsSession, "close", close)
-    monkeypatch.setattr(
-        RequestsSession,
-        "request",
-        lambda self, method, url, **kwargs: response(
-            {"defaults": {}, "overrides": {}} if url.endswith("/config") else {"namespaces": []}
-        ),
-    )
-    plugin = RestCatalog(_config(), _context())
-    assert plugin.list_namespaces(_context()) == ()
-    plugin.close()
-    plugin.close()
-    assert closed
-    assert len(closed) == len(set(closed))
-
-
-def test_rest_catalog_close_releases_provider_session_and_is_terminal(monkeypatch) -> None:
-    plugin = RestCatalog(_config(), _context())
-    closed = []
-
-    class Session:
-        def close(self):
-            closed.append(True)
-
-    class FakeCatalog:
-        def close(self):
-            Session().close()
-
-    install_provider(monkeypatch, FakeCatalog())
-    plugin.list_namespaces(_context())
-    plugin.close()
-    plugin.close()
-
-    assert closed == [True]
-    with pytest.raises(ValueError, match="closed"):
-        plugin.list_tables(_context(), limit=1)
-
-
-def test_rest_catalog_preserves_provider_close_failure_and_is_terminal(monkeypatch) -> None:
-    closed: list[str] = []
-    plugin = RestCatalog(_config(), _context())
-
-    class Session:
-        def close(self):
-            closed.append("session")
-
-    class FailingCatalog:
-        def close(self):
-            closed.append("catalog")
-            Session().close()
+        if session is owned and close_fails:
             raise RuntimeError("catalog close failed")
 
-    install_provider(monkeypatch, FailingCatalog())
-    plugin.list_namespaces(_context())
-    with pytest.raises(RuntimeError, match="catalog close failed"):
-        plugin.close()
+    def request(session, method, url, **kwargs):
+        requested.append(session)
+        return response(
+            {"defaults": {}, "overrides": {}} if url.endswith("/config") else {"namespaces": []}
+        )
 
-    assert closed == ["catalog", "session"]
+    monkeypatch.setattr(RequestsSession, "close", close)
+    monkeypatch.setattr(RequestsSession, "request", request)
+    plugin = RestCatalog(_config(), _context())
+    assert plugin.list_namespaces(_context()) == ()
+    owned = requested[-1]
+    assert owned not in closed
+    if close_fails:
+        with pytest.raises(RuntimeError, match="catalog close failed"):
+            plugin.close()
+    else:
+        plugin.close()
+    plugin.close()
+    assert closed.count(owned) == 1
+    assert len(closed) == len(set(closed))
     with pytest.raises(ValueError, match="closed"):
-        plugin.list_namespaces(_context())
+        plugin.list_tables(_context(), limit=1)
 
 
 @pytest.mark.parametrize(

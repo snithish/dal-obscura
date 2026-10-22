@@ -1,13 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { assertWebVitals, observeWebVitals } from "../../scripts/web-vitals-budget";
 import { authenticatedApi } from "../support/fixtures";
-
-declare global {
-  interface Window {
-    __dalObscuraWebVitals: { lcp: number | null; cls: number };
-  }
-}
-
-type LayoutShift = PerformanceEntry & { hadRecentInput: boolean; value: number };
 
 test("schema reference and column picker virtualize 10k fields and keep search responsive", async ({
   page,
@@ -80,26 +73,12 @@ test("schema reference and column picker virtualize 10k fields and keep search r
 
 test("authenticated policy workspace meets local web-vitals thresholds", async ({ page }) => {
   await authenticatedApi(page);
-  await page.addInitScript(() => {
-    window.__dalObscuraWebVitals = { lcp: null, cls: 0 };
-    new PerformanceObserver((list) => {
-      const last = list.getEntries().at(-1);
-      if (last) window.__dalObscuraWebVitals.lcp = last.startTime;
-    }).observe({ type: "largest-contentful-paint", buffered: true });
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        const shift = entry as LayoutShift;
-        if (!shift.hadRecentInput) window.__dalObscuraWebVitals.cls += shift.value;
-      }
-    }).observe({ type: "layout-shift", buffered: true });
-  });
+  await page.addInitScript(observeWebVitals);
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets", {
     waitUntil: "networkidle",
   });
   await expect(page.getByRole("heading", { name: "orders", exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => window.__dalObscuraWebVitals);
-  expect(metrics.lcp).not.toBeNull();
-  expect(metrics.lcp, "local authenticated LCP").toBeLessThanOrEqual(2500);
-  expect(metrics.cls, "local authenticated CLS").toBeLessThanOrEqual(0.1);
+  assertWebVitals({ lcpMs: metrics.lcp, cls: metrics.cls });
 });

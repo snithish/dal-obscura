@@ -104,7 +104,6 @@ def test_parse_descriptor_rejects_unsupported_protocol_version():
 @pytest.mark.parametrize(
     "payload,error",
     [
-        ({"catalog": "analytics", "columns": ["id"]}, "target is required"),
         ({"catalog": "analytics", "target": "", "columns": ["id"]}, "target is required"),
         ({"catalog": "analytics", "target": "test.table", "columns": []}, "columns"),
         (

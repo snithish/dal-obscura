@@ -32,6 +32,11 @@ type Story = StoryObj<typeof meta>;
 export const UnexpectedRequestsFail: Story = {
   play: async () => {
     expect(() => fetch("/v1/session")).toThrow("Unexpected story network request");
+    expect(() => fetch("/auth/login")).toThrow("Unexpected story network request");
+    expect(() => new XMLHttpRequest().open("GET", "/v1/session")).toThrow(
+      "Unexpected story network request",
+    );
+    expect(() => navigator.sendBeacon("/auth/logout")).toThrow("Unexpected story network request");
     expect(() => fetch("https://idp.example.invalid/.well-known/openid-configuration")).toThrow(
       "Unexpected story network request",
     );

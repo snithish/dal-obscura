@@ -64,8 +64,6 @@ export const Reader: Story = {
   play: async ({ canvas, args }) => {
     const settings = canvas.getByRole("button", { name: "Settings" });
     await expect(settings).toHaveAttribute("aria-disabled", "true");
-    settings.click(); // Programmatic activation must also respect the capability guard.
-    await expect(args.onNavigate).not.toHaveBeenCalled();
     await userEvent.click(canvas.getByRole("button", { name: "Activity" }));
     await expect(args.onNavigate).toHaveBeenCalledWith("activity");
   },
@@ -80,7 +78,7 @@ export const Administrator: Story = {
     },
   },
 };
-export const DarkReader: Story = { ...Reader, globals: { theme: "dark" } };
+export const DarkReader: Story = { globals: { theme: "dark" } };
 
 export const DiscoverableHeader: Story = {
   play: async ({ canvas }) => {

@@ -42,6 +42,7 @@ for (const width of [1440, 390, 320]) {
       if (request.method() !== "GET" && request.url().includes("/v1/assets/")) writes++;
     });
     const sidebar = await openDeepReference(page);
+    await expect(sidebar.locator(".schema-reference-row").last()).toBeInViewport();
     const row = sidebar.getByRole("button", { name: `Inspect ${referencePath}`, exact: true });
     await row.focus();
     await row.press("Enter");
@@ -61,7 +62,7 @@ for (const width of [1440, 390, 320]) {
     await details.press("End");
     await expect.poll(() => details.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
     await details.press("Home");
-    await expect(details.locator("[data-field-detail=type]")).toBeInViewport();
+    await expect.poll(() => details.evaluate((element) => element.scrollTop)).toBe(0);
     expect(writes).toBe(0);
     const result = await new AxeBuilder({ page }).include("#asset-schema-sidebar").analyze();
     expect(result.violations).toEqual([]);

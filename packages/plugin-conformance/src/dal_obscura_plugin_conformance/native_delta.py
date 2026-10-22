@@ -1,6 +1,7 @@
 """Native Delta Spark mutations for the JVM qualification lane."""
 
 import os
+import sys
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from pathlib import Path
@@ -44,31 +45,58 @@ def delta_writer() -> Generator[Any]:
             cast(Any, spark).sparkContext.setLogLevel("ERROR")
             yield spark
         finally:
-            if spark is not None:
-                spark.stop()
-            # PySpark retains its gateway after SparkSession.stop(). Its launch
-            # arguments reference this driver's temporary jars, so reuse after
-            # cleanup is invalid. Release the process and its cached bindings.
-            gateway = SparkContext._gateway
-            if gateway is not None:
-                gateway.shutdown()
-                process = getattr(gateway, "proc", None)
-                if process is not None:
+            primary_error = sys.exception()
+            cleanup_error = None
+            try:
+                if spark is not None:
+                    spark.stop()
+            except BaseException as exc:
+                cleanup_error = exc
+            try:
+                # PySpark's cached gateway refers to this driver's temporary jars.
+                gateway = SparkContext._gateway
+                if gateway is not None:
                     try:
-                        process.wait(timeout=10)
-                    except TimeoutExpired:
-                        process.terminate()
-                        process.wait(timeout=10)
+                        _shutdown_gateway(gateway)
                     finally:
-                        for stream in (process.stdin, process.stdout, process.stderr):
-                            if stream is not None:
-                                close_preserving_error(stream)
-                SparkContext._gateway = None
-                SparkContext._jvm = None
-            if previous is None:
-                os.environ.pop("SPARK_LOCAL_IP", None)
-            else:
-                os.environ["SPARK_LOCAL_IP"] = previous
+                        SparkContext._gateway = None
+                        SparkContext._jvm = None
+            except BaseException as exc:
+                if cleanup_error is None:
+                    cleanup_error = exc
+            finally:
+                if previous is None:
+                    os.environ.pop("SPARK_LOCAL_IP", None)
+                else:
+                    os.environ["SPARK_LOCAL_IP"] = previous
+            if primary_error is None and cleanup_error is not None:
+                raise cleanup_error
+
+
+def _shutdown_gateway(gateway: Any) -> None:
+    try:
+        gateway.shutdown()
+    finally:
+        process = getattr(gateway, "proc", None)
+        if process is not None:
+            try:
+                try:
+                    process.wait(timeout=10)
+                except TimeoutExpired:
+                    process.terminate()
+                    process.wait(timeout=10)
+            finally:
+                primary_error = sys.exception()
+                cleanup_error = None
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    if stream is not None:
+                        try:
+                            close_preserving_error(stream)
+                        except BaseException as error:
+                            if cleanup_error is None:
+                                cleanup_error = error
+                if primary_error is None and cleanup_error is not None:
+                    raise cleanup_error
 
 
 def delete_delta_rows(path: Path, identifiers: Iterable[int], *, spark: Any = None) -> None:

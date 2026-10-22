@@ -3,7 +3,7 @@ import { Page } from "@playwright/test";
 import { authenticatedApi } from "./fixtures";
 
 export const uxAssetId = "00000000-0000-4000-8000-000000000001";
-export const uxRule = {
+const uxRule = {
   ordinal: 10,
   name: "Regional analysts",
   description: "Customer reporting for the European analytics team.",
@@ -28,7 +28,7 @@ const field = (
   path: { version: 1, segments: [{ kind: "field", name, field_id }] },
 });
 const customer = field("customer", 1, "struct");
-export const uxFields: ApiSchemas["SchemaNodeResponse"][] = [
+const uxFields: ApiSchemas["SchemaNodeResponse"][] = [
   {
     ...customer,
     kind: "struct",

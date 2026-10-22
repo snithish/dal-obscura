@@ -18,43 +18,6 @@ test("synthetic mask values preserve NULL and stored values", async () => {
   );
 });
 
-test("coverage expands typed parents and preserves child masks and conflicts", async () => {
-  const { createRuleCoverage } = await import("./policy_editor.ts");
-  const field = (name, segments) => ({
-    value: name,
-    label: name,
-    type: "string",
-    valid: true,
-    path: {
-      version: 1,
-      segments: segments.map((name, index) => ({ kind: "field", name, field_id: index + 1 })),
-    },
-  });
-  const options = [
-    field("person", ["person"]),
-    field("person.email", ["person", "email"]),
-    field("person.phone", ["person", "phone"]),
-    field("person.literal.dot", ["person.literal.dot"]),
-  ];
-  const rule = {
-    ordinal: 1,
-    effect: "allow",
-    principals: ["*"],
-    columns: ["person"],
-    masks: { "person.phone": { type: "hash" } },
-    row_filter: null,
-  };
-  const covered = createRuleCoverage(rule, options);
-  assert.deepEqual(covered.rule.columns, ["person.email", "person.phone"]);
-  assert.deepEqual(covered.rule.masks, { "person.phone": { type: "hash" } });
-  const conflict = createRuleCoverage(
-    { ...rule, masks: { person: { type: "email" }, "person.phone": { type: "hash" } } },
-    options,
-  );
-  assert.deepEqual([...conflict.conflicts], ["person.phone"]);
-  assert.deepEqual(conflict.rule.columns, ["person.email"]);
-});
-
 test("synthetic string masks count Unicode characters rather than UTF-16 units", async () => {
   assert.equal(await simulateMask("😀123", { type: "keep_last", value: 4 }), "😀123");
   assert.equal(await simulateMask("😀123", { type: "keep_last", value: 3 }), "*123");

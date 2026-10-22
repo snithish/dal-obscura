@@ -15,49 +15,6 @@ from dal_obscura.kernel.plans.request import PlanRequest
 from tests.support.plugins.public_plugins import _contract_format
 
 
-def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization() -> None:
-    identifier = TableIdentifier(namespace=("default",), name="users")
-    handle = TableHandle(
-        catalog_plugin_id="manifest",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=identifier,
-        format_plugin_id="parquet.dataset",
-        handle_version=1,
-    )
-    schema = pa.schema([pa.field("id", pa.int64())])
-
-    class OpaqueFormat:
-        descriptor = FORMAT_DESCRIPTOR
-
-        def close(self):
-            return None
-
-        def schema(self, context):
-            del context
-            from dal_obscura_plugin_api import SchemaDescriptor
-
-            return SchemaDescriptor(arrow_schema=schema)
-
-        def plan(self, request, context):
-            del request, context
-            return [object()]
-
-        def execute(self, task, context):
-            del task, context
-            return schema, []
-
-    table_format = PublicPluginTableFormat(
-        catalog_name="fixture",
-        table_name="default.users",
-        format="parquet.dataset",
-        format_factory=lambda value, context: OpaqueFormat(),
-        handle=handle,
-    )
-    with pytest.raises(ValueError, match="immutable ScanTask"):
-        table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
-
-
 def test_public_format_requires_explicit_close_lifecycle() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(
@@ -620,7 +577,7 @@ def test_runtime_closes_lazy_plans_before_closing_the_plugin(invalid_task):
     from dataclasses import replace
 
     table = replace(base, format_factory=factory)
-    with pytest.raises(ValueError, match=r"immutable ScanTask|more tasks"):
+    with pytest.raises(ValueError, match="immutable ScanTask" if invalid_task else "more tasks"):
         table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
     assert closed == ["plan", "plugin"]
 

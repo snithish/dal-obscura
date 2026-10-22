@@ -114,7 +114,9 @@ test("browser history restores asset tabs and guards unfinished forms", async ({
   await expect(page.getByLabel("Find governed asset")).toBeVisible();
 });
 
-test("unavailable deep link can return to inventory", async ({ page }) => {
+test("unavailable deep links never substitute an asset and can return to inventory", async ({
+  page,
+}) => {
   await authenticatedApi(page);
   await page.route("**/v1/assets/missing**", (route) =>
     route.fulfill({
@@ -126,6 +128,7 @@ test("unavailable deep link can return to inventory", async ({ page }) => {
   );
   await page.goto("/?asset=missing#assets");
   await expect(page.getByRole("heading", { name: "Asset unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
   await expect(page.getByLabel("Find governed asset")).toHaveCount(0);
   await page.getByRole("button", { name: "Back to assets" }).click();
   await expect(page.getByRole("button", { name: "orders", exact: true })).toBeVisible();

@@ -1,11 +1,13 @@
 """Provider configuration and bounded catalog discovery through the public SDK."""
 
 from datetime import UTC, datetime, timedelta
+from itertools import count
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
 from dal_obscura_iceberg.catalog import IcebergCatalog
+from dal_obscura_iceberg.discovery import DEFAULT_MAX_NAMESPACES, DEFAULT_MAX_TABLES
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
 
@@ -95,44 +97,33 @@ def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypat
         catalog.list_tables(_context())
 
 
-def test_iceberg_registry_bounds_unbounded_namespace_providers(monkeypatch):
+@pytest.mark.parametrize(
+    ("kind", "max_pulls"),
+    [("namespace", DEFAULT_MAX_NAMESPACES), ("table", DEFAULT_MAX_TABLES + 1)],
+)
+def test_iceberg_registry_bounds_unbounded_providers(monkeypatch, kind, max_pulls):
+    pulled = 0
+
+    def unbounded():
+        nonlocal pulled
+        for index in count():
+            pulled += 1
+            if pulled > max_pulls:
+                pytest.fail("Discovery consumed beyond its configured budget")
+            yield ("users", str(index))
+
     class EndlessCatalog:
         def list_namespaces(self, namespace):
-            del namespace
-            return (("namespace", str(index)) for index in range(100_000))
+            return unbounded() if kind == "namespace" else [()]
 
         def list_tables(self, namespace):
-            del namespace
-            return []
+            return unbounded() if kind == "table" else ()
 
-    monkeypatch.setattr(
-        "pyiceberg.catalog.load_catalog",
-        lambda catalog_name, **options: EndlessCatalog(),
-    )
+    monkeypatch.setattr("pyiceberg.catalog.load_catalog", lambda *args, **kwargs: EndlessCatalog())
     catalog = _catalog(name="analytics", options={})
-
-    with pytest.raises(ValueError, match=r"namespace limit"):
+    with pytest.raises(ValueError, match=kind + " limit"):
         catalog.list_tables(_context())
-
-
-def test_iceberg_registry_bounds_unbounded_table_providers(monkeypatch):
-    class EndlessCatalog:
-        def list_namespaces(self, namespace):
-            del namespace
-            return [()]
-
-        def list_tables(self, namespace):
-            del namespace
-            return (("users", str(index)) for index in range(100_000))
-
-    monkeypatch.setattr(
-        "pyiceberg.catalog.load_catalog",
-        lambda catalog_name, **options: EndlessCatalog(),
-    )
-    catalog = _catalog(name="analytics", options={})
-
-    with pytest.raises(ValueError, match="table limit"):
-        catalog.list_tables(_context())
+    assert pulled == max_pulls
 
 
 class FakePyIcebergTable:

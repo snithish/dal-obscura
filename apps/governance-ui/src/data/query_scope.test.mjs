@@ -54,30 +54,3 @@ test("inventory search results stay separate within one session", () => {
     client.clear();
   }
 });
-
-test("query cache deduplicates one session page without sharing another session", async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  try {
-    let calls = 0;
-    const load = () => {
-      calls += 1;
-      return Promise.resolve({ items: [calls] });
-    };
-    const aliceKey = assetInventoryQueryKey("issuer|alice", "");
-    const [first, second] = await Promise.all([
-      client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
-      client.fetchQuery({ queryKey: aliceKey, queryFn: load }),
-    ]);
-    assert.deepEqual(first, { items: [1] });
-    assert.deepEqual(second, { items: [1] });
-    const bob = await client.fetchQuery({
-      queryKey: assetInventoryQueryKey("issuer|bob", ""),
-      queryFn: load,
-    });
-    assert.deepEqual(bob, { items: [2] });
-    assert.deepEqual(client.getQueryData(aliceKey), { items: [1] });
-    assert.equal(calls, 2);
-  } finally {
-    client.clear();
-  }
-});

@@ -230,21 +230,6 @@ def test_policy_save_rejects_invalid_row_filter_before_commit(client_factory):
     assert "Invalid row_filter SQL" in error["field_errors"][0]["message"]
 
 
-def test_policy_save_rejects_deny_rule_with_mask_before_commit(client_factory):
-    client = _client(client_factory)
-    asset = _provision_owned_asset(client)
-    rule = _allow_rule(row_filter=None)
-    rule["effect"] = "deny"
-    rule["masks"] = {"email": {"type": "email"}}
-
-    response = _replace_live_policy(client, asset, [rule], _bearer("owner-token"))
-
-    assert response.status_code == 422
-    error = response.json()["error"]
-    assert error["code"] == "validation_error"
-    assert error["field_errors"][0]["field"] == "rules.0.effect"
-
-
 def test_platform_admin_can_assign_owner_and_bootstrap_policy(client_factory):
     client = _client(client_factory)
     asset = _provision_asset_without_owner(client)

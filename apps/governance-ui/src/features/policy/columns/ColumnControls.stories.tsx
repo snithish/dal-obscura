@@ -68,24 +68,42 @@ export const WideSchema: Story = {
   play: async ({ canvas, canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole("button", { name: "Allowed columns: 0 selected" }));
+    await body.findByRole("combobox", { name: "Search allowed columns" });
+    await waitFor(() => expect(body.getByText("500 results", { exact: true })).toBeVisible());
+    await expect(body.getAllByRole("option").length).toBeLessThanOrEqual(12);
     await userEvent.type(
       await body.findByRole("combobox", { name: "Search allowed columns" }),
       "field-24",
     );
-    const renderedOptions = body.getAllByRole("option").length;
-    await expect(renderedOptions).toBeLessThanOrEqual(12);
+    await expect(body.getByRole("option", { name: /^field-24\s+string$/ })).toBeVisible();
     await expect(body.getByRole("button", { name: /Select search results \(/ })).toBeVisible();
   },
 };
 
 export const NarrowLayout: Story = {
   render: (args) => (
-    <div style={{ width: 320 }}>
+    <div data-testid="narrow-column-controls" style={{ width: 320 }}>
       <ColumnMultiSelect {...args} />
     </div>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("button", { name: "Allowed columns: 1 selected" })).toBeVisible();
+  play: async ({ canvas, canvasElement, args }) => {
+    const trigger = canvas.getByRole("button", { name: "Allowed columns: 1 selected" });
+    await expect(trigger).toBeVisible();
     await expect(canvas.getByText("email")).toBeVisible();
+    const container = canvas.getByTestId("narrow-column-controls");
+    await expect(container.scrollWidth).toBeLessThanOrEqual(container.clientWidth);
+    const bounds = trigger.getBoundingClientRect();
+    const parent = container.getBoundingClientRect();
+    await expect(bounds.left).toBeGreaterThanOrEqual(parent.left);
+    await expect(bounds.right).toBeLessThanOrEqual(parent.right);
+    await userEvent.click(trigger);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.type(
+      await body.findByRole("combobox", { name: "Search allowed columns" }),
+      "phone",
+    );
+    await userEvent.click(body.getByRole("option", { name: /phone/ }));
+    await expect(args.onChange).toHaveBeenCalledWith(["email", "phone"]);
+    await userEvent.keyboard("{Escape}");
   },
 };

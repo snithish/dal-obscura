@@ -81,36 +81,20 @@ test("authenticated reader shell has no serious or critical accessibility violat
   expect(blockingViolations).toEqual([]);
 });
 
-test("reader deep links fail closed before admin settings requests", async ({ page }) => {
-  const adminRequests: string[] = [];
-  page.on("request", (request) => {
-    const path = new URL(request.url()).pathname;
-    if (path.startsWith("/v1/settings/")) adminRequests.push(path);
+for (const [route, forbiddenPrefixes] of [
+  ["settings", ["/v1/settings/"]],
+  ["connections", ["/v1/settings/", "/v1/catalogs", "/v1/plugins"]],
+] as const) {
+  test(`reader deep links fail closed before ${route} requests`, async ({ page }) => {
+    const adminRequests: string[] = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (forbiddenPrefixes.some((prefix) => path.startsWith(prefix))) adminRequests.push(path);
+    });
+    await authenticatedApi(page);
+    await page.goto(`/#${route}`);
+    await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
+    await expect.poll(() => new URL(page.url()).hash).toBe("#assets");
+    expect(adminRequests).toEqual([]);
   });
-  await authenticatedApi(page);
-  await page.goto("/#settings");
-
-  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
-  await expect.poll(() => new URL(page.url()).hash).toBe("#assets");
-  expect(adminRequests).toEqual([]);
-});
-
-test("reader deep links fail closed before connection management requests", async ({ page }) => {
-  const adminRequests: string[] = [];
-  page.on("request", (request) => {
-    const path = new URL(request.url()).pathname;
-    if (
-      path.startsWith("/v1/settings/") ||
-      path.startsWith("/v1/catalogs") ||
-      path.startsWith("/v1/plugins")
-    ) {
-      adminRequests.push(path);
-    }
-  });
-  await authenticatedApi(page);
-  await page.goto("/#connections");
-
-  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
-  await expect.poll(() => new URL(page.url()).hash).toBe("#assets");
-  expect(adminRequests).toEqual([]);
-});
+}

@@ -98,7 +98,9 @@ def test_rest_plugin_does_not_follow_redirect_to_new_destination() -> None:
             del format, args
 
     denied_server = ThreadingHTTPServer(("127.0.0.1", 0), DeniedHandler)
-    denied_thread = Thread(target=denied_server.serve_forever, daemon=True)
+    denied_thread = Thread(
+        target=denied_server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
     denied_thread.start()
     source_paths: list[str] = []
 
@@ -116,7 +118,9 @@ def test_rest_plugin_does_not_follow_redirect_to_new_destination() -> None:
             del format, args
 
     source_server = ThreadingHTTPServer(("127.0.0.1", 0), SourceHandler)
-    source_thread = Thread(target=source_server.serve_forever, daemon=True)
+    source_thread = Thread(
+        target=source_server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
     source_thread.start()
     catalog = RestCatalog(
         _rest_config(uri=f"http://127.0.0.1:{source_server.server_port}"),

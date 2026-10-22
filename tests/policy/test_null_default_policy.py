@@ -1,3 +1,5 @@
+import pytest
+
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.policy.models import AccessRule, DatasetPolicy, MaskRule, Policy
 from dal_obscura.kernel.policy.policy_resolution import resolve_access
@@ -13,8 +15,16 @@ def resolve(rules, principal=None):
     )
 
 
-def test_unmatched_columns_are_returned_as_null():
-    columns, masks, row_filter = resolve([])
+@pytest.mark.parametrize(
+    "rules",
+    [
+        [],
+        [AccessRule(principals=["group:other"], columns=["email"], masks={}, row_filter=None)],
+    ],
+    ids=["empty-policy", "unmatched-principal"],
+)
+def test_unmatched_columns_are_returned_as_null(rules):
+    columns, masks, row_filter = resolve(rules)
     assert columns == ["email", "country"]
     assert masks == {"email": MaskRule(type="null"), "country": MaskRule(type="null")}
     assert row_filter is None
@@ -78,8 +88,6 @@ def test_explicit_null_wins_over_incompatible_masks_in_every_order():
 
 
 def test_policy_compiler_rejects_non_null_map_key_masks():
-    import pytest
-
     from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
@@ -97,8 +105,6 @@ def test_policy_compiler_rejects_non_null_map_key_masks():
 
 
 def test_compiler_rejects_display_aliases_and_requires_canonical_paths():
-    import pytest
-
     from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
@@ -115,8 +121,6 @@ def test_compiler_rejects_display_aliases_and_requires_canonical_paths():
 def test_overlapping_masks_cannot_silently_replace_each_other():
     from itertools import permutations
 
-    import pytest
-
     from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 
@@ -132,8 +136,6 @@ def test_overlapping_masks_cannot_silently_replace_each_other():
 
 
 def test_unused_mask_values_are_rejected_instead_of_affecting_conflict_resolution():
-    import pytest
-
     from dal_obscura.application.governance.errors import ValidationFailure
     from dal_obscura.application.governance.policies.compiler import compile_policy_rule_payloads
 

@@ -37,6 +37,11 @@ for (const [name, failure, expected] of [
   ],
   ["unknown status", { status: 418 }, "fallback"],
   [
+    "validation without HTTP status",
+    { code: "validation_error", message: "Invalid field" },
+    "Invalid field",
+  ],
+  [
     "HTML challenge",
     { status: 401, code: "auth_challenge" },
     "The browser or edge session expired. Sign in again to continue.",

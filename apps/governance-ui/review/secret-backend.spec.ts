@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "../e2e/support/fixtures";
 
-const phase = process.env.DAL_OBSCURA_REVIEW_PHASE ?? "after";
+import { reviewPhase as phase } from "./phase";
 const output = resolve("../../docs/ui-review/secret-backend");
 
 test("startup secret backend has a distinct plugin label", async ({ page }) => {

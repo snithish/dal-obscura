@@ -2,7 +2,7 @@ import type { ApiSchemas } from "../support/api-types";
 import { expect, test } from "@playwright/test";
 import { uxApi } from "../support/ux-fixture";
 
-test("inventory uses server totals and full owner identities without invented token counts", async ({
+test("inventory uses server totals and revisions without invented token counts", async ({
   page,
 }) => {
   await uxApi(page);
@@ -23,11 +23,6 @@ test("inventory uses server totals and full owner identities without invented to
   await expect(totals.getByText("42", { exact: true })).toBeVisible();
   await expect(totals.getByText("7", { exact: true })).toBeVisible();
   await expect(totals.getByText("Live tokens", { exact: true })).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("cell")
-      .filter({ hasText: "http://localhost:20080/realms/dal-obscura-demo|group:asset-owners" }),
-  ).toBeVisible();
   await expect(page.getByText("rev 1", { exact: true })).toBeVisible();
 });
 

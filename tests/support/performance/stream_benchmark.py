@@ -427,20 +427,6 @@ def _run_iceberg_stream_scenario(
         catalog_registry.close()
 
 
-def _run_large_iceberg_stream_scenario(
-    tmp_path: Path,
-    *,
-    sample_rss: bool = False,
-) -> dict[str, Any]:
-    return _run_iceberg_stream_scenario(
-        tmp_path,
-        total_rows=LARGE_BENCHMARK_TOTAL_ROWS,
-        rows_per_file=LARGE_BENCHMARK_ROWS_PER_FILE,
-        max_tickets=LARGE_BENCHMARK_MAX_TICKETS,
-        sample_rss=sample_rss,
-    )
-
-
 def _create_benchmark_iceberg_table(
     tmp_path: Path,
     *,

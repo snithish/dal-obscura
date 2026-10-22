@@ -10,10 +10,58 @@ from tests.support.control.workspace import (
 )
 
 
-@pytest.mark.parametrize("nullable", ["false", 0, None])
-def test_schema_admission_requires_boolean_nullability_without_coercion(client_factory, nullable):
+@pytest.fixture
+def asset_client(client_factory):
     client = client_factory()
-    asset = _provision_asset(client)
+    catalog = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "plugin_id": ICEBERG_CATALOG_ID,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert catalog.status_code == 200, catalog.text
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    )
+    assert asset.status_code == 200, asset.text
+    return client, asset.json()
+
+
+def test_schema_admission_preserves_exact_names_and_distinct_paths(asset_client):
+    client, asset = asset_client
+    names = ["x" * 257, "界" * 1024, "x" * 16384, " spaced.name "]
+    paths = [[name] for name in names] + [
+        ["a.b"],
+        ["a", "b"],
+        ["left", "value"],
+        ["right", "value"],
+    ]
+    fields = [
+        {"name": path[-1], "field_id": str(index), "path": path}
+        for index, path in enumerate(paths, 1)
+    ]
+    response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"expected_revision": 0, "fields": fields},
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+    expected = [
+        {**field, "field_id": f"iceberg:{field['field_id']}", "type": "string", "nullable": True}
+        for field in fields
+    ]
+    assert response.json()["fields"] == expected
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert detail["schema_fields"] == expected
+
+
+@pytest.mark.parametrize("nullable", ["false", 0, None])
+def test_schema_admission_requires_boolean_nullability_without_coercion(asset_client, nullable):
+    client, asset = asset_client
     response = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
         json={
@@ -34,9 +82,8 @@ def test_schema_admission_requires_boolean_nullability_without_coercion(client_f
     assert client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["revision"] == 0
 
 
-def test_asset_access_reports_effective_capabilities_and_reasons(client_factory):
-    client = client_factory()
-    asset = _provision_asset(client)
+def test_asset_access_reports_effective_capabilities_and_reasons(asset_client):
+    client, asset = asset_client
     admin = client.get(f"/v1/assets/{asset['id']}/access", headers=ADMIN_HEADERS)
     assert admin.status_code == 200
     assert admin.json()["principal"] == "platform:admin"
@@ -103,41 +150,8 @@ def test_workspace_asset_requires_physical_iceberg_identifier(client_factory):
     assert response.status_code == 422
 
 
-def test_asset_cannot_remove_its_last_owner_without_reassignment(client_factory):
-    client = client_factory()
-    asset = _provision_asset(client)
-    assigned = client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
-        headers=ADMIN_HEADERS,
-    )
-
-    removed = client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        json={"owners": [], "expected_revision": 1},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert assigned.status_code == 200
-    assert removed.status_code == 400
-    assert "last owner" in removed.json()["error"]["message"]
-
-
-def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail(client_factory):
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
+def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail(asset_client):
+    client, asset = asset_client
 
     legacy_response = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
@@ -222,68 +236,8 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail(client_
     ]
 
 
-def test_schema_fields_preserve_literal_dotted_and_nested_paths(client_factory):
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
-
-    response = client.put(
-        f"/v1/assets/{asset['id']}/schema-fields",
-        json={
-            "fields": [
-                {"name": "a.b", "path": ["a.b"], "field_id": "literal-1"},
-                {"name": "b", "path": ["a", "b"], "field_id": "nested-2"},
-            ],
-            "expected_revision": 0,
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 200
-    assert response.json()["fields"] == [
-        {
-            "name": "a.b",
-            "field_id": "iceberg:literal-1",
-            "path": ["a.b"],
-            "type": "string",
-            "nullable": True,
-        },
-        {
-            "name": "b",
-            "field_id": "iceberg:nested-2",
-            "path": ["a", "b"],
-            "type": "string",
-            "nullable": True,
-        },
-    ]
-
-
-def test_workspace_policy_can_be_replaced_directly_from_asset_detail(client_factory):
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
+def test_workspace_policy_can_be_replaced_directly_from_asset_detail(asset_client):
+    client, asset = asset_client
 
     response = client.put(
         f"/v1/assets/{asset['id']}/policy",
@@ -326,21 +280,8 @@ def test_workspace_policy_can_be_replaced_directly_from_asset_detail(client_fact
     ]
 
 
-def test_retired_asset_policy_preview_route_does_not_dispatch(client_factory):
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
+def test_retired_asset_policy_preview_route_does_not_dispatch(asset_client):
+    client, asset = asset_client
     response = client.post(
         f"/v1/assets/{asset['id']}/policy-preview",
         json={"principal": "user:alice@example.com"},
@@ -353,32 +294,40 @@ def test_retired_asset_policy_preview_route_does_not_dispatch(client_factory):
     assert "cell" not in _keys_recursive(response.json())
 
 
-def test_workspace_asset_owners_can_be_replaced_from_asset_detail(client_factory):
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
+def test_workspace_asset_owners_can_be_replaced_from_asset_detail(asset_client):
+    client, asset = asset_client
+
+    missing = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:alice@example.com"]},
         headers=ADMIN_HEADERS,
     )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
-
+    assert missing.status_code == 428
+    assert client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["revision"] == 0
     response = client.put(
         f"/v1/assets/{asset['id']}/owners",
         json={"owners": ["user:alice@example.com", "group:data-owners"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
+    removed = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": [], "expected_revision": 1},
+        headers=ADMIN_HEADERS,
+    )
+    assert removed.status_code == 400
+    assert "last owner" in removed.json()["error"]["message"]
     second_response = client.put(
         f"/v1/assets/{asset['id']}/owners",
         json={"owners": ["user:alice@example.com"], "expected_revision": 1},
         headers=ADMIN_HEADERS,
     )
+    stale = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:stale"], "expected_revision": 1},
+        headers=ADMIN_HEADERS,
+    )
+    assert stale.status_code == 409
+    assert "Asset revision changed" in stale.json()["error"]["message"]
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
@@ -396,32 +345,6 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail(client_factory
     assert summary["unowned_asset_count"] == 0
     assert summary["runtime_configured"] is False
     assert summary["enabled_auth_provider_count"] == 0
-
-
-def test_existing_asset_metadata_update_requires_revision_precondition(client_factory):
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
-
-    missing = client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:alice@example.com"]},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert missing.status_code == 428
-    assert client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["revision"] == 0
 
 
 def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids(client_factory):
@@ -494,43 +417,19 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids(client_fact
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
 
 
-def test_asset_metadata_precondition_rejects_stale_writer(client_factory) -> None:
-    client = client_factory()
-    asset = _provision_asset(client)
-    current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+def test_asset_binding_precondition_rejects_stale_update(asset_client) -> None:
+    client, asset = asset_client
 
-    first = client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:first"], "expected_revision": current["revision"]},
-        headers=ADMIN_HEADERS,
-    )
-    stale = client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:stale"], "expected_revision": current["revision"]},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert first.status_code == 200
-    assert stale.status_code == 409
-    assert "Asset revision changed" in stale.json()["error"]["message"]
-
-
-def test_asset_binding_precondition_rejects_stale_update(client_factory) -> None:
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
+    missing = client.put(
         "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        json={"backend": "iceberg", "table_identifier": "prod.users-v2", "options": {}},
         headers=ADMIN_HEADERS,
-    ).json()
-
+    )
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "revision_precondition_required"
+    unchanged = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert unchanged["table_identifier"] == "prod.users"
+    assert unchanged["revision"] == 0
     first = client.put(
         "/v1/assets/analytics/default.users",
         json={
@@ -557,35 +456,6 @@ def test_asset_binding_precondition_rejects_stale_update(client_factory) -> None
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
     assert detail["table_identifier"] == "prod.users-v2"
     assert detail["revision"] == 1
-
-
-def test_asset_binding_update_requires_revision_precondition(client_factory) -> None:
-    client = client_factory()
-    client.put(
-        "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
-        },
-        headers=ADMIN_HEADERS,
-    )
-    asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
-        headers=ADMIN_HEADERS,
-    ).json()
-
-    missing = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users-v2", "options": {}},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert missing.status_code == 428
-    assert missing.json()["error"]["code"] == "revision_precondition_required"
-    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
-    assert detail["table_identifier"] == "prod.users"
-    assert detail["revision"] == 0
 
 
 def test_asset_binding_precondition_rejects_nonzero_revision_on_create(client_factory) -> None:
@@ -615,11 +485,18 @@ def test_asset_binding_precondition_rejects_nonzero_revision_on_create(client_fa
     assert client.get("/v1/assets", headers=ADMIN_HEADERS).json() == []
 
 
-def test_asset_grant_precondition_rejects_stale_writer(client_factory) -> None:
-    client = client_factory()
-    asset = _provision_asset(client)
+def test_asset_grant_precondition_rejects_stale_writer(asset_client) -> None:
+    client, asset = asset_client
     current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
+    missing = client.put(
+        f"/v1/assets/{asset['id']}/grants",
+        json={"grants": [{"principal": "analyst", "capability": "read"}]},
+        headers=ADMIN_HEADERS,
+    )
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "revision_precondition_required"
+    assert client.get(f"/v1/assets/{asset['id']}/grants", headers=ADMIN_HEADERS).json() == []
     first = client.put(
         f"/v1/assets/{asset['id']}/grants",
         json={
@@ -636,20 +513,6 @@ def test_asset_grant_precondition_rejects_stale_writer(client_factory) -> None:
 
     assert first.status_code == 200
     assert stale.status_code == 409
-
-
-def test_asset_grant_update_requires_revision_precondition(client_factory) -> None:
-    client = client_factory()
-    asset = _provision_asset(client)
-    missing = client.put(
-        f"/v1/assets/{asset['id']}/grants",
-        json={"grants": [{"principal": "analyst", "capability": "read"}]},
-        headers=ADMIN_HEADERS,
-    )
-
-    assert missing.status_code == 428
-    assert missing.json()["error"]["code"] == "revision_precondition_required"
-    assert client.get(f"/v1/assets/{asset['id']}/grants", headers=ADMIN_HEADERS).json() == []
 
 
 def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated(client_factory):
@@ -696,46 +559,6 @@ def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated(client_
 
     invalid = client.get("/v1/assets/page?cursor=garbage", headers=ADMIN_HEADERS)
     assert invalid.status_code == 400
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["x" * 257, "界" * 1024, "x" * 16384, " spaced.name "],
-    ids=["ascii-257", "unicode-1024", "ascii-16384", "whitespace"],
-)
-def test_schema_admission_preserves_exact_long_and_whitespace_names(client_factory, name):
-    client = client_factory()
-    asset = _provision_asset(client)
-    field = {"name": name, "field_id": "7", "path": [name], "type": "string", "nullable": True}
-    response = client.put(
-        f"/v1/assets/{asset['id']}/schema-fields",
-        json={"expected_revision": 0, "fields": [field]},
-        headers=ADMIN_HEADERS,
-    )
-    assert response.status_code == 200, response.text
-    expected = {**field, "field_id": "iceberg:7"}
-    assert response.json()["fields"] == [expected]
-    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
-    assert detail["schema_fields"] == [expected]
-
-
-def test_schema_admission_allows_same_leaf_name_at_distinct_paths(client_factory):
-    client = client_factory()
-    asset = _provision_asset(client)
-    fields = [
-        {"name": "value", "field_id": str(index), "path": [parent, "value"], "type": "string"}
-        for index, parent in enumerate(["left", "right"], 1)
-    ]
-    response = client.put(
-        f"/v1/assets/{asset['id']}/schema-fields",
-        json={"expected_revision": 0, "fields": fields},
-        headers=ADMIN_HEADERS,
-    )
-    assert response.status_code == 200, response.text
-    assert [field["path"] for field in response.json()["fields"]] == [
-        ["left", "value"],
-        ["right", "value"],
-    ]
 
 
 @pytest.mark.parametrize("name", [" spaced.name ", " "], ids=["spaced", "space-only"])

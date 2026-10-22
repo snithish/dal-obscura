@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor, SchemaDescriptor, TableHandle, TableIdentifier
-from dal_obscura_plugin_api.execution import close_preserving_error
 
 from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
@@ -21,20 +20,6 @@ from tests.control.assets.schema_cases import (
     discover_schema,
 )
 from tests.support.sources.schema_catalog import schema_registry
-
-
-def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
-    schema = _nested_schema()
-    asset_id = uuid4()
-    result = discover_schema(
-        _FakeStore(asset_id),
-        asset_id,
-        ControlPlaneActor.for_platform_admin("admin"),
-        plugin_registry=schema_registry(lambda *args, **kwargs: _FakeCatalog(_FakeTable(schema))),
-    )
-    fields = cast(list[dict[str, object]], result["fields"])
-    for node, arrow_field in zip(fields, schema.as_arrow(), strict=True):
-        assert node["type"] == str(arrow_field.type)
 
 
 def test_get_asset_schema_returns_typed_nested_paths() -> None:
@@ -61,6 +46,9 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
     assert isinstance(result["schema_fingerprint"], str)
     assert len(result["schema_fingerprint"]) == 64
     fields = cast(list[dict[str, object]], result["fields"])
+    assert [node["type"] for node in fields] == [
+        str(field.type) for field in _nested_schema().as_arrow()
+    ]
     profile = fields[0]
     assert profile["kind"] == "struct"
     assert profile["path"] == {
@@ -407,16 +395,3 @@ def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
         )
 
     assert "catalog-password" not in str(failure.value)
-
-
-def test_schema_plugin_cleanup_does_not_mask_primary_error() -> None:
-    class FailingClose:
-        def close(self) -> None:
-            raise RuntimeError("cleanup failed")
-
-    with pytest.raises(ValueError, match="primary failure"):
-        try:
-            raise ValueError("primary failure")
-        except ValueError:
-            close_preserving_error(FailingClose())
-            raise

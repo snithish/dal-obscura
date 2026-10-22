@@ -45,17 +45,6 @@ def test_guard_failure_is_preserved_when_cleanup_also_fails():
     assert source.close_calls == 1
 
 
-def test_stream_construction_failure_closes_the_original_source():
-    class BrokenSource(Source):
-        def __iter__(self):
-            raise ValueError("cannot iterate")
-
-    source = BrokenSource(close_failure=True)
-    with pytest.raises(ValueError, match="cannot iterate"):
-        ManagedStream(source)
-    assert source.close_calls == 1
-
-
 def test_supervisor_is_lazy_and_admits_before_opening_another_source():
     from dal_obscura.application.reads.execution import ExecutionSupervisor, StreamAdmissionError
 

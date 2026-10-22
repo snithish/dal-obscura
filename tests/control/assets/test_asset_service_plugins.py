@@ -11,7 +11,7 @@ from dal_obscura.application.governance.assets.service import AssetsCommands
 from dal_obscura.application.governance.errors import ValidationFailure
 
 
-def _commands(asset_commands, *, overlap=True, declared_format=True):
+def _commands(asset_commands, *, overlap=True, declared_format=True, handle_overlap=True):
     _, factory, actor = asset_commands
     catalog = PluginDescriptor(
         kind="catalog",
@@ -34,7 +34,7 @@ def _commands(asset_commands, *, overlap=True, declared_format=True):
         distribution="fixture",
         version="1.0.0",
         capabilities=frozenset({"nested_schema"}),
-        handle_versions=frozenset({1}),
+        handle_versions=frozenset({1} if handle_overlap else {2}),
         config_schema={"fields": [{"name": "format_option", "type": "string", "required": True}]},
     )
 
@@ -84,13 +84,22 @@ def test_asset_binding_validates_pair_capabilities_and_format_options(asset_comm
 
 
 @pytest.mark.parametrize(
-    "overlap,declared_format,message",
-    [(False, True, "capabilities do not overlap"), (True, False, "does not declare")],
+    "overlap,declared_format,handle_overlap,message",
+    [
+        (False, True, True, "capabilities do not overlap"),
+        (True, False, True, "does not declare"),
+        (True, True, False, "handle versions do not overlap"),
+    ],
 )
 def test_asset_binding_rejects_incompatible_plugin_pair_without_publishing(
-    asset_commands, overlap, declared_format, message
+    asset_commands, overlap, declared_format, handle_overlap, message
 ):
-    commands, actor = _commands(asset_commands, overlap=overlap, declared_format=declared_format)
+    commands, actor = _commands(
+        asset_commands,
+        overlap=overlap,
+        declared_format=declared_format,
+        handle_overlap=handle_overlap,
+    )
     with pytest.raises(ValidationFailure, match=message):
         commands.upsert_workspace_asset(
             "plugins",

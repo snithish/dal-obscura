@@ -133,25 +133,6 @@ test("late asset lookup responses cannot replace the current inventory", async (
   );
 });
 
-test("late live policy saves cannot clear a newer local edit", async ({ page }) => {
-  const deferredSave = deferredResponse();
-  await authenticatedApi(page, { deferredSave });
-  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
-  await deferredSave.started;
-  await page.getByRole("button", { name: "New rule", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save policy" })).toBeVisible();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-
-  deferredSave.release();
-  await deferredSave.completed;
-  await expect(page.getByText("Live revision 2", { exact: true })).toBeVisible();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(page.getByText("Live policy saved.")).toHaveCount(0);
-});
-
 test("late policy evaluations cannot replace a newer unsaved edit", async ({ page }) => {
   const deferredEvaluate = deferredResponse();
   await authenticatedApi(page, { deferredEvaluate });

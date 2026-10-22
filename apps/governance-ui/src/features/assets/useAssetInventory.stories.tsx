@@ -1,3 +1,4 @@
+import { localStoryUrl } from "../../design/storyNetworkGuard";
 import type { components } from "../../generated/control_plane";
 import { StrictMode, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
@@ -38,7 +39,7 @@ const meta = {
   beforeEach: () => {
     const original = window.fetch;
     window.fetch = async (input) => {
-      const url = new URL(String(input), window.location.href);
+      const url = localStoryUrl(input);
       if (url.pathname !== "/v1/assets/page")
         throw new Error(`Unexpected synthetic request: ${url}`);
       if (url.searchParams.has("search"))
@@ -84,11 +85,15 @@ export const FailedSearch: Story = {
       expect(canvas.getByRole("alert")).toHaveTextContent("temporarily unavailable"),
     );
     await expect(canvas.getByRole("status")).toHaveTextContent("Orders");
-    window.fetch = async () =>
-      Response.json(
+    window.fetch = async (input) => {
+      const url = localStoryUrl(input);
+      if (url.pathname !== "/v1/assets/page")
+        throw new Error(`Unexpected synthetic request: ${url}`);
+      return Response.json(
         { error: { code: "request_rejected", message: "Unavailable", request_id: "test-request" } },
         { status: 503 },
       );
+    };
     await userEvent.click(canvas.getByRole("button", { name: "Change login" }));
     await waitFor(() => expect(canvas.getByRole("status")).toHaveTextContent("Empty inventory"));
     await waitFor(() =>

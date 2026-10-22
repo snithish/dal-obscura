@@ -66,6 +66,7 @@ def test_workspace_policy_rules_reject_deny_effect_before_save(client_factory):
     )
 
     assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
     assert response.json()["error"]["field_errors"][0]["field"] == "rules.0.effect"
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
     assert detail["policy_status"] == "configured"

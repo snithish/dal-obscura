@@ -1,27 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
-
-from dal_obscura_plugin_conformance.iceberg_fixtures import iceberg_sql_catalog_options
 
 from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     ServiceConfig,
 )
-
-ICEBERG_CATALOG_ID = "iceberg.catalog"
-
-
-def iceberg_catalog_config(
-    tmp_path: Path,
-    name: str,
-    warehouse_name: str,
-) -> CatalogConfig:
-    return CatalogConfig(
-        name=name,
-        options=iceberg_sql_catalog_options(tmp_path, name, warehouse_name),
-    )
 
 
 def service_config_from_raw(raw_service_config: dict[str, object]) -> ServiceConfig:

@@ -62,23 +62,6 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
     return asset
 
 
-def replace_live_policy(
-    client: TestClient,
-    asset_id: str,
-    rules: list[dict[str, object]],
-    headers: dict[str, str] = ADMIN_HEADERS,
-):
-    """Replace the asset's live policy using its current optimistic revision."""
-
-    current = client.get(f"/v1/assets/{asset_id}", headers=ADMIN_HEADERS)
-    assert current.status_code == 200, current.text
-    return client.put(
-        f"/v1/assets/{asset_id}/policy",
-        json={"expected_revision": current.json()["policy_revision"], "rules": rules},
-        headers=headers,
-    )
-
-
 def _keys_recursive(value: object) -> set[str]:
     if isinstance(value, dict):
         keys = {str(key) for key in value}

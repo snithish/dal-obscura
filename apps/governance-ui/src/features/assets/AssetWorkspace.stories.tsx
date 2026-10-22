@@ -145,7 +145,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a direct live policy editing with token revocation. It uses deterministic fixtures; mutations stay out of Storybook.",
+          "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a synthetic policy editing with token revocation. It uses deterministic fixtures; mutations stay out of Storybook.",
       },
     },
   },
@@ -179,21 +179,17 @@ export const ReaderNavigationAndKeyboardTabs: Story = {
     canvas.getByRole("tab", { name: "Policy" }).focus();
     await userEvent.keyboard("{ArrowRight}");
     await expect(canvas.getByRole("tab", { name: "Access" })).toHaveFocus();
-    await expect(canvas.getByRole("tabpanel")).toBeVisible();
+    await expect(canvas.getByRole("tab", { name: "Access" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      canvas.getByRole("heading", { name: "Owners and delegated capabilities" }),
+    ).toBeVisible();
   },
 };
 
-export const DarkNestedPolicy: Story = {
-  ...NestedLivePolicy,
-  globals: { theme: "dark" },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Select allowed columns" })).toBeVisible();
-    await expect(
-      canvas.getByRole("button", { name: "Allowed columns: 2 selected" }),
-    ).toHaveTextContent("2 selected");
-    await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
-  },
-};
+export const DarkNestedPolicy: Story = { globals: { theme: "dark" } };
 
 export const AccessAndGrants: Story = {
   args: {

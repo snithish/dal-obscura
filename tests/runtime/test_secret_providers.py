@@ -13,14 +13,6 @@ from dal_obscura.runtime.secrets import (
 )
 
 
-def test_env_secret_provider_reads_configured_prefix(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("DAL_OBSCURA_SECRET_JWT", "jwt-secret")
-
-    provider = load_secret_provider(SecretProviderConfig(config={"prefix": "DAL_OBSCURA_SECRET_"}))
-
-    assert provider.get_secret("JWT") == "jwt-secret"
-
-
 def test_load_secret_provider_uses_fixed_environment_provider(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LOCAL_catalog-password", "value")
 

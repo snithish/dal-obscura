@@ -292,6 +292,7 @@ def run_catalog_checks(  # noqa: C901
         for _page_index in range(max_pages):
             context.check_active()
             page = plugin.list_tables(context, continuation=continuation, limit=page_size)
+            context.check_active()
             check_discovery_page(page)
             if len(page.entries) > page_size:
                 raise ValueError("catalog returned more entries than requested")
@@ -393,8 +394,10 @@ def run_format_checks(
             )
             output_schema, batches = plugin.execute(passive_task, context)
             if not output_schema.equals(request.schema, check_metadata=True):
-                _close_iterable_preserving_error(batches)
-                raise ValueError("format output schema differs from the declared schema")
+                try:
+                    raise ValueError("format output schema differs from the declared schema")
+                finally:
+                    _close_iterable_preserving_error(batches)
             check_record_batches(
                 output_schema,
                 batches,

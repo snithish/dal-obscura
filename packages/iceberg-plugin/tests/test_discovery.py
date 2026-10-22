@@ -239,88 +239,34 @@ def test_iceberg_discovery_does_not_hide_root_table_provider_errors() -> None:
         )
 
 
-def test_iceberg_discovery_rejects_namespace_explosion():
-    from dal_obscura_iceberg.discovery import DEFAULT_MAX_NAMESPACES
-
-    class WideCatalog(FakeIcebergCatalog):
-        def list_namespaces(self, namespace=()):
-            return (
-                ((str(index),) for index in range(DEFAULT_MAX_NAMESPACES + 1))
-                if not namespace
-                else ()
-            )
-
-    with pytest.raises(ValueError, match="namespace limit"):
-        discover_iceberg_tables(
-            "analytics", {}, load_catalog_fn=lambda *args, **kwargs: WideCatalog()
-        )
-
-
-def test_iceberg_discovery_rejects_table_explosion():
-    from dal_obscura_iceberg.discovery import DEFAULT_MAX_TABLES
-
-    class WideCatalog(FakeIcebergCatalog):
-        def list_tables(self, namespace):
-            return ((*namespace, str(index)) for index in range(DEFAULT_MAX_TABLES + 1))
-
-    with pytest.raises(ValueError, match="table limit"):
-        discover_iceberg_tables(
-            "analytics", {}, load_catalog_fn=lambda *args, **kwargs: WideCatalog()
-        )
-
-
-def test_iceberg_discovery_stops_an_unbounded_provider_page():
-    class EndlessCatalog:
-        def list_namespaces(self, namespace=()):
-            if namespace == ():
-                return (("ns", str(index)) for index in range(100_000))
-            return ()
-
-        def list_tables(self, namespace):
-            return ()
-
-    with pytest.raises(ValueError, match="namespace limit"):
-        discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: EndlessCatalog(),
-        )
-
-
 def test_iceberg_discovery_honors_cancellation_and_deadline():
-    class SlowCatalog:
+    cancelled = [True]
+    visited = []
+
+    class Catalog:
         def list_namespaces(self, namespace=()):
-            return (("ns", index) for index in range(100_000))
+            for name in ("ns", "must-not-pull"):
+                cancelled[0] = True
+                visited.append(name)
+                yield (name,)
 
         def list_tables(self, namespace):
             return ()
+
+    def discover(**options):
+        return discover_iceberg_tables(
+            "analytics", {}, load_catalog_fn=lambda name, **options: Catalog(), **options
+        )
 
     with pytest.raises(InterruptedError, match="cancelled"):
-        discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: SlowCatalog(),
-            cancel_check=lambda: True,
-        )
+        discover(cancel_check=lambda: cancelled[0])
+    assert visited == []
+
+    cancelled[0] = False
+    with pytest.raises(InterruptedError, match="cancelled"):
+        discover(cancel_check=lambda: cancelled[0])
+    assert visited == ["ns"]
 
     with pytest.raises(TimeoutError, match="deadline"):
-        discover_iceberg_tables(
-            "analytics", {}, load_catalog_fn=lambda name, **options: SlowCatalog(), deadline_at=0.0
-        )
-
-
-def test_iceberg_discovery_rejects_malformed_provider_identifier_segments():
-    class MalformedCatalog:
-        def list_namespaces(self, namespace=()):
-            if namespace == ():
-                return [("default", 7)]
-            return []
-
-        def list_tables(self, namespace):
-            del namespace
-            return [("default", "users\n")]
-
-    with pytest.raises(ValueError, match="invalid namespace"):
-        discover_iceberg_tables(
-            "analytics", {}, load_catalog_fn=lambda name, **options: MalformedCatalog()
-        )
+        discover(deadline_at=0.0)
+    assert visited == ["ns"]

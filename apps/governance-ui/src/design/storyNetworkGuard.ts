@@ -1,16 +1,17 @@
 type StoryRequest = string | URL | Request;
 
-function requestUrl(input: StoryRequest): URL {
+export function localStoryUrl(input: StoryRequest): URL {
   const raw = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
-  return new URL(raw, window.location.href);
+  const url = new URL(raw, window.location.href);
+  if (url.origin !== window.location.origin) {
+    throw new Error(`Unexpected story network request: ${url.href}`);
+  }
+  return url;
 }
 
 function assertStoryRequest(input: StoryRequest): void {
-  const url = requestUrl(input);
-  const sameOriginApi =
-    url.origin === window.location.origin &&
-    (url.pathname.startsWith("/v1/") || url.pathname.startsWith("/auth/"));
-  if (url.origin !== window.location.origin || sameOriginApi) {
+  const url = localStoryUrl(input);
+  if (url.pathname.startsWith("/v1/") || url.pathname.startsWith("/auth/")) {
     throw new Error(`Unexpected story network request: ${url.href}`);
   }
 }

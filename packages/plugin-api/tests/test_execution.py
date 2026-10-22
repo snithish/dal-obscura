@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from dal_obscura_plugin_api import ExecutionContext
-from dal_obscura_plugin_api.execution import active, checked_iterator
+from dal_obscura_plugin_api.execution import active, checked_iterator, close_preserving_error
 
 
 def context(cancelled):
@@ -77,3 +77,16 @@ def test_generator_guard_checks_each_pull_and_closes_provider():
     with pytest.raises(InterruptedError):
         next(stream)
     assert closed == [True]
+
+
+def test_cleanup_does_not_mask_primary_error() -> None:
+    class FailingClose:
+        def close(self) -> None:
+            raise RuntimeError("cleanup failed")
+
+    with pytest.raises(ValueError, match="primary failure"):
+        try:
+            raise ValueError("primary failure")
+        except ValueError:
+            close_preserving_error(FailingClose())
+            raise

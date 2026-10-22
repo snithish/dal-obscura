@@ -118,30 +118,6 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
     assert fake_connection.closed == 1
 
 
-def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
-    adapter = SupervisedRowTransformAdapter(
-        DuckDBRowTransformAdapter(), supervisor=ExecutionSupervisor(max_active_streams=1)
-    )
-    batch = pa.record_batch([pa.array([1, 2, 3])], names=["id"])
-    first = adapter.apply_filters_and_masks_stream(
-        [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
-    )
-
-    assert next(cast(Generator[pa.RecordBatch], first)).num_rows == 3
-    second = adapter.apply_filters_and_masks_stream(
-        [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
-    )
-    with pytest.raises(StreamAdmissionError, match="capacity"):
-        next(cast(Generator[pa.RecordBatch], second))
-
-    cast(Generator[pa.RecordBatch], first).close()
-    assert list(
-        adapter.apply_filters_and_masks_stream(
-            [batch], DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
-        )
-    )
-
-
 def test_stream_admission_precedes_source_reads_and_creation_is_lazy():
     adapter = SupervisedRowTransformAdapter(
         DuckDBRowTransformAdapter(), supervisor=ExecutionSupervisor(max_active_streams=1)
@@ -173,6 +149,11 @@ def test_stream_admission_precedes_source_reads_and_creation_is_lazy():
         next(second)
     assert consumed == [True]
     cast(Generator[pa.RecordBatch], first).close()
+    resumed = adapter.apply_filters_and_masks_stream(
+        source(), DuckDBProjectionCompiler().compile(batch.schema, ["id"], {}), None
+    )
+    assert pa.Table.from_batches(resumed).to_pylist() == [{"id": 1}]
+    assert consumed == [True, True]
 
 
 def test_input_budget_counts_retained_slice_buffers():

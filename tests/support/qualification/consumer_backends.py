@@ -233,7 +233,7 @@ def rest_registry(
                 pass
 
         http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = Thread(target=http.serve_forever, daemon=True)
+        thread = Thread(target=http.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         thread.start()
         try:
             plugins = plugin_registry(

@@ -117,6 +117,6 @@ def _bounded_provider_items(
 
 def _check_budget(deadline_at: float | None, cancel_check: Callable[[], bool] | None) -> None:
     if cancel_check is not None and cancel_check():
-        raise RuntimeError("Catalog discovery cancelled")
+        raise InterruptedError("Catalog discovery cancelled")
     if deadline_at is not None and monotonic() >= deadline_at:
         raise TimeoutError("Catalog discovery deadline exceeded")

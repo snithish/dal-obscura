@@ -19,7 +19,3 @@ class FakeSecretProvider:
         if key == "missing":
             return None
         return f"{self.config['prefix']}:{self.secrets['token']}:{key}"
-
-
-class NotASecretProvider:
-    pass

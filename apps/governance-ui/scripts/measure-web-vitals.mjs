@@ -1,5 +1,5 @@
 import { chromium } from "@playwright/test";
-import { assertWebVitals, WEB_VITALS_LIMITS } from "./web-vitals-budget.mjs";
+import { assertWebVitals, observeWebVitals, WEB_VITALS_LIMITS } from "./web-vitals-budget.ts";
 
 const url = process.env.DAL_OBSCURA_WEB_VITALS_URL ?? "http://127.0.0.1:4173/#assets";
 const width = Number(process.env.DAL_OBSCURA_WEB_VITALS_WIDTH ?? 1440);
@@ -12,19 +12,7 @@ const browser = await chromium.launch({
 
 try {
   const page = await browser.newPage({ viewport: { width, height } });
-  await page.addInitScript(() => {
-    window.__dalObscuraWebVitals = { lcp: null, cls: 0 };
-    new PerformanceObserver((list) => {
-      const entries = list.getEntries();
-      const last = entries.at(-1);
-      if (last) window.__dalObscuraWebVitals.lcp = last.startTime;
-    }).observe({ type: "largest-contentful-paint", buffered: true });
-    new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        if (!entry.hadRecentInput) window.__dalObscuraWebVitals.cls += entry.value;
-      }
-    }).observe({ type: "layout-shift", buffered: true });
-  });
+  await page.addInitScript(observeWebVitals);
 
   await page.goto(url, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);

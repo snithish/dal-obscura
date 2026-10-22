@@ -162,7 +162,7 @@ def test_oidc_discovery_does_not_follow_redirects():
             del format, args
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Redirect)
-    thread = Thread(target=server.serve_forever, daemon=True)
+    thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         issuer = f"http://127.0.0.1:{server.server_port}/issuer"

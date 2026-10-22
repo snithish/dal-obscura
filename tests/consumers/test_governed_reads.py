@@ -57,10 +57,7 @@ def test_python_and_duckdb_receive_identical_masked_nested_rows(governed_server)
 
 
 @pytest.mark.parametrize("backend", ["manifest.parquet", "iceberg.catalog", "delta.directory"])
-@pytest.mark.parametrize(
-    "name", ["x" * 257, "界" * 1024, "x" * 16384], ids=["ascii-257", "unicode-1024", "ascii-16384"]
-)
-def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path, backend, name):
+def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path, backend):
     from dal_obscura_plugin_api.paths import FieldPath, FieldSegment
 
     from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
@@ -72,8 +69,9 @@ def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path
         sql_registry,
     )
 
-    table = pa.table({name: ["private", None], "region": ["us", "us"]})
-    path = FieldPath((FieldSegment(name),)).to_human()
+    names = ["x" * 257, "界" * 1024, "x" * 16384]
+    table = pa.table({**{name: ["private", None] for name in names}, "region": ["us", "us"]})
+    paths = [FieldPath((FieldSegment(name),)).to_human() for name in names]
     factories = {
         "manifest.parquet": manifest_registry,
         "iceberg.catalog": sql_registry,
@@ -81,8 +79,8 @@ def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path
     }
     policy = [
         allow_rule(
-            columns=[path, "region"],
-            masks={path: {"type": "redact", "value": "[hidden]"}},
+            columns=[*paths, "region"],
+            masks={path: {"type": "redact", "value": "[hidden]"} for path in paths},
             row_filter="region = 'us'",
         )
     ]
@@ -97,6 +95,11 @@ def test_long_field_names_survive_real_backend_and_authenticated_flight(tmp_path
         )
         with running_flight_client(server) as flight_client:
             sdk = DalObscuraClient.from_flight_client(flight_client, auth_token=make_jwt("user1"))
-            result = sdk.read_table(catalog="analytics", target="default.users", columns=[path])
-    assert result.schema.equals(pa.schema([pa.field(name, pa.string())]), check_metadata=True)
-    assert result.to_pylist() == [{name: "[hidden]"}, {name: None}]
+            result = sdk.read_table(catalog="analytics", target="default.users", columns=paths)
+    assert result.schema.equals(
+        pa.schema([pa.field(name, pa.string()) for name in names]), check_metadata=True
+    )
+    assert result.to_pylist() == [
+        dict.fromkeys(names, "[hidden]"),
+        dict.fromkeys(names),
+    ]

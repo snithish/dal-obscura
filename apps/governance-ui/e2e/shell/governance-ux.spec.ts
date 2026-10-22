@@ -251,9 +251,11 @@ test("excluding a subtree then restoring one child keeps sibling exclusions", as
 test("inventory aligns links and reveals the complete owner identity", async ({ page }) => {
   await page.goto("/#assets");
   await expect(
-    page.getByText("http://localhost:20080/realms/dal-obscura-demo|group:asset-owners", {
-      exact: true,
-    }),
+    page
+      .getByRole("cell")
+      .getByText("http://localhost:20080/realms/dal-obscura-demo|group:asset-owners", {
+        exact: true,
+      }),
   ).toBeVisible();
   const table = page.getByRole("table");
   const heading = await table

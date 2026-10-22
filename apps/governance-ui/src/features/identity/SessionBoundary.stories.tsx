@@ -1,3 +1,4 @@
+import { localStoryUrl } from "../../design/storyNetworkGuard";
 import { StrictMode, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor } from "storybook/test";
@@ -54,7 +55,7 @@ const meta = {
     const original = window.fetch;
     let signedIn = true;
     window.fetch = fn(async (input: RequestInfo | URL) => {
-      const path = new URL(String(input), window.location.href).pathname;
+      const path = localStoryUrl(input).pathname;
       if (path === "/v1/session")
         return new Response(
           JSON.stringify(

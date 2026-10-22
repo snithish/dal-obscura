@@ -59,4 +59,4 @@ export const LocalPending: Story = {
     await expect(canvas.getByRole("button", { name: "Signing in…" })).toBeDisabled();
   },
 };
-export const DarkFailure: Story = { ...LocalRejected, globals: { theme: "dark" } };
+export const DarkFailure: Story = { args: LocalRejected.args, globals: { theme: "dark" } };
