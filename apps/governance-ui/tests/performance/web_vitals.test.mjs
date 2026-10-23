@@ -13,7 +13,7 @@ test("web-vitals gate rejects a reported slow largest paint", () => {
   );
 });
 
-for (const lcpMs of [null, Infinity, "100", -1]) {
+for (const lcpMs of [null, NaN, "100", -1]) {
   test(`web-vitals gate rejects invalid LCP ${lcpMs}`, () => {
     assert.throws(() => assertWebVitals({ lcpMs, cls: 0 }), /Largest Contentful Paint/);
   });

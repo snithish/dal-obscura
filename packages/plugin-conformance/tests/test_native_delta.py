@@ -10,31 +10,34 @@ import pytest
 from dal_obscura_plugin_conformance.native_delta import delta_writer
 
 
-@pytest.mark.parametrize("body_fails", [False, True])
-@pytest.mark.parametrize("stop_error", [RuntimeError, KeyboardInterrupt])
-def test_delta_writer_releases_gateway_and_environment_when_stop_fails(
+@pytest.mark.parametrize(
+    ("body_fails", "stop_error"),
+    [
+        (False, RuntimeError),
+        (True, RuntimeError),
+        (False, KeyboardInterrupt),
+        (True, KeyboardInterrupt),
+        pytest.param(False, None, id="cleanup-only"),
+    ],
+)
+def test_delta_writer_preserves_primary_error_and_releases_resources(
     monkeypatch, body_fails, stop_error
 ):
     calls = []
 
-    class Builder:
-        def master(self, value):
-            return self
-
-        def appName(self, value):
-            return self
-
-        def config(self, key, value):
-            return self
-
-        def getOrCreate(self):
-            return SimpleNamespace(
-                sparkContext=SimpleNamespace(setLogLevel=lambda level: None), stop=stop
-            )
-
     def stop():
         calls.append("stop")
-        raise stop_error("stop sentinel")
+        if stop_error is not None:
+            raise stop_error("stop sentinel")
+
+    builder = SimpleNamespace(
+        master=lambda value: builder,
+        appName=lambda value: builder,
+        config=lambda key, value: builder,
+        getOrCreate=lambda: SimpleNamespace(
+            sparkContext=SimpleNamespace(setLogLevel=lambda level: None), stop=stop
+        ),
+    )
 
     class BrokenPipe:
         def close(self):
@@ -67,13 +70,17 @@ def test_delta_writer_releases_gateway_and_environment_when_stop_fails(
     pyspark = ModuleType("pyspark")
     monkeypatch.setattr(pyspark, "SparkContext", context, raising=False)
     sql = ModuleType("pyspark.sql")
-    monkeypatch.setattr(sql, "SparkSession", SimpleNamespace(builder=Builder()), raising=False)
+    monkeypatch.setattr(sql, "SparkSession", SimpleNamespace(builder=builder), raising=False)
     monkeypatch.setitem(sys.modules, "pyspark", pyspark)
     monkeypatch.setitem(sys.modules, "pyspark.sql", sql)
     monkeypatch.setenv("SPARK_LOCAL_IP", "original-host")
 
-    error = ValueError if body_fails else stop_error
-    message = "body sentinel" if body_fails else "stop sentinel"
+    if body_fails:
+        error, message = ValueError, "body sentinel"
+    elif stop_error is not None:
+        error, message = stop_error, "stop sentinel"
+    else:
+        error, message = RuntimeError, "pipe close sentinel"
     with pytest.raises(error, match=message), delta_writer():
         if body_fails:
             raise ValueError("body sentinel")
