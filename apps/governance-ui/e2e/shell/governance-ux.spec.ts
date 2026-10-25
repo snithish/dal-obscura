@@ -251,6 +251,7 @@ test("excluding a subtree then restoring one child keeps sibling exclusions", as
 
 test("inventory aligns links and reveals the complete owner identity", async ({ page }) => {
   await page.goto("/#assets");
+  await page.getByRole("cell").getByText("group:asset-owners", { exact: true }).click();
   await expect(
     page
       .getByRole("cell")

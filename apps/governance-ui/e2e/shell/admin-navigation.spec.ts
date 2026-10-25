@@ -1,3 +1,4 @@
+import { chooseTheme } from "../support/theme";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "../support/fixtures";
 
@@ -42,14 +43,14 @@ test("account menu owns theme selection and sign out remains directly reachable"
   await authenticatedApi(page);
   await page.goto("/#assets");
   await expect(page.getByRole("combobox", { name: "Color theme" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Account menu", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Dark theme", exact: true }).click();
+  await chooseTheme(page, "Dark theme");
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "dark");
   await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Account menu", exact: true }).click();
   await expect(
     page.getByRole("menuitemradio", { name: "Dark theme", exact: true }),
   ).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("menuitemradio", { name: "Dark theme", exact: true }).focus();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Account menu", exact: true })).toBeFocused();
 });

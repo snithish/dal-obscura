@@ -65,6 +65,15 @@ test("schema reference and column picker virtualize 10k fields and keep search r
     durations.push(finished - started);
   }
   durations.sort((left, right) => left - right);
+  const testInfo = test.info();
+  await testInfo.attach("picker-key-latency", {
+    body: JSON.stringify({
+      fieldCount: 10000,
+      samplesMs: durations,
+      p95Ms: durations[Math.floor(durations.length * 0.95)],
+    }),
+    contentType: "application/json",
+  });
   expect(
     durations[Math.floor(durations.length * 0.95)],
     "95th percentile picker key latency",
@@ -80,5 +89,10 @@ test("authenticated policy workspace meets local web-vitals thresholds", async (
   await expect(page.getByRole("heading", { name: "orders", exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => window.__dalObscuraWebVitals);
+  const testInfo = test.info();
+  await testInfo.attach("workspace-web-vitals", {
+    body: JSON.stringify({ lcpMs: metrics.lcp, cls: metrics.cls }),
+    contentType: "application/json",
+  });
   assertWebVitals({ lcpMs: metrics.lcp, cls: metrics.cls });
 });

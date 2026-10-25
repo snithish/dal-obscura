@@ -18,13 +18,28 @@ test("capture governance UI refresh", async ({ page }) => {
   await page.goto(`/?asset=${uxAssetId}#assets`);
   await expect(page.getByLabel("Rule name", { exact: true })).toBeVisible();
   await page.screenshot({ path: resolve(output, `${reviewPhase}-policy.png`), fullPage: true });
+  if (reviewPhase === "after") {
+    await page.getByLabel("Rule name", { exact: true }).fill("Reviewed regional analysts");
+    await page.getByRole("button", { name: "Review changes", exact: true }).click();
+    const review = page.getByRole("dialog", { name: "Review policy changes", exact: true });
+    await expect(review).toHaveCSS("opacity", "1");
+    await page.screenshot({ path: resolve(output, "after-save-review.png") });
+    await review.getByRole("button", { name: "Keep editing", exact: true }).click();
+    await page.getByRole("button", { name: "Discard all changes", exact: true }).click();
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.getByRole("button", { name: "Open value lens", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Value lens", exact: true })).toBeVisible();
+  const lens = page.getByRole("dialog", { name: "Value lens", exact: true });
+  await expect(lens).toBeVisible();
+  await expect(lens).toHaveCSS("opacity", "1");
+  if (reviewPhase === "after")
+    await lens
+      .getByRole("region", { name: "Selected synthetic field value" })
+      .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: resolve(output, `${reviewPhase}-preview-mobile.png`),
-    fullPage: true,
+    fullPage: false,
   });
   await authenticatedApi(page, { admin: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
