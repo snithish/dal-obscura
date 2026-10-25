@@ -137,8 +137,8 @@ test("System follows OS changes and explicit choice overrides the OS", async ({ 
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "dark");
   await expect(page.locator(".login-panel")).toHaveCSS("background-color", "rgb(23, 31, 44)");
-  await page.getByRole("combobox", { name: "Color theme" }).click();
-  await page.getByRole("option", { name: "Light theme", exact: true }).click();
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Light theme", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "light");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "light");
@@ -181,8 +181,8 @@ test("authenticated policy workspace keeps rendered text and controls readable i
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   for (const theme of ["Light theme", "Dark theme"] as const) {
-    await page.getByRole("combobox", { name: "Color theme" }).click();
-    await page.getByRole("option", { name: theme, exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: theme, exact: true }).click();
     await expect(page.locator(".policy-save-bar")).toHaveCSS(
       "background-color",
       theme === "Dark theme" ? "rgb(23, 31, 44)" : "rgb(255, 255, 255)",
@@ -218,8 +218,8 @@ test("authenticated management screens keep rendered text and controls readable 
     for (const [hash, heading] of screens) {
       await page.goto(`/${hash}`);
       await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-      await page.getByRole("combobox", { name: "Color theme" }).click();
-      await page.getByRole("option", { name: theme, exact: true }).click();
+      await page.getByRole("button", { name: "Account menu", exact: true }).click();
+      await page.getByRole("menuitemradio", { name: theme, exact: true }).click();
       const samples = await renderedContrastSamples(
         page,
         ".management-view h2, .management-view h3, .management-view p, .management-view button, .management-view input, .management-view select, .management-view textarea",

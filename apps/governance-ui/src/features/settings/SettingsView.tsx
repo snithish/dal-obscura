@@ -66,6 +66,8 @@ export function SettingsView({
   const providerEditEpoch = useRef(0);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const savingRef = useRef(false);
+  const runtimeSection = useRef<HTMLDivElement>(null);
+  const providersSection = useRef<HTMLDivElement>(null);
 
   useEffect(
     () => () => {
@@ -477,7 +479,29 @@ export function SettingsView({
           Refresh
         </Button>
       </div>
-      <div className="form-card">
+      <nav className="settings-sections" aria-label="Settings sections">
+        <a
+          href="#settings"
+          onClick={(event) => {
+            event.preventDefault();
+            runtimeSection.current?.scrollIntoView({ block: "start" });
+            runtimeSection.current?.focus({ preventScroll: true });
+          }}
+        >
+          Runtime limits · {runtimeDirty ? "Unsaved" : "Saved"}
+        </a>
+        <a
+          href="#settings"
+          onClick={(event) => {
+            event.preventDefault();
+            providersSection.current?.scrollIntoView({ block: "start" });
+            providersSection.current?.focus({ preventScroll: true });
+          }}
+        >
+          Authentication providers · {providersDirty ? "Unsaved" : "Saved"}
+        </a>
+      </nav>
+      <div className="form-card settings-section" ref={runtimeSection} tabIndex={-1}>
         <h3>Runtime limits</h3>
         <p className="help">
           {runtime
@@ -574,7 +598,7 @@ export function SettingsView({
         </Button>
         {message?.scope === "runtime" && <Message tone={message.tone}>{message.text}</Message>}
       </div>
-      <div className="form-card">
+      <div className="form-card settings-section" ref={providersSection} tabIndex={-1}>
         <div className="form-card-head">
           <h3>Authentication providers</h3>
           <Button

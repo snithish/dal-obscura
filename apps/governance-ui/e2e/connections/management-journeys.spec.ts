@@ -303,7 +303,7 @@ test("administrator activity filters and paginates the permitted audit records",
   await authenticatedApi(page, { admin: true, configuredAudit: true });
   await page.goto("/#activity");
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
-  await page.getByLabel("Action").fill("asset.policy.replace");
+  await page.getByLabel("Action", { exact: true }).fill("asset.policy.replace");
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page.getByText("asset.policy.replace")).toBeVisible();
   await expect(page.getByText("asset.tokens.revoke")).toHaveCount(0);
@@ -312,7 +312,7 @@ test("administrator activity filters and paginates the permitted audit records",
   await expect(page.getByText("asset.tokens.revoke")).toBeVisible();
   await page.getByRole("button", { name: "Assets", exact: true }).click();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
-  await expect(page.getByLabel("Action")).toHaveValue("asset.policy.replace");
+  await expect(page.getByLabel("Action", { exact: true })).toHaveValue("asset.policy.replace");
 });
 
 test.describe("audit date filters in a non-UTC timezone", () => {

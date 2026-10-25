@@ -5,6 +5,13 @@ import { Icon } from "../../shared/Icon";
 import { QueryView } from "../../shared/QueryView";
 import type { ActivityData, AuditFilters } from "./useActivityQueries";
 
+const actionPresets = [
+  { value: "", label: "Choose a preset" },
+  { value: "asset.policy.replace", label: "Policy saved" },
+  { value: "asset.tokens.revoke", label: "Tokens revoked" },
+  { value: "asset.owners.replace", label: "Owners changed" },
+];
+
 export function ActivityView({
   data,
   loading,
@@ -113,6 +120,16 @@ function ActivityContent({
             value={draftFilters.correlationId ?? ""}
             onChange={(event) => setFilter("correlationId", event.currentTarget.value)}
             placeholder="Correlation ID"
+          />
+          <NativeSelect
+            label="Action preset"
+            value={
+              actionPresets.some((item) => item.value === draftFilters.action)
+                ? draftFilters.action
+                : ""
+            }
+            onChange={(event) => setFilter("action", event.currentTarget.value)}
+            data={actionPresets}
           />
           <NativeSelect
             label="Resource type"

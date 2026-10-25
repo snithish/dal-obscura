@@ -31,7 +31,7 @@ test("activity refresh exposes busy state while retaining loaded rows", async ({
   await authenticatedApi(page, { admin: true, configuredAudit: true });
   await page.goto("/#activity");
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
-  await page.getByLabel("Action").fill("asset.policy.replace");
+  await page.getByLabel("Action", { exact: true }).fill("asset.policy.replace");
   await page.getByRole("button", { name: "Apply filters", exact: true }).click();
   const row = page.locator("strong").filter({ hasText: "asset.policy.replace" });
   await expect(row).toBeVisible();

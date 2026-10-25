@@ -128,9 +128,6 @@ pre,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workbench-theme {
-  width: 148px;
-}
 .workbench-account-button .mantine-Button-label {
   gap: 8px;
 }
@@ -302,9 +299,6 @@ pre,
   .workbench-account {
     width: 100%;
     gap: 8px;
-  }
-  .workbench-theme {
-    width: 136px;
   }
   .workbench-principal {
     max-width: 88px;
@@ -1316,3 +1310,28 @@ pre,
   }
 }
 
+.settings-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 16px;
+}
+.settings-sections a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--primary);
+}
+.settings-section {
+  scroll-margin-top: 100px;
+}
+@media (max-width: 48em) {
+  .settings-section {
+    scroll-margin-top: 150px;
+  }
+}

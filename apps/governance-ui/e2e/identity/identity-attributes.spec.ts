@@ -125,8 +125,8 @@ test("attribute controls remain accessible on narrow screens", async ({ page }) 
 test("identity mapping forms remain accessible in both themes", async ({ page }) => {
   await page.goto("/#settings");
   for (const theme of ["Light theme", "Dark theme"]) {
-    await page.getByRole("combobox", { name: "Color theme" }).click();
-    await page.getByRole("option", { name: theme, exact: true }).click();
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: theme, exact: true }).click();
     await expect(page.locator(".attribute-mappings")).toBeVisible();
     const results = await new AxeBuilder({ page }).include(".attribute-mappings").analyze();
     expect(results.violations).toEqual([]);

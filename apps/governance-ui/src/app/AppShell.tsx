@@ -9,7 +9,6 @@ import {
   Group,
   Menu,
   NavLink,
-  Select,
   Stack,
   Text,
   Title,
@@ -141,23 +140,29 @@ export function AppShell(props: AppShellProps) {
               >
                 Search workspace
               </Menu.Item>
+              <Menu.Divider />
+              <Menu.Label>Color theme</Menu.Label>
+              <Menu.RadioGroup
+                value={props.theme}
+                onChange={(value) => {
+                  if (value === "system" || value === "light" || value === "dark")
+                    props.onThemeChange(value);
+                }}
+              >
+                {(
+                  [
+                    ["system", "System theme"],
+                    ["light", "Light theme"],
+                    ["dark", "Dark theme"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Menu.RadioItem key={value} value={value} closeMenuOnClick>
+                    {label}
+                  </Menu.RadioItem>
+                ))}
+              </Menu.RadioGroup>
             </Menu.Dropdown>
           </Menu>
-          <Select
-            aria-label="Color theme"
-            value={props.theme}
-            allowDeselect={false}
-            data={[
-              { value: "system", label: "System theme" },
-              { value: "light", label: "Light theme" },
-              { value: "dark", label: "Dark theme" },
-            ]}
-            onChange={(value) => {
-              if (value === "system" || value === "light" || value === "dark")
-                props.onThemeChange(value);
-            }}
-            className="workbench-theme"
-          />
           {(props.session || props.logoutPending) && (
             <Button
               variant="default"
