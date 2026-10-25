@@ -123,6 +123,22 @@ def test_catalog_release_publication_requires_authenticated_admin(client_factory
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize("plugin_id", ["iceberg.catalog", "example.catalog"])
+def test_catalog_writes_require_admission_even_for_bundled_plugins(client_factory, plugin_id):
+    from dal_obscura.plugins import PluginRegistry
+
+    client = client_factory(plugin_registry=PluginRegistry(allowlist={}))
+    response = client.put(
+        "/v1/catalogs/warehouse",
+        json={"plugin_id": plugin_id, "options": {"uri": "sqlite:///catalog.db"}},
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == "Catalog plugin is not admitted"
+    assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json() == []
+    assert client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"] == []
+
+
 @pytest.mark.integration
 def test_postgres_catalog_release_is_not_visible_until_complete(monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
@@ -181,12 +197,18 @@ def test_postgres_catalog_release_is_not_visible_until_complete(monkeypatch):
 
 def test_workspace_catalog_upsert_bootstraps_default_workspace(client_factory):
     client = client_factory()
+    options = {
+        "type": "sql",
+        "uri": "sqlite:///catalog.db",
+        "provider_catalog_name": "warehouse",
+        "s3.region": "eu-west-1",
+    }
 
     response = client.put(
         "/v1/catalogs/analytics",
         json={
             "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+            "options": options,
         },
         headers=ADMIN_HEADERS,
     )
@@ -200,7 +222,7 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace(client_factory):
             "id": response.json()["id"],
             "name": "analytics",
             "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+            "options": options,
             "status": "configured",
             "revision": 0,
             "discovered_table_count": 0,
@@ -217,7 +239,7 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace(client_factory):
     assert catalog_events[0]["details"] == {
         "name": "analytics",
         "plugin_id": ICEBERG_CATALOG_ID,
-        "option_keys": ["type", "uri"],
+        "option_keys": ["provider_catalog_name", "s3.region", "type", "uri"],
     }
 
 

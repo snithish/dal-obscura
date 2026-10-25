@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from importlib import metadata
 from types import SimpleNamespace
 from typing import Any, Protocol, cast
@@ -389,6 +390,33 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(entry
         entry_points_fn=lambda: _EntryPoints([entry]),
     )
     assert registry.reload()[("catalog", "iceberg.catalog")] == descriptor
+
+
+@pytest.mark.parametrize("source", ["global", "captured"])
+def test_format_options_keep_scoped_references_out_of_signed_work(entry_factory, source):
+    entry = entry_factory("fixture.format", "dal_obscura.table_formats.v3")
+    descriptor = replace(
+        load_static_plugin_descriptor(entry),
+        config_schema={"fields": [{"name": "endpoint", "type": "uri"}]},
+    )
+    reference = {"secret": "ENDPOINT", "scope": "catalog:analytics"}
+    registry = PluginRegistry(
+        allowlist={
+            ("table_format", "fixture.format"): build_plugin_lock("table_format", entry, descriptor)
+        },
+        entry_points_fn=lambda: _EntryPoints([entry]),
+        descriptor_loader=lambda _: descriptor,
+        options={"dal.plugins.fixture.format.endpoint": reference} if source == "global" else {},
+    )
+    registry.reload()
+    assert dict(
+        registry.format_options("fixture.format", captured={"endpoint": "https://public.example"})
+    ) == {"endpoint": "https://public.example"}
+    with pytest.raises(ValueError, match="cannot contain secrets"):
+        if source == "global":
+            registry.format_options("fixture.format")
+        else:
+            registry.format_options("fixture.format", captured={"endpoint": reference})
 
 
 def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -> None:

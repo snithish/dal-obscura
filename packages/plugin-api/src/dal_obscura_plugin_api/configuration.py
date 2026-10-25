@@ -53,8 +53,11 @@ class ConfigField:
 
     def validate(self, value: object) -> None:
         """Validate an unresolved option; secret authorization remains with the host."""
-        if self.type in {"string", "uri"} and not isinstance(value, str):
-            raise ValueError("must be a string")
+        if self.type in {"string", "uri"}:
+            if isinstance(value, Mapping):
+                _validate_secret_reference(value)
+            elif not isinstance(value, str):
+                raise ValueError("must be a string")
         if self.type == "boolean" and not isinstance(value, bool):
             raise ValueError("must be a boolean")
         if self.type == "integer" and (isinstance(value, bool) or not isinstance(value, int)):
@@ -84,10 +87,12 @@ def _validate_secret_reference(value: object) -> None:
 
 def config_fields(schema: Mapping[str, object]) -> tuple[ConfigField, ...] | None:
     """Validate declared fields once, retaining absent-vs-empty schema semantics."""
+    if "additionalProperties" in schema and not isinstance(schema["additionalProperties"], bool):
+        raise ValueError("Plugin configuration additionalProperties must be boolean")
     if "fields" not in schema:
         if schema.get("defaults"):
             raise ValueError("Plugin configuration defaults require declared fields")
-        return None
+        return None if schema.get("additionalProperties", True) else ()
     raw_fields = schema["fields"]
     if not isinstance(raw_fields, (list, tuple)):
         raise ValueError("Plugin configuration fields must be a list")

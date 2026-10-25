@@ -78,8 +78,54 @@ def test_packaged_descriptor_rejects_oversized_metadata(descriptor_package):
             "integer",
         ),
         ({"fields": [], "defaults": {"unknown": "value"}}, "default"),
+        ({"fields": [], "additionalProperties": "true"}, "additionalProperties"),
     ],
 )
 def test_descriptor_rejects_invalid_configuration_language_before_admission(schema, message):
     with pytest.raises(ValueError, match=message):
         PluginDescriptor("catalog", "fixture", "3", 1, "fixture", "1", config_schema=schema)
+
+
+@pytest.mark.parametrize("field_type", ["string", "uri"])
+def test_text_fields_accept_strings_or_scoped_references(field_type):
+    descriptor = PluginDescriptor(
+        "catalog",
+        "fixture",
+        "3",
+        1,
+        "fixture",
+        "1",
+        config_schema={"fields": [{"name": "uri", "type": field_type}]},
+    )
+    assert descriptor.config_fields is not None
+    field = descriptor.config_fields[0]
+    field.validate("https://catalog.example")
+    field.validate({"secret": "CATALOG_URI", "scope": "catalog:analytics"})
+    for malformed in [
+        {"secret": "CATALOG_URI"},
+        {"secret": "CATALOG_URI", "scope": ""},
+        {"secret": "CATALOG_URI", "scope": "catalog:analytics", "value": "inline"},
+        {"secret": "", "scope": "catalog:analytics"},
+    ]:
+        with pytest.raises(ValueError, match="secret"):
+            field.validate(malformed)
+    with pytest.raises(ValueError, match="string"):
+        field.validate(42)
+
+
+@pytest.mark.parametrize(
+    "field", [{"type": "integer"}, {"type": "enum", "options": ["safe", "fast"]}]
+)
+def test_non_text_fields_do_not_accept_secret_references(field):
+    descriptor = PluginDescriptor(
+        "catalog",
+        "fixture",
+        "3",
+        1,
+        "fixture",
+        "1",
+        config_schema={"fields": [{"name": "mode", **field}]},
+    )
+    assert descriptor.config_fields is not None
+    with pytest.raises(ValueError):
+        descriptor.config_fields[0].validate({"secret": "MODE", "scope": "catalog:analytics"})

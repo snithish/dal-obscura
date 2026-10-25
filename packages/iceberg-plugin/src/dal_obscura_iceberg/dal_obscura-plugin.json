@@ -17,6 +17,7 @@
         1
       ],
       "config_schema": {
+        "additionalProperties": true,
         "defaults": {
           "type": "sql"
         },
@@ -24,7 +25,7 @@
           {
             "name": "type",
             "type": "enum",
-            "required": true,
+            "required": false,
             "options": [
               "sql",
               "rest",
@@ -36,8 +37,13 @@
             ]
           },
           {
-            "name": "uri",
+            "name": "provider_catalog_name",
             "type": "string",
+            "required": false
+          },
+          {
+            "name": "uri",
+            "type": "uri",
             "required": false,
             "secret": false
           },

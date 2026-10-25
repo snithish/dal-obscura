@@ -14,6 +14,14 @@ wheel artifacts. The lock identifies distribution, version, SDK API, descriptor
 and installed artifact. Local composition can construct locks for bundled wheels;
 external plugins always need explicit admission. See [qualification](testing.md).
 
+Catalog writes, persisted configuration capture and asset bindings require an
+admitted startup registry for bundled and external plugins alike. The Iceberg
+catalog exposes common typed fields and allows additional PyIceberg properties.
+Its catalog type can be inferred by PyIceberg when omitted. Providers validate
+backend properties at construction. Stored options pass host credential, egress
+and size validation before reference resolution. Connection edits preserve
+additional properties for descriptors that allow them.
+
 `DAL_OBSCURA_PLUGIN_OPTIONS` is a JSON object of namespaced global arguments:
 
 ```json

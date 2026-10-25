@@ -166,10 +166,11 @@ def test_admitted_descriptor_preserves_typed_boolean_integer_and_enum_values() -
         )
 
 
-def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
+@pytest.mark.parametrize("plugin_id", ["example.catalog", "iceberg.catalog"])
+def test_admitted_catalog_options_are_checked_before_factory_use(plugin_id) -> None:
     descriptor = PluginDescriptor(
         kind="catalog",
-        plugin_id="example.catalog",
+        plugin_id=plugin_id,
         api_version="3",
         config_version=1,
         distribution="example",
@@ -180,7 +181,7 @@ def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
 
     class Registry:
         def admitted(self):
-            return {("catalog", "example.catalog"): descriptor}
+            return {("catalog", plugin_id): descriptor}
 
         def load(self, kind, plugin_id):
             calls.append((kind, plugin_id))
@@ -188,8 +189,30 @@ def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
 
     with pytest.raises(ValidationFailure, match="unsupported fields"):
         validate_admitted_catalog_options(
-            "example.catalog",
+            plugin_id,
             {"uri": "https://catalog.example", "debug": True},
             Registry(),
         )
     assert calls == []
+    with pytest.raises(ValidationFailure, match="not admitted"):
+        validate_admitted_catalog_options(plugin_id, {"uri": "https://catalog.example"}, None)
+
+
+def test_open_catalog_fields_still_validate_declared_options() -> None:
+    descriptor = PluginDescriptor(
+        "catalog",
+        "example.catalog",
+        "3",
+        1,
+        "example",
+        "1",
+        config_schema={
+            "fields": [{"name": "uri", "required": True}],
+            "additionalProperties": True,
+        },
+    )
+    validate_descriptor_options(descriptor, {"uri": "https://example", "s3.region": "eu-west-1"})
+    with pytest.raises(ValidationFailure, match="missing required fields"):
+        validate_descriptor_options(descriptor, {"s3.region": "eu-west-1"})
+    with pytest.raises(ValidationFailure, match="must be a string"):
+        validate_descriptor_options(descriptor, {"uri": 42})

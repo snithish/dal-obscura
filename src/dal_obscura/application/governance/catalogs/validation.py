@@ -13,7 +13,6 @@ from dal_obscura_plugin_api import PluginDescriptor
 from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.application.governance.ports import GovernancePluginRegistry
 
-ICEBERG_CATALOG_ID = "iceberg.catalog"
 _MAX_OPTION_DEPTH = 16
 _MAX_OPTION_NODES = 1_024
 _MAX_OPTION_KEYS = 128
@@ -47,17 +46,13 @@ def validate_admitted_catalog_options(
     options: dict[str, Any],
     plugin_registry: GovernancePluginRegistry | None,
 ) -> None:
-    """Validate persisted external catalog options before provider use.
+    """Validate persisted catalog options before provider use.
 
     Stored configuration crosses a trust boundary. Discovery and schema
     operations validate the admitted descriptor before resolving secrets or
     loading a factory.
-    Built-in Iceberg options use the PyIceberg configuration contract and are
-    validated by ``validate_catalog_options``.
     """
 
-    if plugin_id == ICEBERG_CATALOG_ID:
-        return
     if plugin_registry is None:
         raise ValidationFailure("Catalog plugin is not admitted")
     admitted = plugin_registry.admitted()
@@ -157,7 +152,8 @@ def validate_descriptor_options(
     if fields is None:
         return
     names = {field.name for field in fields}
-    if unknown := sorted(set(options) - names):
+    unknown = sorted(set(options) - names)
+    if unknown and descriptor.config_schema.get("additionalProperties") is not True:
         raise ValidationFailure(f"{kind} options contain unsupported fields: " + ", ".join(unknown))
     required: set[str] = set()
     for field in fields:

@@ -295,11 +295,16 @@ export function ConnectionsView({
   async function save() {
     if (savingRef.current) return;
     if (!name.trim()) return rejectFields({ name: "Connection name is required." });
+    function existingReference(field: PluginConfigField) {
+      if (
+        editingCatalog?.plugin_id !== pluginId ||
+        !(field.secret || field.type === "string" || field.type === "uri")
+      )
+        return undefined;
+      return preserveSecretReference(editingCatalog.options[field.name]);
+    }
     const missing = effectiveFields.filter(
-      (field) =>
-        field.required &&
-        !config[field.name]?.trim() &&
-        !(field.secret && preserveSecretReference(editingCatalog?.options[field.name])),
+      (field) => field.required && !config[field.name]?.trim() && !existingReference(field),
     );
     if (missing.length)
       return rejectFields(
@@ -331,15 +336,22 @@ export function ConnectionsView({
     savingRef.current = true;
     setSaving(true);
     const options: Record<string, unknown> = { ...pluginDefaults(selectedPlugin) };
+    const allowsAdditionalProperties =
+      selectedPlugin.config_schema.additionalProperties === true ||
+      (selectedPlugin.config_schema.fields === undefined &&
+        selectedPlugin.config_schema.additionalProperties !== false);
+    if (allowsAdditionalProperties && editingCatalog?.plugin_id === pluginId) {
+      const declaredFields = new Set(effectiveFields.map((field) => field.name));
+      for (const [key, value] of Object.entries(editingCatalog.options)) {
+        if (!declaredFields.has(key)) options[key] = value;
+      }
+    }
     for (const field of effectiveFields) {
       const value = config[field.name]?.trim();
       if (!value) {
-        // An empty secret field while editing means “keep the existing
-        // server-held reference”, never “erase the credential”.
-        if (field.secret && editingCatalog?.options[field.name] !== undefined) {
-          const reference = preserveSecretReference(editingCatalog.options[field.name]);
-          if (reference) options[field.name] = reference;
-        }
+        // Blank edits retain scoped references, including referenced URI fields.
+        const reference = existingReference(field);
+        if (reference) options[field.name] = reference;
         continue;
       }
       if (field.secret) options[field.name] = { secret: value, scope: `catalog:${name.trim()}` };
@@ -978,6 +990,11 @@ export function ConnectionsView({
               onChange={(event) => {
                 markDirty("connection");
                 setFieldErrors({});
+                setConfig(
+                  pluginDefaults(
+                    catalogPlugins.find((plugin) => plugin.plugin_id === event.currentTarget.value),
+                  ),
+                );
                 setPluginId(event.currentTarget.value);
               }}
               data={catalogPlugins.map((plugin) => ({

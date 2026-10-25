@@ -7,16 +7,24 @@ from dal_obscura.adapters.sql.database.db import session_factory
 from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory
 from dal_obscura.application.governance.assets.service import AssetsCommands
 from dal_obscura.kernel.identity.actor import ControlPlaneActor
+from dal_obscura.plugins.bootstrap import create_plugin_registry
+
+
+@pytest.fixture(scope="session")
+def admitted_plugins():
+    return create_plugin_registry()
 
 
 @pytest.fixture
-def asset_commands(db_engine):
+def asset_commands(db_engine, admitted_plugins):
     work_factory = SqlGovernanceUnitOfWorkFactory(session_factory(db_engine))
     with work_factory() as work:
         work.workspace.ensure_workspace()
         work.catalogs.upsert_catalog(name="analytics", plugin_id="iceberg.catalog", options={})
         work.commit()
     commands = AssetsCommands(
-        work_factory, schema_loader=ProviderAssetSchemaLoader(), plugin_registry=None
+        work_factory,
+        schema_loader=ProviderAssetSchemaLoader(plugin_registry=admitted_plugins),
+        plugin_registry=admitted_plugins,
     )
     return commands, work_factory, ControlPlaneActor.for_platform_admin("admin")

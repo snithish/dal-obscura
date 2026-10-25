@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
 from dal_obscura.application.governance.assets import schema as schema_service
 from dal_obscura.application.governance.assets.access import ensure_asset_capability
 from dal_obscura.application.governance.catalogs.validation import (
-    ICEBERG_CATALOG_ID,
     validate_descriptor_options,
 )
 from dal_obscura.application.governance.errors import AuthorizationFailure, ValidationFailure
@@ -151,27 +151,28 @@ class AssetsCommands:
             required_workspace(work)
             catalog_record = work.catalogs.get_workspace_catalog(catalog)
             catalog_plugin_id = str(catalog_record["plugin_id"])
-            if backend != "iceberg" or catalog_plugin_id != ICEBERG_CATALOG_ID:
-                if self._plugin_registry is None:
-                    raise ValidationFailure("Plugin pair is not admitted")
-                # Plugin admission is frozen at startup; never discover or import
-                # newly installed code while handling an asset mutation.
-                admitted = self._plugin_registry.admitted()
-                catalog_descriptor = admitted.get(("catalog", catalog_plugin_id))
-                format_descriptor = admitted.get(("table_format", backend))
-                if catalog_descriptor is None or format_descriptor is None:
-                    raise ValidationFailure("Plugin pair is not admitted")
-                if backend not in catalog_descriptor.output_formats:
-                    raise ValidationFailure("Catalog does not declare this table format")
-                if not catalog_descriptor.handle_versions.intersection(
-                    format_descriptor.handle_versions
-                ):
-                    raise ValidationFailure(
-                        "Catalog and table-format handle versions do not overlap"
-                    )
-                if not catalog_descriptor.capabilities.intersection(format_descriptor.capabilities):
-                    raise ValidationFailure("Catalog and table-format capabilities do not overlap")
-                validate_descriptor_options(format_descriptor, options, kind="Table-format")
+            if self._plugin_registry is None:
+                raise ValidationFailure("Plugin pair is not admitted")
+            # Admission is frozen at startup; asset mutations cannot discover code.
+            admitted = self._plugin_registry.admitted()
+            catalog_descriptor = admitted.get(("catalog", catalog_plugin_id))
+            format_descriptor = admitted.get(("table_format", backend))
+            if catalog_descriptor is None or format_descriptor is None:
+                raise ValidationFailure("Plugin pair is not admitted")
+            if backend not in catalog_descriptor.output_formats:
+                raise ValidationFailure("Catalog does not declare this table format")
+            if not catalog_descriptor.handle_versions.intersection(
+                format_descriptor.handle_versions
+            ):
+                raise ValidationFailure("Catalog and table-format handle versions do not overlap")
+            if not catalog_descriptor.capabilities.intersection(format_descriptor.capabilities):
+                raise ValidationFailure("Catalog and table-format capabilities do not overlap")
+            if any(
+                field.name in options and (field.secret or isinstance(options[field.name], Mapping))
+                for field in format_descriptor.config_fields or ()
+            ):
+                raise ValidationFailure("Table-format options cannot contain secrets")
+            validate_descriptor_options(format_descriptor, options, kind="Table-format")
             asset_id = work.assets.upsert_asset(
                 catalog=catalog,
                 target=target,

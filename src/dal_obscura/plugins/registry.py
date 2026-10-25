@@ -162,7 +162,7 @@ class PluginRegistry:
         fields = {field.name: field for field in descriptor.config_fields or ()}
         if set(options) - set(fields):
             raise ValueError("Unsupported format options")
-        if any(fields[key].secret for key in options):
+        if any(fields[key].secret or isinstance(value, Mapping) for key, value in options.items()):
             raise ValueError("Format options cannot contain secrets")
         for key, value in options.items():
             fields[key].validate(value)

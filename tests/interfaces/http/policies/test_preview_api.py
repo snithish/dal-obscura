@@ -195,8 +195,10 @@ def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory
     from dal_obscura.adapters.sql.unit_of_work import SqlGovernanceUnitOfWorkFactory
     from dal_obscura.application.governance.policies import evaluation as evaluation_service
     from dal_obscura.kernel.identity.actor import ControlPlaneActor
+    from dal_obscura.plugins.bootstrap import create_plugin_registry
 
-    client = client_factory()
+    registry = create_plugin_registry()
+    client = client_factory(plugin_registry=registry)
     asset = _provision_reviewable_asset(client)
     rows: list[dict[str, object]] = [{"id": 7}]
     groups = ["initial-group"]
@@ -211,6 +213,7 @@ def test_evaluation_capture_detaches_synthetic_inputs_before_work(client_factory
             claims=claims,
             rows=rows,
             identity_mapper=SyntheticPreviewIdentityMapper(),
+            plugin_registry=registry,
         )
         store.commit()
     rows[0]["id"] = 999

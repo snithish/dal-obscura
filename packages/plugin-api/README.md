@@ -32,11 +32,19 @@ fields in the JSON file so admission and runtime describe the same contract.
 The SDK validates declared fields and exposes immutable `config_fields` on the
 descriptor. Fields support strings, URI strings, booleans, integers, finite
 numbers, string enums and scoped secret references. Names must fit the operator
-form's identifier syntax. Defaults must name declared fields and match their
-types. Omitted `fields` leaves catalog option validation to the provider; an
-empty list declares no options. Formats admit only declared non-secret options
-into signed work. The host still owns secret grants, endpoint policy and bounds
-on stored configuration.
+form's identifier syntax. Catalog string and URI fields also accept an explicit
+scoped secret reference. The host authorizes and resolves these references before
+provider construction; other field types retain their declared value types.
+Defaults must name declared fields and match their types. With declared fields,
+unknown catalog options are rejected unless
+`additionalProperties` is explicitly `true`. This lets a provider expose common
+typed fields while owning its remaining backend properties. The flag must be a
+boolean; declared fields retain their type and required checks. Omitted `fields`
+leaves catalog option validation to the provider unless `additionalProperties`
+is `false`. An empty list declares no options by default.
+Formats admit only declared non-secret options into signed work and reject secret
+references even in string fields. The host still owns secret grants, endpoint
+policy and bounds on stored configuration.
 
 ## Execution
 

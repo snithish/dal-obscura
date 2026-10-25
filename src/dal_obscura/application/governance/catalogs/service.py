@@ -10,10 +10,8 @@ from dal_obscura_plugin_api import CatalogConfig, DiscoveryPage
 
 from dal_obscura.application.governance.catalogs.discovery import DiscoveryCursors
 from dal_obscura.application.governance.catalogs.validation import (
-    ICEBERG_CATALOG_ID,
     validate_admitted_catalog_options,
     validate_catalog_options,
-    validate_descriptor_options,
 )
 from dal_obscura.application.governance.errors import (
     AuthorizationFailure,
@@ -182,13 +180,7 @@ def upsert_workspace_catalog(
 ) -> dict[str, str]:
     """Creates or updates a workspace catalog definition."""
 
-    if plugin_id != ICEBERG_CATALOG_ID:
-        if plugin_registry is None:
-            raise ValidationFailure("Catalog plugin is not admitted")
-        admitted = plugin_registry.admitted()
-        if ("catalog", plugin_id) not in admitted:
-            raise ValidationFailure("Catalog plugin is not admitted")
-        validate_descriptor_options(admitted[("catalog", plugin_id)], options)
+    validate_admitted_catalog_options(plugin_id, options, plugin_registry)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     store.workspace.ensure_workspace()
     catalog_id = store.catalogs.upsert_catalog(

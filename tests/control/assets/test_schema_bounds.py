@@ -22,13 +22,15 @@ from tests.support.sources.schema_catalog import schema_registry
 
 
 @pytest.fixture
-def captured_schema(asset_commands):
+def captured_schema(asset_commands, admitted_plugins):
     commands, work_factory, actor = asset_commands
     asset = commands.upsert_workspace_asset(
         "analytics", "events", "iceberg", "default.events", {}, actor=actor, correlation_id=None
     )
     with work_factory() as work:
-        return capture_asset_schema(work, UUID(asset["id"]), actor)
+        return capture_asset_schema(
+            work, UUID(asset["id"]), actor, plugin_registry=admitted_plugins
+        )
 
 
 def test_get_asset_schema_reports_scope_encoding_budget(captured_schema) -> None:

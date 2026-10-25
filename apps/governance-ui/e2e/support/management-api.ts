@@ -10,7 +10,8 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
     module: "synthetic.catalog",
     plugin_id: "synthetic.catalog.iceberg",
     options: {
-      uri: "https://catalog.example",
+      uri: { secret: "catalog/endpoint", scope: "catalog:analytics" },
+      "s3.region": "eu-west-1",
       password: { secret: "catalog/analytics", scope: "catalog:analytics" },
     },
     status: "ready",
@@ -48,6 +49,7 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
         output_formats: ["iceberg"],
         handle_versions: [1],
         config_schema: {
+          additionalProperties: true,
           fields: [
             { name: "uri", type: "uri", required: true },
             { name: "password", type: "secret_reference", required: true, secret: true },

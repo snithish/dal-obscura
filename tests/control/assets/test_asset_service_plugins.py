@@ -11,6 +11,35 @@ from dal_obscura.application.governance.assets.service import AssetsCommands
 from dal_obscura.application.governance.errors import ValidationFailure
 
 
+@pytest.mark.parametrize(
+    "catalog_id,format_id",
+    [("fixture.catalog", "fixture.format"), ("iceberg.catalog", "iceberg")],
+)
+def test_asset_binding_requires_admission_for_every_pair(asset_commands, catalog_id, format_id):
+    from dal_obscura.plugins import PluginRegistry
+
+    _, factory, actor = asset_commands
+    with factory() as work:
+        work.catalogs.upsert_catalog(name="plugins", plugin_id=catalog_id, options={})
+        work.commit()
+    commands = AssetsCommands(
+        factory,
+        schema_loader=ProviderAssetSchemaLoader(),
+        plugin_registry=PluginRegistry(allowlist={}),
+    )
+    with pytest.raises(ValidationFailure, match="Plugin pair is not admitted"):
+        commands.upsert_workspace_asset(
+            "plugins",
+            "events",
+            format_id,
+            "default.events",
+            {},
+            actor=actor,
+            correlation_id=None,
+        )
+    assert commands.list_workspace_assets(actor=actor, correlation_id=None) == []
+
+
 def _commands(asset_commands, *, overlap=True, declared_format=True, handle_overlap=True):
     _, factory, actor = asset_commands
     catalog = PluginDescriptor(
@@ -55,7 +84,14 @@ def _commands(asset_commands, *, overlap=True, declared_format=True, handle_over
 
 def test_asset_binding_validates_pair_capabilities_and_format_options(asset_commands):
     commands, actor = _commands(asset_commands)
-    for options, message in [({}, "missing required"), ({"format_option": 42}, "must be a string")]:
+    for options, message in [
+        ({}, "missing required"),
+        ({"format_option": 42}, "must be a string"),
+        (
+            {"format_option": {"secret": "FORMAT_OPTION", "scope": "catalog:plugins"}},
+            "cannot contain secrets",
+        ),
+    ]:
         with pytest.raises(ValidationFailure, match=message):
             commands.upsert_workspace_asset(
                 "plugins",
