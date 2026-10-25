@@ -90,7 +90,7 @@ export function AssetInventory(props: AssetInventoryProps) {
                         name={asset.policy_status === "configured" ? "shield-check" : "key-round"}
                         size={13}
                       />
-                      {asset.policy_status === "configured" ? "Configured" : "Default NULL"}
+                      {asset.policy_status === "configured" ? "Configured" : "Default NULL masks"}
                     </span>
                   </Table.Td>
                   <Table.Td className="inventory-revision">

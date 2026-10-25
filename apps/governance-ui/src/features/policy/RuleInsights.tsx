@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMediaQuery } from "@mantine/hooks";
 import { Button, Checkbox, Modal, TextInput } from "@mantine/core";
 import type { PolicyRule, SchemaNode } from "../../data/api";
 import { authoritativeColumnOptions, createRuleCoverage, groupMasks } from "./policy_editor";
@@ -59,6 +60,11 @@ function LensContent({
   options: ReturnType<typeof authoritativeColumnOptions>;
   coverage: ReturnType<typeof createRuleCoverage>;
 }) {
+  const compact = useMediaQuery("(max-width: 48em)");
+  const rowHeight = compact ? 80 : COLUMN_ROW_HEIGHT;
+  const [selected, setSelected] = useState(
+    () => options.find((option) => coverage.rule.columns.includes(option.value))?.value ?? "",
+  );
   const [scope, setScope] = useState("");
   const [query, setQuery] = useState("");
   const [sample, setSample] = useState("sample@example.invalid");
@@ -81,21 +87,25 @@ function LensContent({
           (coverage.descendants.get(option.value) ?? []).some((leaf) => allowed.has(leaf))),
     );
   }, [options, coverage, scope, query]);
-  const start = Math.max(0, Math.floor(scrollTop / COLUMN_ROW_HEIGHT) - 2);
-  const end = Math.min(
-    rows.length,
-    Math.ceil((scrollTop + COLUMN_VIEW_HEIGHT) / COLUMN_ROW_HEIGHT) + 2,
-  );
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 2);
+  const end = Math.min(rows.length, Math.ceil((scrollTop + COLUMN_VIEW_HEIGHT) / rowHeight) + 2);
   const visible = useMemo(() => rows.slice(start, end), [rows, start, end]);
   useEffect(() => {
     setScrollTop(0);
     if (viewport.current) viewport.current.scrollTop = 0;
   }, [scope, query]);
+  const selectedOption = useMemo(
+    () => options.find((option) => option.value === selected),
+    [options, selected],
+  );
   useEffect(() => {
     let current = true;
     setValues({});
     void Promise.all(
-      visible.map(async (option) => {
+      [
+        ...visible,
+        ...(selectedOption && !visible.includes(selectedOption) ? [selectedOption] : []),
+      ].map(async (option) => {
         const children = coverage.descendants.get(option.value) ?? [];
         if (children.length !== 1 || children[0] !== option.value) return [option.value, undefined];
         return [
@@ -113,7 +123,7 @@ function LensContent({
     return () => {
       current = false;
     };
-  }, [visible, coverage, granted, sample, nullSample]);
+  }, [visible, coverage, granted, sample, nullSample, selectedOption]);
   return (
     <>
       <p className="help">
@@ -143,7 +153,7 @@ function LensContent({
       {scope && <p role="status">Subtree: {scope}</p>}
       <div className="value-lens-head">
         <span>Field path / subtree mask state</span>
-        <span>Simulated value · Returned as stored — no mask in this rule</span>
+        <span>Mask state · select a field to inspect its full value</span>
       </div>
       <div
         ref={viewport}
@@ -154,7 +164,7 @@ function LensContent({
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
         style={{ height: COLUMN_VIEW_HEIGHT }}
       >
-        <div style={{ height: rows.length * COLUMN_ROW_HEIGHT, position: "relative" }}>
+        <div style={{ height: rows.length * rowHeight, position: "relative" }}>
           {visible.map((option, index) => {
             const children = coverage.descendants.get(option.value) ?? [];
             const parent = children.length !== 1 || children[0] !== option.value;
@@ -170,8 +180,8 @@ function LensContent({
                 className="value-lens-row"
                 style={{
                   position: "absolute",
-                  top: (start + index) * COLUMN_ROW_HEIGHT,
-                  height: COLUMN_ROW_HEIGHT,
+                  top: (start + index) * rowHeight,
+                  height: rowHeight,
                 }}
               >
                 {parent ? (
@@ -185,7 +195,15 @@ function LensContent({
                     {option.value}
                   </Button>
                 ) : (
-                  <code title={option.value}>{option.value}</code>
+                  <button
+                    type="button"
+                    className="value-lens-field"
+                    aria-label={"Inspect field " + option.value}
+                    aria-pressed={selected === option.value}
+                    onClick={() => setSelected(option.value)}
+                  >
+                    <code title={option.value}>{option.value}</code>
+                  </button>
                 )}
                 <span>
                   {parent ? (
@@ -200,7 +218,7 @@ function LensContent({
                   ) : !granted.has(option.value) ? (
                     "Not selected in this rule (NULL default)"
                   ) : option.value in values ? (
-                    JSON.stringify(values[option.value])
+                    (coverage.rule.masks[option.value]?.type ?? "No mask") + " · View full value"
                   ) : (
                     "Calculating…"
                   )}
@@ -210,6 +228,20 @@ function LensContent({
           })}
         </div>
       </div>
+      {selected && (
+        <section className="value-lens-detail" aria-label="Selected synthetic field value">
+          <h3>Selected field</h3>
+          <code>{selected}</code>
+          <p className="help">Illustrative output</p>
+          <code>
+            {!(selected in values)
+              ? "Calculating…"
+              : !granted.has(selected)
+                ? "Not selected in this rule (NULL default)"
+                : JSON.stringify(values[selected])}
+          </code>
+        </section>
+      )}
       <p className="help">
         {rows.length.toLocaleString()} schema paths · at most 12 rows mounted. Parent rows show
         state summaries, never raw values.

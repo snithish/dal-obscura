@@ -330,3 +330,23 @@ test.describe("audit date filters in a non-UTC timezone", () => {
     await expect(createdAfter).toHaveValue("2026-09-26T10:45");
   });
 });
+
+test("connection validation focuses the invalid field and clears while correcting it", async ({
+  page,
+}) => {
+  await authenticatedApi(page, { admin: true });
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes("/v1/catalogs"))
+      writes.push(request.url());
+  });
+  await page.goto("/#connections");
+  await page.getByRole("button", { name: "Save connection", exact: true }).click();
+  const name = page.getByRole("textbox", { name: "Name", exact: true });
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await name.fill("analytics");
+  await expect(name).not.toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Connection name is required.", { exact: true })).toHaveCount(0);
+  expect(writes).toEqual([]);
+});

@@ -136,6 +136,22 @@ export function ConnectionsView({
   sessionScope,
 }: ConnectionsViewProps) {
   const [name, setName] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const connectionForm = useRef<HTMLDivElement>(null);
+  function rejectFields(errors: Record<string, string>) {
+    setFieldErrors(errors);
+    setMessage(null);
+    requestAnimationFrame(() =>
+      connectionForm.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+    );
+  }
+  function clearFieldError(field: string) {
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
   const [editingCatalog, setEditingCatalog] = useState<Catalog | null>(null);
   const catalogPlugins = plugins.filter((plugin) => plugin.kind === "catalog");
   const [pluginId, setPluginId] = useState(catalogPlugins[0]?.plugin_id ?? "");
@@ -278,12 +294,7 @@ export function ConnectionsView({
   }, [pluginId]);
   async function save() {
     if (savingRef.current) return;
-    if (!name.trim())
-      return setMessage({
-        tone: "error",
-        text: "Connection name is required.",
-        scope: "connection",
-      });
+    if (!name.trim()) return rejectFields({ name: "Connection name is required." });
     const missing = effectiveFields.filter(
       (field) =>
         field.required &&
@@ -291,11 +302,11 @@ export function ConnectionsView({
         !(field.secret && preserveSecretReference(editingCatalog?.options[field.name])),
     );
     if (missing.length)
-      return setMessage({
-        tone: "error",
-        text: `Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`,
-        scope: "connection",
-      });
+      return rejectFields(
+        Object.fromEntries(
+          missing.map((field) => [field.name, configFieldLabel(field.name) + " is required."]),
+        ),
+      );
     const invalidNumber = effectiveFields.find((field) => {
       if ((field.type !== "integer" && field.type !== "number") || !config[field.name]?.trim())
         return false;
@@ -303,10 +314,12 @@ export function ConnectionsView({
       return !Number.isFinite(parsed) || (field.type === "integer" && !Number.isInteger(parsed));
     });
     if (invalidNumber)
-      return setMessage({
-        tone: "error",
-        text: `${configFieldLabel(invalidNumber.name)} must be a valid ${invalidNumber.type} value.`,
-        scope: "connection",
+      return rejectFields({
+        [invalidNumber.name]:
+          configFieldLabel(invalidNumber.name) +
+          " must be a valid " +
+          invalidNumber.type +
+          " value.",
       });
     if (!selectedPlugin)
       return setMessage({
@@ -314,6 +327,7 @@ export function ConnectionsView({
         text: "Select an admitted catalog adapter before saving.",
         scope: "connection",
       });
+    setFieldErrors({});
     savingRef.current = true;
     setSaving(true);
     const options: Record<string, unknown> = { ...pluginDefaults(selectedPlugin) };
@@ -355,6 +369,7 @@ export function ConnectionsView({
       });
       setName("");
       setConfig({});
+      setFieldErrors({});
       setEditingCatalog(null);
       onReload();
     } catch (error) {
@@ -381,6 +396,7 @@ export function ConnectionsView({
       });
       return;
     }
+    setFieldErrors({});
     setEditingCatalog(catalog);
     setName(catalog.name);
     setPluginId(catalog.plugin_id);
@@ -710,6 +726,7 @@ export function ConnectionsView({
     const value = config[field.name] ?? "";
     const update = (next: string) => {
       markDirty("connection");
+      clearFieldError(field.name);
       setConfig((current) => ({ ...current, [field.name]: next }));
     };
     const label = (
@@ -722,6 +739,8 @@ export function ConnectionsView({
       field.type === "boolean" ? (
         <NativeSelect
           label={label}
+          error={fieldErrors[field.name]}
+          errorProps={{ role: "alert" }}
           value={value}
           onChange={(event) => update(event.currentTarget.value)}
           data={[
@@ -733,6 +752,8 @@ export function ConnectionsView({
       ) : field.type === "enum" && field.options?.length ? (
         <NativeSelect
           label={label}
+          error={fieldErrors[field.name]}
+          errorProps={{ role: "alert" }}
           value={value}
           onChange={(event) => update(event.currentTarget.value)}
           data={[
@@ -743,6 +764,8 @@ export function ConnectionsView({
       ) : (
         <TextInput
           label={label}
+          error={fieldErrors[field.name]}
+          errorProps={{ role: "alert" }}
           value={value}
           onChange={(event) => update(event.currentTarget.value)}
           placeholder={
@@ -911,7 +934,7 @@ export function ConnectionsView({
         </p>
       )}
       {pluginCards}
-      <div className="form-card">
+      <div className="form-card" ref={connectionForm}>
         <div className="management-head">
           <div>
             <h3>{editingCatalog ? `Edit ${editingCatalog.name}` : "Add catalog"}</h3>
@@ -937,10 +960,13 @@ export function ConnectionsView({
         <div className="form-grid">
           <TextInput
             label="Name"
+            error={fieldErrors.name}
+            errorProps={{ role: "alert" }}
             value={name}
             disabled={Boolean(editingCatalog)}
             onChange={(event) => {
               markDirty("connection");
+              clearFieldError("name");
               setName(event.currentTarget.value);
             }}
             placeholder="analytics"
@@ -951,6 +977,7 @@ export function ConnectionsView({
               value={pluginId}
               onChange={(event) => {
                 markDirty("connection");
+                setFieldErrors({});
                 setPluginId(event.currentTarget.value);
               }}
               data={catalogPlugins.map((plugin) => ({

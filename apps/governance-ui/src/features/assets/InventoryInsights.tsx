@@ -44,7 +44,7 @@ export function InventoryInsights() {
             <small>Control-plane summary</small>
           </div>
           <div>
-            <span>No policy</span>
+            <span>Default NULL masks</span>
             <strong>{summary.data.missing_policy_count.toLocaleString()}</strong>
             <small>Default NULL masks</small>
           </div>

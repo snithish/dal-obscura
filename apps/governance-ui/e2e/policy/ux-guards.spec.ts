@@ -38,3 +38,18 @@ test("collapsed pending edits remain discoverable beside the disabled save", asy
   await review.click();
   await expect(page.getByRole("button", { name: "Discard row changes" })).toBeFocused();
 });
+
+test("global bypass is disclosed as an advanced action with explicit consequences", async ({
+  page,
+}) => {
+  const bypass = page.getByRole("button", { name: "Allow all to all users", exact: true });
+  await expect(bypass).not.toBeVisible();
+  await page.getByText("Advanced policy options", { exact: true }).click();
+  await expect(bypass).toBeVisible();
+  await bypass.click();
+  const confirmation = page.getByRole("dialog", { name: "Allow all authenticated readers?" });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByText(/every column and row, without masks/)).toBeVisible();
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByText("Allow all is enabled", { exact: true })).toHaveCount(0);
+});

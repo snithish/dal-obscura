@@ -1205,3 +1205,58 @@ pre,
     color: HighlightText;
   }
 }
+
+.policy-advanced {
+  margin: 12px 0 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.policy-advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.value-lens-field {
+  border: 0;
+  color: var(--primary);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  min-height: 36px;
+}
+.value-lens-field code {
+  display: block;
+}
+.value-lens-field[aria-pressed="true"] {
+  background: var(--selection);
+}
+.value-lens-detail {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+.value-lens-detail code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 48em) {
+  .value-lens-head {
+    display: none;
+  }
+  .value-lens-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    align-content: center;
+  }
+  .value-lens-field {
+    min-height: 36px;
+  }
+  .value-lens-row > span {
+    font-size: 12px;
+  }
+}

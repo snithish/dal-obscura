@@ -55,3 +55,29 @@ for (const width of [390, 320]) {
     }
   });
 }
+
+test("mobile lens exposes a full selected path and synthetic value without truncation", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await uxApi(page);
+  await page.goto(`/?asset=${uxAssetId}#assets`);
+  await page.getByRole("button", { name: "Open value lens", exact: true }).click();
+  const lens = page.getByRole("dialog", { name: "Value lens", exact: true });
+  await lens.getByRole("button", { name: "Inspect field customer.email", exact: true }).click();
+  const value = lens.getByRole("region", { name: "Selected synthetic field value" });
+  await expect(value.getByText("customer.email", { exact: true })).toBeVisible();
+  const sample = "long-synthetic-address-for-preview@example.invalid";
+  await lens.getByLabel("Synthetic sample value").fill(sample);
+  await expect(value.getByText(JSON.stringify(sample), { exact: true })).toBeVisible();
+  expect(
+    await value
+      .locator("code")
+      .evaluateAll((elements) =>
+        elements.every((element) => element.scrollWidth <= element.clientWidth),
+      ),
+  ).toBe(true);
+  await lens.getByLabel("Use a NULL sample").check();
+  await expect(value.getByText("null", { exact: true })).toBeVisible();
+  expect(await lens.locator(".value-lens-row").count()).toBeLessThanOrEqual(12);
+});

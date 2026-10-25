@@ -300,14 +300,32 @@ export function AssetWorkspace(props: {
                         : "Rules reveal selected columns with no mask, or replace the default with another mask. Row filters are independent."}
                     </p>
                   </div>
+                </div>
+                <details className="policy-advanced" open={bypass || undefined}>
+                  <summary>Advanced policy options</summary>
+                  <p className="help">
+                    Allow all bypasses every column mask and row filter for all authenticated
+                    readers.
+                  </p>
                   <Button
                     variant="default"
                     disabled={readOnly || bypass || dirty}
-                    onClick={props.onAllowAll}
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: "Allow all authenticated readers?",
+                          message:
+                            "All authenticated readers will receive every column and row, without masks. Other rules are bypassed. This change is staged until you save the policy.",
+                          confirmLabel: "Stage allow all",
+                          destructive: true,
+                        })
+                      )
+                        props.onAllowAll();
+                    }}
                   >
                     Allow all to all users
                   </Button>
-                </div>
+                </details>
                 <div className="policy-list-heading">
                   <h2>
                     Rules <span className="context-tag">{props.rules.length}</span>

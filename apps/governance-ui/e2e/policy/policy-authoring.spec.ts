@@ -173,7 +173,9 @@ test("one saved-policy test entry reopens the modal with retained persona inputs
 test("allow all is an explicit removable bypass and discard restores restrictions", async ({
   page,
 }) => {
+  await page.getByText("Advanced policy options", { exact: true }).click();
   await page.getByRole("button", { name: "Allow all to all users", exact: true }).click();
+  await page.getByRole("button", { name: "Stage allow all", exact: true }).click();
   await expect(page.getByText("Allow all is enabled", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Column Masks" })).toBeDisabled();
   await page.getByRole("button", { name: "Save policy", exact: true }).click();
