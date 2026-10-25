@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import type { FixtureRule } from "../support/api-types";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "../support/fixtures";
@@ -28,11 +29,11 @@ test("mask and row edits have independent save guards and survive reload", async
   await page.getByLabel("Filter column 1").selectOption("country");
   await page.getByLabel("Filter value 1").fill("US");
   await page.getByRole("button", { name: "Apply mask", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Apply row filter", exact: true }).click();
   await expect(page.getByLabel("Filter value 1")).toHaveValue("US");
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeEnabled();
+  await savePolicy(page);
   await expect(page.getByText(/Live policy saved/)).toBeVisible();
   await page.reload();
   await expect(page.getByText("group:privacy-reviewers", { exact: true })).toBeVisible();
@@ -40,10 +41,10 @@ test("mask and row edits have independent save guards and survive reload", async
 });
 test("discard restores row state and releases the save guard", async ({ page }) => {
   await page.getByRole("button", { name: "Add Row Filter", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Discard row changes", exact: true }).click();
   await expect(page.getByText("All rows are allowed by this rule.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeEnabled();
 });
 test("editing a mask preserves literal replacement text", async ({ page }) => {
   await page.getByRole("button", { name: "Add Column Masks", exact: true }).click();
@@ -111,7 +112,7 @@ test("reselecting the active rule does not release pending edits", async ({ page
   await page.getByRole("button", { name: "Add Column Masks", exact: true }).click();
   await page.getByLabel("Mask", { exact: true }).selectOption("hash");
   await page.getByRole("button", { name: /^Rule 1/ }).click();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
   expect(dialogs).toBe(0);
 });
 
@@ -141,7 +142,7 @@ test("named rules stack, collapse without losing edits, and persist metadata", a
   await expect(cards.first().getByLabel("Description", { exact: true })).toHaveValue(
     "Reporting access with protected contact details",
   );
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   await expect(page.getByText(/Live policy saved/)).toBeVisible();
   await page.reload();
   await expect(cards.first().getByLabel("Rule name", { exact: true })).toHaveValue(
@@ -178,7 +179,7 @@ test("allow all is an explicit removable bypass and discard restores restriction
   await page.getByRole("button", { name: "Stage allow all", exact: true }).click();
   await expect(page.getByText("Allow all is enabled", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Column Masks" })).toBeDisabled();
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   await expect(page.getByText(/Live policy saved/)).toBeVisible();
   await page.reload();
   const bypass = page

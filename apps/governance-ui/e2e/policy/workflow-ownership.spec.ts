@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import type { FixtureRule } from "../support/api-types";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi, deferredResponse } from "../support/fixtures";
@@ -26,10 +27,10 @@ test("duplicate saves keep one submission and a late success preserves exact new
   });
   await page.goto(editorUrl);
   await page.getByLabel("Rule name", { exact: true }).fill("Submitted name");
-  await page.getByRole("button", { name: "Save policy", exact: true }).click({ clickCount: 2 });
+  await savePolicy(page, { clickCount: 2 });
   await pending.started;
   await page.getByLabel("Rule name", { exact: true }).fill("Newer local name");
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
   expect(submissions).toHaveLength(1);
   expect(submissions[0]).toMatchObject({
     expected_revision: 1,
@@ -44,7 +45,7 @@ test("duplicate saves keep one submission and a late success preserves exact new
   const next = page.waitForRequest(
     (request) => request.method() === "PUT" && request.url().endsWith("/policy"),
   );
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   expect((await next).postDataJSON()).toMatchObject({
     expected_revision: 2,
     rules: [{ ...rule, name: "Newer local name" }],

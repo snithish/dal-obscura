@@ -179,7 +179,8 @@ export function PolicyEditorController({
         revokeExistingTokens,
         request.signal,
       );
-      if (!isCurrent(sessionGeneration) || !draft.saved(submission, saved.policy_revision)) return;
+      if (!isCurrent(sessionGeneration) || !draft.completeSave(submission, saved.policy_revision))
+        return;
       markInventoryPolicySaved(
         queryClient,
         sessionCacheKey,
@@ -336,8 +337,10 @@ export function PolicyEditorController({
       grants={grants}
       onBack={onBack}
       rules={rules}
+      savedRules={draft.saved}
       activeRevision={policyRevision}
       saveState={saveState}
+      savePending={draft.pending !== null}
       notice={notice}
       fieldErrors={fieldErrors}
       onUpdateRule={updateRule}

@@ -21,14 +21,16 @@ test("asset owner chooses whether live policy changes revoke tokens", async ({ p
   await expect(page.getByText("Live revision 1", { exact: true })).toBeVisible();
   await expect(page.getByText("Loaded the current live policy.")).toBeVisible();
 
-  const revokeOnSave = page.getByLabel("Revoke existing tokens after saving");
+  await page.getByRole("button", { name: "Review changes", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "Review policy changes", exact: true });
+  const revokeOnSave = review.getByLabel("Revoke existing tokens after saving");
   await expect(revokeOnSave).toBeVisible();
   await expect(revokeOnSave).not.toBeChecked();
   const preserveRequest = page.waitForRequest(
     (request) =>
       request.method() === "PUT" && request.url().endsWith(`/v1/assets/${assetId}/policy`),
   );
-  await page.getByRole("button", { name: "Save policy" }).click();
+  await review.getByRole("button", { name: "Save policy", exact: true }).click();
   expect((await preserveRequest).postDataJSON()).toMatchObject({
     expected_revision: 1,
     revoke_existing_tokens: false,
@@ -47,12 +49,13 @@ test("asset owner chooses whether live policy changes revoke tokens", async ({ p
     ),
   ).toBeVisible();
 
+  await page.getByRole("button", { name: "Review changes", exact: true }).click();
   await revokeOnSave.check();
   const revokeRequest = page.waitForRequest(
     (request) =>
       request.method() === "PUT" && request.url().endsWith(`/v1/assets/${assetId}/policy`),
   );
-  await page.getByRole("button", { name: "Save policy" }).click();
+  await review.getByRole("button", { name: "Save policy", exact: true }).click();
   expect((await revokeRequest).postDataJSON()).toMatchObject({
     expected_revision: 2,
     revoke_existing_tokens: true,

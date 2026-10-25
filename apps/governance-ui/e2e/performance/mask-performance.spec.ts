@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import { expect, test } from "@playwright/test";
 import { wideSelectionApi } from "../support/wide-selection";
 
@@ -33,7 +34,7 @@ test("wide mask edits retain exact targets and keep replacement typing responsiv
   const saved = page.waitForRequest(
     (request) => request.method() === "PUT" && request.url().endsWith("/policy"),
   );
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   const submitted = (await saved).postDataJSON().rules[0];
   const columns = Array.from({ length: 5000 }, (_, index) => `field_${index}`);
   expect(submitted.columns).toEqual(columns);

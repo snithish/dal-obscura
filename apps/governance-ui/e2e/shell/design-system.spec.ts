@@ -488,7 +488,7 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
   expect(await page.getByRole("heading", { name: "alpha-orders" }).count()).toBe(0);
   await expect(page.locator(".policy-save-bar")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
   staleSchema.release();
   const abandonedSchema = await staleSchema.completed;
   expect(abandonedSchema.failure()?.errorText).toBe("net::ERR_ABORTED");

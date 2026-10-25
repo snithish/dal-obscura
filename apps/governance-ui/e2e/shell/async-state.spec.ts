@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi, deferredResponse } from "../support/fixtures";
 
@@ -35,13 +36,13 @@ test("mutation HTML challenges clear private workspace state", async ({ page }) 
       body: "<html><title>Sign in</title></html>",
     }),
   );
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   await expect(
     page.getByText("The browser or edge session expired. Sign in again to continue."),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toHaveCount(0);
 });
 
 test("late management responses cannot replace the current page", async ({ page }) => {

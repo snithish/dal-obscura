@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import type { FixtureRule } from "../support/api-types";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
@@ -221,7 +222,7 @@ test("New rule appends and preserves rule order after saving and reloading", asy
   const request = page.waitForRequest(
     (request) => request.method() === "PUT" && request.url().endsWith("/policy"),
   );
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   const saved = (await request).postDataJSON().rules as Array<{ name: string; ordinal: number }>;
   expect(saved.map((rule) => rule.name)).toEqual(["First", "Second", "Third"]);
   expect(saved.map((rule) => rule.ordinal)).toEqual(

@@ -1,3 +1,4 @@
+import { PolicySaveReview } from "../policy/PolicySaveReview";
 import { RuleInsights } from "../policy/RuleInsights";
 import { RuleColumnSummary } from "../policy/RuleColumnSummary";
 import { Message, type MessageState } from "../../shared/Message";
@@ -7,7 +8,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
-  Checkbox,
   Modal,
   NativeSelect,
   Select,
@@ -54,8 +54,10 @@ export function AssetWorkspace(props: {
   grants: AssetGrant[];
   onBack: () => void;
   rules: PolicyRule[];
+  savedRules: PolicyRule[];
   activeRevision: number;
   saveState: SaveState;
+  savePending: boolean;
   notice: MessageState & { target: "policy" | "tokens" };
   fieldErrors?: Array<{ field: string; message: string; type: string }>;
   onUpdateRule: (change: (rule: PolicyRule) => PolicyRule, index: number) => void;
@@ -109,7 +111,7 @@ export function AssetWorkspace(props: {
   );
   const [generation, setGeneration] = useState(0);
   const [accessDirty, setAccessDirty] = useState(false);
-  const [revoke, setRevoke] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const pendingRef = useRef(pending);
   const lastOrdinals = useRef(new Set(props.rules.map((rule) => rule.ordinal)));
   const focusAddedRule = useRef(false);
@@ -144,7 +146,7 @@ export function AssetWorkspace(props: {
     setPending({});
     pendingRef.current = {};
     setGeneration((value) => value + 1);
-    setRevoke(false);
+    setReviewOpen(false);
     setExpanded(new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal)));
   }, [props.asset.id]);
   useEffect(() => {
@@ -179,7 +181,7 @@ export function AssetWorkspace(props: {
     pendingRef.current = {};
     setPending({});
     setGeneration((value) => value + 1);
-    setRevoke(false);
+    setReviewOpen(false);
     props.onDirtyChange?.(accessDirty);
   }
   async function selectTab(next: AssetTab) {
@@ -481,19 +483,21 @@ export function AssetWorkspace(props: {
                                   }
                                 />
                               </details>
-                              <PolicyRuleEditor
-                                assetId={props.asset.id}
-                                ruleIndex={index}
-                                rule={rule}
-                                fields={props.asset.schema?.fields}
-                                supportedMasks={props.asset.schema?.supported_masks ?? []}
-                                readOnly={readOnly || bypass}
-                                onUpdateRule={(change) => props.onUpdateRule(change, index)}
-                                onDirtyChange={(value) => report(rule.ordinal, value)}
-                              />
+                              <div className="policy-rule-details">
+                                <PolicyRuleEditor
+                                  assetId={props.asset.id}
+                                  ruleIndex={index}
+                                  rule={rule}
+                                  fields={props.asset.schema?.fields}
+                                  supportedMasks={props.asset.schema?.supported_masks ?? []}
+                                  readOnly={readOnly || bypass}
+                                  onUpdateRule={(change) => props.onUpdateRule(change, index)}
+                                  onDirtyChange={(value) => report(rule.ordinal, value)}
+                                />
+                                <RuleInsights rule={rule} fields={props.asset.schema?.fields} />
+                              </div>
                             </>
                           )}
-                          <RuleInsights rule={rule} fields={props.asset.schema?.fields} />
                           <div className="rule-footer">
                             <Button
                               variant="subtle"
@@ -553,23 +557,16 @@ export function AssetWorkspace(props: {
                   >
                     Discard all changes
                   </Button>
-                  {props.access?.can_revoke_tokens && (
-                    <Checkbox
-                      label="Revoke existing tokens after saving"
-                      checked={revoke}
-                      onChange={(event) => setRevoke(event.currentTarget.checked)}
-                    />
-                  )}
                   {dirty && (
                     <p className="pending-edit-note">
                       Complete identity conditions and apply or cancel open forms before saving.
                     </p>
                   )}
                   <Button
-                    disabled={readOnly || dirty || props.saveState === "saving"}
-                    onClick={() => props.onSave(revoke)}
+                    disabled={readOnly || dirty || props.savePending}
+                    onClick={() => setReviewOpen(true)}
                   >
-                    {props.saveState === "saving" ? "Saving…" : "Save policy"}
+                    {props.saveState === "saving" ? "Saving…" : "Review changes"}
                   </Button>
                 </div>
                 <details className="policy-conflicts">
@@ -614,6 +611,20 @@ export function AssetWorkspace(props: {
           )}
         </Tabs.Panel>
       </Tabs>
+      <PolicySaveReview
+        opened={reviewOpen && !readOnly}
+        assetName={props.asset.name}
+        revision={props.activeRevision}
+        saved={props.savedRules}
+        rules={props.rules}
+        canRevoke={Boolean(props.access?.can_revoke_tokens)}
+        disabled={readOnly || dirty || props.savePending}
+        onClose={() => setReviewOpen(false)}
+        onSave={(revoke) => {
+          setReviewOpen(false);
+          props.onSave(revoke);
+        }}
+      />
       <Modal
         opened={testOpen}
         onClose={() => setTestOpen(false)}

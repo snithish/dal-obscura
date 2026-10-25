@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import type { FixtureRule } from "../support/api-types";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi } from "../support/fixtures";
@@ -17,7 +18,7 @@ test("read-only access disables all authoring", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Allowed columns:/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Add Column Masks", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Add Row Filter", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
 });
 
 test("editor fits a narrow viewport", async ({ page }, testInfo) => {
@@ -45,7 +46,7 @@ test("revision conflicts preserve column edits", async ({ page }) => {
   await page.getByRole("combobox", { name: "Search allowed columns" }).fill("phone");
   await page.getByRole("option", { name: /phone/ }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   await expect(page.getByText(/resource changed on the server/i).first()).toBeVisible();
   await page.getByRole("button", { name: "Allowed columns: 2 selected", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "Choose allowed columns" });

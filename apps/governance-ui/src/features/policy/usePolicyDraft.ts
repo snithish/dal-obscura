@@ -37,7 +37,7 @@ export function usePolicyDraft(initial: Pick<PolicyDraft, "rules" | "revision">)
       dispatch({ type: "beginSave" });
       return current.current.pending;
     },
-    saved(submission: PolicySubmission, revision: number): boolean {
+    completeSave(submission: PolicySubmission, revision: number): boolean {
       const applies =
         current.current.pending === submission &&
         current.current.editVersion === submission.editVersion;

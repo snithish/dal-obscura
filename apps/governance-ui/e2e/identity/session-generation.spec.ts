@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi, deferredResponse } from "../support/fixtures";
 
@@ -43,7 +44,7 @@ for (const operation of ["asset load", "policy save"] as const) {
     await page.getByRole("button", { name: "orders", exact: true }).click();
     if (operation === "policy save") {
       await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-      await page.getByRole("button", { name: "Save policy", exact: true }).click();
+      await savePolicy(page);
     }
     await pending.started;
     await page.getByRole("button", { name: "Sign out", exact: true }).click();

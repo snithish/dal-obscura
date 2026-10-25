@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import { expect, test } from "@playwright/test";
 import { authenticatedApi, deferredResponse } from "../support/fixtures";
 
@@ -98,7 +99,7 @@ test("policy save errors reveal the affected rule and focus the validation summa
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   const second = page.getByRole("button", { name: /^Rule 20/ });
   await expect(second).toHaveAttribute("aria-expanded", "false");
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   await expect(page.locator(".validation-summary")).toBeFocused();
   await expect(page.locator(".validation-summary")).toContainText("Rule 2: Invalid row_filter SQL");
   await expect(second).toHaveAttribute("aria-expanded", "true");

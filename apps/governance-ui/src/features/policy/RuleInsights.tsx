@@ -20,7 +20,24 @@ export function RuleInsights({
   const coverage = useMemo(() => createRuleCoverage(rule, options), [rule, options]);
   if (rule.effect === "allow_all" || !fields) return null;
   return (
-    <section className="rule-insights" aria-label="Rule mask coverage">
+    <section className="rule-insights" aria-label="Draft rule summary">
+      <h3>Draft rule summary</h3>
+      <p className="help">Audience</p>
+      <div className="rule-summary-audience">
+        {rule.principals.length
+          ? rule.principals.map((principal) => (
+              <code key={principal}>
+                {principal === "*" ? "All authenticated readers" : principal}
+              </code>
+            ))
+          : "No audience"}
+      </div>
+      <p className="help">Row scope</p>
+      <code className="rule-summary-filter">{rule.row_filter || "All rows in this rule"}</code>
+      <p className="help">
+        Other rules and identity attributes are not evaluated. Unselected columns retain the default
+        NULL mask unless another rule grants access.
+      </p>
       <h3>Mask coverage</h3>
       <p className="help">
         Selected schema leaves in this rule. No mask returns stored values when requested. Tallies

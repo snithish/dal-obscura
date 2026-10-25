@@ -1,3 +1,4 @@
+import { savePolicy } from "../support/policy";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { assetId, identityApi } from "./fixtures";
@@ -11,16 +12,16 @@ test("condition key changes clear values and save the new attribute domain", asy
   await page.getByText("Identity attribute conditions (1)", { exact: true }).click();
   await page.getByRole("combobox", { name: "Attribute 1", exact: true }).click();
   await page.getByRole("option", { name: "Region", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeDisabled();
   await expect(page.locator(".attribute-conditions")).not.toContainText("Finance");
   await page.getByRole("combobox", { name: "Allowed values 1", exact: true }).click();
   await page.getByRole("option", { name: "EU", exact: true }).click();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Review changes", exact: true })).toBeEnabled();
   const save = page.waitForRequest(
     (request) => request.url().endsWith("/policy") && request.method() === "PUT",
   );
-  await page.getByRole("button", { name: "Save policy", exact: true }).click();
+  await savePolicy(page);
   expect((await save).postDataJSON().rules[0].when).toEqual({ region: ["EU"] });
 });
 

@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type { Asset, AssetAccess, PolicyRule, SchemaNode, Session } from "../../data/api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
@@ -113,8 +113,10 @@ const meta = {
     grants: [],
     onBack: noop,
     rules: [rule],
+    savedRules: [rule],
     activeRevision: 1,
     saveState: "saved" as const,
+    savePending: false,
     notice: {
       tone: "info",
       target: "policy",
@@ -162,7 +164,7 @@ export const NestedLivePolicy: Story = {
     await expect(canvas.getByRole("heading", { name: "Protect sensitive values" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Edit Mask email mask" })).toBeVisible();
     await expect(canvas.getByLabelText("DuckDB SQL row filter")).toHaveValue("region = 'EU'");
-    await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
+    await expect(canvas.getByRole("button", { name: "Review changes" })).toBeEnabled();
   },
 };
 
@@ -222,10 +224,12 @@ export const OwnerCanRevokeTokens: Story = {
     onSave: fn(),
   },
   play: async ({ canvas, args }) => {
-    const revoke = canvas.getByLabelText("Revoke existing tokens after saving");
+    await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+    const review = within(document.body).getByRole("dialog", { name: "Review policy changes" });
+    const revoke = within(review).getByLabelText("Revoke existing tokens after saving");
     await expect(revoke).toBeVisible();
     await userEvent.click(revoke);
-    await userEvent.click(canvas.getByRole("button", { name: "Save policy" }));
+    await userEvent.click(within(review).getByRole("button", { name: "Save policy" }));
     await expect(args.onSave).toHaveBeenCalledWith(true);
   },
 };
