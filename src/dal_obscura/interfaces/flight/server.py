@@ -16,6 +16,7 @@ from dal_obscura.interfaces.flight.contracts import (
     authentication_request_from_context,
     parse_descriptor,
 )
+from dal_obscura.interfaces.flight.errors import internal_error
 from dal_obscura.interfaces.flight.streaming import make_stream
 from dal_obscura.observability import ServiceMetrics, get_resident_memory_bytes
 
@@ -91,16 +92,18 @@ class DataAccessFlightService(flight.FlightServerBase):
                 raise flight.FlightCancelledError("Request cancelled") from None
             except TimeoutError:
                 raise flight.FlightTimedOutError("Request deadline exceeded") from None
-            except PermissionError as exc:
+            except PermissionError:
                 self._logger.warning(
                     "auth_or_authz_failed", extra=self._log_extra(correlation_id=correlation_id)
                 )
-                raise flight.FlightUnauthorizedError("Unauthorized") from exc
-            except ValueError as exc:
+                raise flight.FlightUnauthorizedError("Unauthorized") from None
+            except ValueError:
                 self._logger.warning(
                     "invalid_request", extra=self._log_extra(correlation_id=correlation_id)
                 )
-                raise pa.ArrowInvalid("Invalid request") from exc
+                raise pa.ArrowInvalid("Invalid request") from None
+            except Exception as exc:
+                raise internal_error(exc, phase="schema", correlation_id=correlation_id) from None
 
             self._logger.info(
                 "schema_request",
@@ -138,16 +141,18 @@ class DataAccessFlightService(flight.FlightServerBase):
                 raise flight.FlightCancelledError("Request cancelled") from None
             except TimeoutError:
                 raise flight.FlightTimedOutError("Request deadline exceeded") from None
-            except PermissionError as exc:
+            except PermissionError:
                 self._logger.warning(
                     "auth_or_authz_failed", extra=self._log_extra(correlation_id=correlation_id)
                 )
-                raise flight.FlightUnauthorizedError("Unauthorized") from exc
-            except ValueError as exc:
+                raise flight.FlightUnauthorizedError("Unauthorized") from None
+            except ValueError:
                 self._logger.warning(
                     "invalid_request", extra=self._log_extra(correlation_id=correlation_id)
                 )
-                raise pa.ArrowInvalid("Invalid request") from exc
+                raise pa.ArrowInvalid("Invalid request") from None
+            except Exception as exc:
+                raise internal_error(exc, phase="plan", correlation_id=correlation_id) from None
 
             self._logger.info(
                 "plan_request",
@@ -182,8 +187,8 @@ class DataAccessFlightService(flight.FlightServerBase):
             auth_request = authentication_request_from_context(context, method="do_get")
             try:
                 token = ticket.ticket.decode("utf-8")
-            except UnicodeDecodeError as exc:
-                raise pa.ArrowInvalid("Invalid ticket") from exc
+            except UnicodeDecodeError:
+                raise pa.ArrowInvalid("Invalid ticket") from None
             try:
                 result = self._reads.fetch(
                     token,
@@ -195,16 +200,18 @@ class DataAccessFlightService(flight.FlightServerBase):
                 raise flight.FlightCancelledError("Request cancelled") from None
             except TimeoutError:
                 raise flight.FlightTimedOutError("Request deadline exceeded") from None
-            except PermissionError as exc:
+            except PermissionError:
                 self._logger.warning(
                     "unauthorized", extra=self._log_extra(correlation_id=correlation_id)
                 )
-                raise flight.FlightUnauthorizedError("Unauthorized") from exc
-            except ValueError as exc:
+                raise flight.FlightUnauthorizedError("Unauthorized") from None
+            except ValueError:
                 self._logger.error(
                     "ticket_payload_mismatch", extra=self._log_extra(correlation_id=correlation_id)
                 )
-                raise flight.FlightInternalError("Ticket payload mismatch") from exc
+                raise flight.FlightInternalError("Ticket payload mismatch") from None
+            except Exception as exc:
+                raise internal_error(exc, phase="fetch", correlation_id=correlation_id) from None
 
             self._logger.info(
                 "do_get",
@@ -216,7 +223,9 @@ class DataAccessFlightService(flight.FlightServerBase):
                     columns=result.columns,
                 ),
             )
-            return make_stream(result.output_schema, result.result_batches)
+            return make_stream(
+                result.output_schema, result.result_batches, correlation_id=correlation_id
+            )
 
     def _log_extra(self, **extra: object) -> dict[str, object]:
         """Adds process-level telemetry to every structured log line."""
@@ -236,9 +245,9 @@ def _health_payload(
         return payload
     try:
         observed = dict(health_check())
-    except Exception as exc:
+    except Exception:
         logger.warning("flight_health_check_failed")
-        raise flight.FlightUnavailableError("Data plane is not ready") from exc
+        raise flight.FlightUnavailableError("Data plane is not ready") from None
     if observed.get("status") != "ready":
         logger.warning("flight_health_check_not_ready", extra={"health": observed})
         raise flight.FlightUnavailableError("Data plane is not ready")
