@@ -58,6 +58,14 @@ export function AssetWorkspace(props: {
   activeRevision: number;
   saveState: SaveState;
   savePending: boolean;
+  saveRecovery: {
+    required: boolean;
+    checking: boolean;
+    snapshot: { rules: PolicyRule[]; revision: number } | null;
+    check: () => void;
+    accept: () => void;
+    close: () => void;
+  };
   notice: MessageState & { target: "policy" | "tokens" };
   fieldErrors?: Array<{ field: string; message: string; type: string }>;
   onUpdateRule: (change: (rule: PolicyRule) => PolicyRule, index: number) => void;
@@ -303,31 +311,6 @@ export function AssetWorkspace(props: {
                     </p>
                   </div>
                 </div>
-                <details className="policy-advanced" open={bypass || undefined}>
-                  <summary>Advanced policy options</summary>
-                  <p className="help">
-                    Allow all bypasses every column mask and row filter for all authenticated
-                    readers.
-                  </p>
-                  <Button
-                    variant="default"
-                    disabled={readOnly || bypass || dirty}
-                    onClick={async () => {
-                      if (
-                        await confirm({
-                          title: "Allow all authenticated readers?",
-                          message:
-                            "All authenticated readers will receive every column and row, without masks. Other rules are bypassed. This change is staged until you save the policy.",
-                          confirmLabel: "Stage allow all",
-                          destructive: true,
-                        })
-                      )
-                        props.onAllowAll();
-                    }}
-                  >
-                    Allow all to all users
-                  </Button>
-                </details>
                 <div className="policy-list-heading">
                   <h2>
                     Rules <span className="context-tag">{props.rules.length}</span>
@@ -397,7 +380,7 @@ export function AssetWorkspace(props: {
                             <span className="local-edit-label">1 rule with unapplied edits</span>
                           )}
                         </button>
-                        <RuleColumnSummary rule={rule} />
+                        {!open && <RuleColumnSummary rule={rule} />}
                         <div id={`rule-body-${rule.ordinal}`} className="rule-body" hidden={!open}>
                           <div className="rule-metadata">
                             <TextInput
@@ -535,6 +518,31 @@ export function AssetWorkspace(props: {
                     <p>No overrides. Every column returns NULL for authenticated readers.</p>
                   </div>
                 )}
+                <details className="policy-advanced" open={bypass || undefined}>
+                  <summary>Advanced policy options</summary>
+                  <p className="help">
+                    Allow all bypasses every column mask and row filter for all authenticated
+                    readers.
+                  </p>
+                  <Button
+                    variant="default"
+                    disabled={readOnly || bypass || dirty}
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: "Allow all authenticated readers?",
+                          message:
+                            "All authenticated readers will receive every column and row, without masks. Other rules are bypassed. This change is staged until you save the policy.",
+                          confirmLabel: "Stage allow all",
+                          destructive: true,
+                        })
+                      )
+                        props.onAllowAll();
+                    }}
+                  >
+                    Allow all to all users
+                  </Button>
+                </details>
                 <div className="policy-save-bar">
                   {pendingRules.length > 0 && (
                     <Button
@@ -562,8 +570,18 @@ export function AssetWorkspace(props: {
                       Complete identity conditions and apply or cancel open forms before saving.
                     </p>
                   )}
+                  {props.saveRecovery.required && (
+                    <Button
+                      variant="default"
+                      loading={props.saveRecovery.checking}
+                      disabled={props.savePending}
+                      onClick={props.saveRecovery.check}
+                    >
+                      Check saved policy
+                    </Button>
+                  )}
                   <Button
-                    disabled={readOnly || dirty || props.savePending}
+                    disabled={readOnly || dirty || props.savePending || props.saveRecovery.required}
                     onClick={() => setReviewOpen(true)}
                   >
                     {props.saveState === "saving" ? "Saving…" : "Review changes"}
@@ -624,6 +642,18 @@ export function AssetWorkspace(props: {
           setReviewOpen(false);
           props.onSave(revoke);
         }}
+      />
+      <PolicySaveReview
+        opened={Boolean(props.saveRecovery.snapshot) && !readOnly}
+        intent="reconcile"
+        assetName={props.asset.name}
+        revision={props.saveRecovery.snapshot?.revision ?? props.activeRevision}
+        saved={props.saveRecovery.snapshot?.rules ?? props.savedRules}
+        rules={props.rules}
+        canRevoke={false}
+        disabled={readOnly || props.savePending || props.saveRecovery.checking}
+        onClose={props.saveRecovery.close}
+        onSave={props.saveRecovery.accept}
       />
       <Modal
         opened={testOpen}

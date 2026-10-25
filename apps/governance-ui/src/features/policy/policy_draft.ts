@@ -16,7 +16,7 @@ export type PolicyDraft = {
   pending: PolicySubmission | null;
 };
 export type PolicyDraftAction =
-  | { type: "load"; rules: PolicyRule[]; revision: number }
+  | { type: "load" | "rebase"; rules: PolicyRule[]; revision: number }
   | { type: "clear" | "discard" | "add" | "allowAll" | "beginSave" }
   | { type: "update"; index: number; rule: PolicyRule }
   | { type: "remove" | "duplicate"; index: number }
@@ -60,6 +60,16 @@ export function reducePolicyDraft(state: PolicyDraft, action: PolicyDraftAction)
         rules: structuredClone(action.rules),
         saved: structuredClone(action.rules),
         revision: action.revision,
+      };
+    case "rebase":
+      if (state.pending) return state;
+      return {
+        ...state,
+        saved: structuredClone(action.rules),
+        revision: action.revision,
+        editVersion: state.editVersion + 1,
+        status: "unsaved",
+        errors: [],
       };
     case "discard":
       return {

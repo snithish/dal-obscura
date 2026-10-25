@@ -54,6 +54,13 @@ export function PolicyEditorController({
   const previewPendingRef = useRef(false);
   const [formDirty, setFormDirty] = useState(false);
   const [revokingTokens, setRevokingTokens] = useState(false);
+  const [saveNeedsCheck, setSaveNeedsCheck] = useState(false);
+  const [checkingSaved, setCheckingSaved] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState<{
+    rules: PolicyRule[];
+    revision: number;
+  } | null>(null);
+  const checkingSavedRef = useRef(false);
   const revokePending = useRef(false);
   const draft = usePolicyDraft({
     rules: asset.policy_rules ?? [],
@@ -162,6 +169,7 @@ export function PolicyEditorController({
     });
   }
   async function savePolicy(revokeExistingTokens = false) {
+    if (saveNeedsCheck) return;
     const submission = draft.beginSave();
     if (!submission) return;
     const assetId = asset.id;
@@ -181,6 +189,7 @@ export function PolicyEditorController({
       );
       if (!isCurrent(sessionGeneration) || !draft.completeSave(submission, saved.policy_revision))
         return;
+      setSaveNeedsCheck(false);
       markInventoryPolicySaved(
         queryClient,
         sessionCacheKey,
@@ -198,10 +207,16 @@ export function PolicyEditorController({
       invalidateAssetQueries(assetId);
     } catch (error) {
       if (isAbortError(error) || !isCurrent(sessionGeneration)) return;
-      if (draft.failed(submission, (error as ApiFailure).fieldErrors ?? [])) {
+      const failure = error as ApiFailure;
+      const unknown = failure.status === undefined || failure.status >= 500;
+      if (unknown || failure.status === 409 || failure.status === 428) setSaveNeedsCheck(true);
+      const applies = draft.failed(submission, failure.fieldErrors ?? []);
+      if (applies || unknown || failure.status === 409 || failure.status === 428) {
         setNotice({
           tone: "error",
-          text: recoveryMessage(error, "Save failed. Your unsaved changes remain in this browser."),
+          text: unknown
+            ? `The save outcome is unknown. Your draft remains in this browser. Check saved policy before retrying.${failure.requestId ? ` Request ID: ${failure.requestId}` : ""}`
+            : recoveryMessage(error, "Save failed. Your unsaved changes remain in this browser."),
           target: "policy",
         });
       }
@@ -209,6 +224,48 @@ export function PolicyEditorController({
       if (isCurrent(sessionGeneration)) draft.dispatch({ type: "cancelSave", submission });
       request.finish();
     }
+  }
+  async function checkSavedPolicy() {
+    if (checkingSavedRef.current || draft.current().pending) return;
+    checkingSavedRef.current = true;
+    setCheckingSaved(true);
+    const request = registerRequest();
+    try {
+      const current = await controlPlane.getAsset(asset.id, request.signal);
+      if (!isCurrent(sessionGeneration)) return;
+      setSavedSnapshot({
+        rules: current.policy_rules ?? [],
+        revision: current.policy_revision ?? 0,
+      });
+    } catch (error) {
+      if (isCurrent(sessionGeneration) && !isAbortError(error))
+        setNotice({
+          tone: "error",
+          target: "policy",
+          text: recoveryMessage(
+            error,
+            "Could not check the saved policy. Your draft remains unchanged.",
+          ),
+        });
+    } finally {
+      request.finish();
+      if (isCurrent(sessionGeneration)) {
+        checkingSavedRef.current = false;
+        setCheckingSaved(false);
+      }
+    }
+  }
+  function acceptSavedRevision() {
+    if (!savedSnapshot || draft.current().pending) return;
+    draft.dispatch({ type: "rebase", ...savedSnapshot });
+    setSaveNeedsCheck(false);
+    setSavedSnapshot(null);
+    setPreview(null);
+    setNotice({
+      tone: "info",
+      target: "policy",
+      text: "The saved revision is now your comparison baseline. Your draft is unchanged. Review changes before saving.",
+    });
   }
   function changeTestPersona(setter: (value: string) => void, value: string) {
     previewInputEpoch.current += 1;
@@ -341,6 +398,14 @@ export function PolicyEditorController({
       activeRevision={policyRevision}
       saveState={saveState}
       savePending={draft.pending !== null}
+      saveRecovery={{
+        required: saveNeedsCheck,
+        checking: checkingSaved,
+        snapshot: savedSnapshot,
+        check: () => void checkSavedPolicy(),
+        accept: acceptSavedRevision,
+        close: () => setSavedSnapshot(null),
+      }}
       notice={notice}
       fieldErrors={fieldErrors}
       onUpdateRule={updateRule}

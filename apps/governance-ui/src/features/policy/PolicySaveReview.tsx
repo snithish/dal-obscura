@@ -6,6 +6,7 @@ import { policyChanges } from "./policy_review";
 
 export function PolicySaveReview({
   opened,
+  intent = "save",
   assetName,
   revision,
   saved,
@@ -16,6 +17,7 @@ export function PolicySaveReview({
   onSave,
 }: {
   opened: boolean;
+  intent?: "save" | "reconcile";
   assetName: string;
   revision: number;
   saved: PolicyRule[];
@@ -33,13 +35,16 @@ export function PolicySaveReview({
       setPage(0);
     }
   }, [opened]);
-  const changes = useMemo(() => policyChanges(saved, rules), [saved, rules]);
+  const changes = useMemo(
+    () => (opened ? policyChanges(saved, rules) : []),
+    [opened, saved, rules],
+  );
   const currentPage = Math.min(page, Math.max(0, Math.ceil(changes.length / 10) - 1));
   return (
     <Modal
       opened={opened}
       onClose={onClose}
-      title="Review policy changes"
+      title={intent === "save" ? "Review policy changes" : "Compare saved policy"}
       size="xl"
       closeButtonProps={{ "aria-label": "Close policy review" }}
     >
@@ -52,7 +57,11 @@ export function PolicySaveReview({
         unsaved changes.
       </p>
       {!changes.length && (
-        <p>No authored settings changed. Saving still creates a policy revision.</p>
+        <p>
+          {intent === "save"
+            ? "No authored settings changed. Saving still creates a policy revision."
+            : "The saved policy matches your authored settings. Using this revision keeps your draft."}
+        </p>
       )}
       {changes.slice(currentPage * 10, currentPage * 10 + 10).map((change) => (
         <section className="policy-review-change" key={change.ordinal}>
@@ -147,17 +156,19 @@ export function PolicySaveReview({
         </div>
       )}
       <p className="help">
+        {intent === "reconcile" &&
+          "Using this revision changes only your local comparison baseline and retains your draft. Server changes are not merged into your draft. Saving later replaces the full policy with your draft. "}
         New tickets use the saved policy. Existing tokens retain their captured policy until expiry
         or revocation.
       </p>
-      {canRevoke && (
+      {intent === "save" && canRevoke && (
         <Checkbox
           label="Revoke existing tokens after saving"
           checked={revoke}
           onChange={(event) => setRevoke(event.currentTarget.checked)}
         />
       )}
-      {canRevoke && revoke && (
+      {intent === "save" && canRevoke && revoke && (
         <p className="help">Existing readers must obtain new tickets after revocation.</p>
       )}
       <div className="editor-actions">
@@ -165,7 +176,7 @@ export function PolicySaveReview({
           Keep editing
         </Button>
         <Button disabled={disabled} onClick={() => onSave(canRevoke && revoke)}>
-          Save policy
+          {intent === "save" ? "Save policy" : "Use saved revision"}
         </Button>
       </div>
     </Modal>

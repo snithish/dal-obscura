@@ -68,3 +68,22 @@ test("failed save preserves draft and exposes validation only for its submitted 
   assert.equal(draft.status, "unsaved");
   assert.deepEqual(draft.errors, []);
 });
+
+test("rebasing after comparison updates the saved revision without replacing newer local edits", () => {
+  let draft = reducePolicyDraft(load(), {
+    type: "update",
+    index: 0,
+    rule: { ...rule, name: "Local draft" },
+  });
+  draft = reducePolicyDraft(draft, {
+    type: "rebase",
+    rules: [{ ...rule, name: "Server change" }],
+    revision: 4,
+  });
+  assert.equal(draft.revision, 4);
+  assert.equal(draft.rules[0].name, "Local draft");
+  assert.equal(draft.saved[0].name, "Server change");
+  assert.equal(draft.status, "unsaved");
+  draft = reducePolicyDraft(draft, { type: "discard" });
+  assert.equal(draft.rules[0].name, "Server change");
+});

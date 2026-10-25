@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import type { Asset, AssetAccess, PolicyRule, SchemaNode, Session } from "../../data/api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
@@ -117,6 +117,14 @@ const meta = {
     activeRevision: 1,
     saveState: "saved" as const,
     savePending: false,
+    saveRecovery: {
+      required: false,
+      checking: false,
+      snapshot: null,
+      check: noop,
+      accept: noop,
+      close: noop,
+    },
     notice: {
       tone: "info",
       target: "policy",
@@ -227,7 +235,7 @@ export const OwnerCanRevokeTokens: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
     const review = within(document.body).getByRole("dialog", { name: "Review policy changes" });
     const revoke = within(review).getByLabelText("Revoke existing tokens after saving");
-    await expect(revoke).toBeVisible();
+    await waitFor(() => expect(revoke).toBeVisible());
     await userEvent.click(revoke);
     await userEvent.click(within(review).getByRole("button", { name: "Save policy" }));
     await expect(args.onSave).toHaveBeenCalledWith(true);
