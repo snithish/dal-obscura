@@ -9,9 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
 from typing import cast
-from uuid import uuid4
 
 import pyarrow as pa
 from dal_obscura_plugin_api import CatalogConfig as PublicCatalogConfig
@@ -47,14 +45,19 @@ from dal_obscura_plugin_api.schema.bounds import (
 from dal_obscura_plugin_api.schema.identity import schema_has_stable_ids
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
 
-from dal_obscura.application.reads.sources import CatalogTableListing, Plan, ScanTask, Source
+from dal_obscura.application.reads.sources import (
+    CatalogTableListing,
+    Plan,
+    ScanTask,
+    Source,
+    new_execution_context,
+)
 from dal_obscura.kernel.plans.request import PlanRequest
 
 MAX_PLUGIN_BATCH_BYTES = 16 * 1024 * 1024
 MAX_PLUGIN_DISCOVERY_PAGES = 128
 MAX_PLUGIN_DISCOVERY_PAGE_ENTRIES = 500
 MAX_PLUGIN_DISCOVERY_ENTRIES = 10_000
-PLUGIN_OPERATION_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -83,8 +86,8 @@ class PublicPluginTableFormat(Source):
         )
 
     @contextmanager
-    def open(self) -> Generator[_BoundSource]:
-        context = _context()
+    def open(self, *, context: ExecutionContext | None = None) -> Generator[_BoundSource]:
+        context = self._execution_context(context or new_execution_context())
         plugin = self._open(context)
         try:
             descriptor = plugin.schema(context)
@@ -125,6 +128,7 @@ class PublicPluginTableFormat(Source):
             row_filter = request.row_filter.expression.sql(dialect="duckdb")
         output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
         validate_native_schema(output_schema)
+        context.check_active()
         planned = plugin.plan(ScanRequest(output_schema, max_tickets, row_filter), context)
         tasks: list[PluginScanTask] = []
         iterator = None
@@ -169,21 +173,21 @@ class PublicPluginTableFormat(Source):
         )
 
     def execute(
-        self, partition: object, *, deadline: datetime
+        self, partition: object, *, context: ExecutionContext
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, PublicPluginPartition):
             raise TypeError("Public plugin format requires a PublicPluginPartition")
 
         def execute_batches() -> Iterable[pa.RecordBatch]:
-            context = _context(deadline)
-            plugin = self._open(context)
+            operation = self._execution_context(context)
+            plugin = self._open(operation)
             try:
-                output_schema, batches = plugin.execute(partition.task, context)
+                output_schema, batches = plugin.execute(partition.task, operation)
                 try:
-                    context.check_active()
+                    operation.check_active()
                     if not output_schema.equals(partition.schema, check_metadata=True):
                         raise ValueError("Public plugin changed the declared output schema")
-                    yield from _checked_plugin_batches(batches, output_schema, context)
+                    yield from _checked_plugin_batches(batches, output_schema, operation)
                 finally:
                     close_preserving_error(batches)
             finally:
@@ -191,13 +195,14 @@ class PublicPluginTableFormat(Source):
 
         return partition.schema, execute_batches()
 
-    def _open(self, context: ExecutionContext | None = None) -> TableFormatPlugin:
-        context = context or _context()
-        context = replace(
+    def _execution_context(self, context: ExecutionContext) -> ExecutionContext:
+        return replace(
             context,
             options=self.options,
             check_path=PathRuleEnforcer([{"root": root} for root in self.path_roots]).check,
         )
+
+    def _open(self, context: ExecutionContext) -> TableFormatPlugin:
         context.check_active()
         plugin = self.format_factory(self.handle, context)
         try:
@@ -214,7 +219,7 @@ class PublicPluginTableFormat(Source):
                 or self.handle.handle_version not in descriptor.handle_versions
             ):
                 raise ValueError("Public format factory returned a mismatched descriptor")
-        except Exception:
+        except BaseException:
             close_preserving_error(plugin)
             raise
         return plugin
@@ -239,9 +244,9 @@ class _BoundSource(Source):
         return self.source._plan(self.plugin, self.descriptor, self.context, request, max_tickets)
 
     def execute(
-        self, partition: object, *, deadline: datetime
+        self, partition: object, *, context: ExecutionContext
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        return self.source.execute(partition, deadline=deadline)
+        return self.source.execute(partition, context=context)
 
 
 class PublicPluginCatalogAdapter:
@@ -257,6 +262,8 @@ class PublicPluginCatalogAdapter:
         path_enforcer: PathRuleEnforcer | None = None,
         revision: int = 0,
         format_options: Callable[[str], Mapping[str, object]] | None = None,
+        *,
+        context: ExecutionContext | None = None,
     ) -> None:
         self._name = name
         self._catalog_plugin_id = catalog_plugin_id
@@ -267,7 +274,8 @@ class PublicPluginCatalogAdapter:
         public_config = PublicCatalogConfig(
             plugin_id=catalog_plugin_id, instance_id=name, revision=revision, options=dict(options)
         )
-        context = _context()
+        context = context or new_execution_context()
+        context.check_active()
         catalog = catalog_factory(public_config, context)
         try:
             if not all(
@@ -287,7 +295,7 @@ class PublicPluginCatalogAdapter:
                 or getattr(descriptor, "plugin_id", None) != self._catalog_plugin_id
             ):
                 raise ValueError("Public catalog factory returned a mismatched descriptor")
-        except Exception:
+        except BaseException:
             close_preserving_error(catalog)
             raise
         self._catalog = catalog
@@ -297,10 +305,13 @@ class PublicPluginCatalogAdapter:
     def name(self) -> str:
         return self._name
 
-    def resolve_table(self, target: str) -> PublicPluginTableFormat:
+    def resolve_table(
+        self, target: str, *, context: ExecutionContext | None = None
+    ) -> PublicPluginTableFormat:
         self._ensure_open()
         identifier = table_identifier(target)
-        context = _context()
+        context = context or new_execution_context()
+        context.check_active()
         handle = self._catalog.resolve_table(identifier, context)
         context.check_active()
         if not isinstance(handle, TableHandle):
@@ -338,7 +349,7 @@ class PublicPluginCatalogAdapter:
         continuation: str | None = None
         seen_tokens: set[str] = set()
         listings: list[CatalogTableListing] = []
-        context = _context()
+        context = new_execution_context()
         for _ in range(MAX_PLUGIN_DISCOVERY_PAGES):
             page = self._catalog.list_tables(context, continuation=continuation, limit=500)
             context.check_active()
@@ -384,15 +395,6 @@ class PublicPluginCatalogAdapter:
     def _ensure_open(self) -> None:
         if self._closed:
             raise ValueError("Public catalog adapter is closed")
-
-
-def _context(deadline: datetime | None = None) -> ExecutionContext:
-    return ExecutionContext(
-        deadline=deadline
-        if deadline is not None
-        else datetime.now(UTC) + timedelta(seconds=PLUGIN_OPERATION_TIMEOUT_SECONDS),
-        correlation_id=f"plugin-{uuid4().hex}",
-    )
 
 
 def _validated_page_entries(page: object) -> tuple[TableIdentifier, ...]:

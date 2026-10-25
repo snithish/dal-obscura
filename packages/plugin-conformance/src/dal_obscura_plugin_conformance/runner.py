@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -19,6 +18,7 @@ from dal_obscura_plugin_api import (
     TableFormatPlugin,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.execution import close_preserving_error
 
 DEFAULT_MAX_OUTPUT_BATCHES = 1_024
 DEFAULT_MAX_OUTPUT_ROWS = 1_000_000
@@ -203,25 +203,11 @@ def check_record_batches(
     finally:
         try:
             if iterator is not None and iterator is not batches:
-                _close_iterable_preserving_error(iterator)
+                close_preserving_error(iterator)
         finally:
-            _close_iterable_preserving_error(batches)
+            close_preserving_error(batches)
     if result is not None:
         result.record_pass("record_batches")
-
-
-def _close_iterable_preserving_error(value: object) -> None:
-    """Close provider output while retaining an active validation/cancel error."""
-
-    close = getattr(value, "close", None)
-    if not callable(close):
-        return
-    active_error = sys.exc_info()[1]
-    try:
-        close()
-    except Exception:
-        if active_error is None:
-            raise
 
 
 def _check_task_coverage(
@@ -382,9 +368,9 @@ def run_format_checks(
         finally:
             try:
                 if iterator is not None and iterator is not planned:
-                    _close_iterable_preserving_error(iterator)
+                    close_preserving_error(iterator)
             finally:
-                _close_iterable_preserving_error(planned)
+                close_preserving_error(planned)
         result.record_pass("bounded_plan")
         _check_task_coverage(tasks, expected_task_ids, task_identity, result)
         for task in tasks:
@@ -397,7 +383,7 @@ def run_format_checks(
                 try:
                     raise ValueError("format output schema differs from the declared schema")
                 finally:
-                    _close_iterable_preserving_error(batches)
+                    close_preserving_error(batches)
             check_record_batches(
                 output_schema,
                 batches,

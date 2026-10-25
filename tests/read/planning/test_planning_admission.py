@@ -13,11 +13,46 @@ from tests.support.read.fakes import (
     FakeTicketCodec,
     FakeTicketStore,
     StaticAccessContext,
+    StubTableFormat,
     _build_use_case_dependencies,
     make_read_service,
     scan_payload,
     ticket_payload,
 )
+
+
+def test_cancellation_during_planning_does_not_issue_tickets():
+    from threading import Event
+
+    cancelled = Event()
+    schema, decision, original = _build_use_case_dependencies()
+
+    class CancellingSource(StubTableFormat):
+        def plan(self, request, max_tickets):
+            result = super().plan(request, max_tickets)
+            cancelled.set()
+            return result
+
+    source = CancellingSource(
+        catalog_name=original.catalog_name,
+        table_name=original.table_name,
+        format=original.format,
+        schema=schema,
+        batches=original.batches,
+    )
+    store = FakeTicketStore()
+    reader = make_read_service(
+        identity=FakeIdentity(Principal(id="user1", groups=[], attributes={})),
+        access_context=StaticAccessContext(FakeAuthorizer(decision), FakeCatalogRegistry(source)),
+        ticket_store=store,
+    )
+    with pytest.raises(InterruptedError, match="cancelled"):
+        reader.plan(
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+            AUTHORIZATION_HEADER,
+            cancel_check=cancelled.is_set,
+        )
+    assert store.stored == []
 
 
 def test_plan_access_rejects_authorization_without_asset_identity():

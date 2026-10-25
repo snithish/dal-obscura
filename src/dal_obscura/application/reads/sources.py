@@ -2,18 +2,34 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
+from uuid import uuid4
 
 import pyarrow as pa
+from dal_obscura_plugin_api import ExecutionContext
 
 from dal_obscura.kernel.plans.request import PlanRequest
 from dal_obscura.kernel.plans.snapshot import PublishedAssetSnapshot
 from dal_obscura.kernel.policy.authorization import AuthorizationPort
 from dal_obscura.kernel.policy.filters import RowFilter
+
+
+def new_execution_context(
+    *,
+    deadline: datetime | None = None,
+    correlation_id: str | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> ExecutionContext:
+    """Use one ten-second admission budget, or the captured fetch deadline."""
+    return ExecutionContext(
+        deadline=deadline or datetime.now(UTC) + timedelta(seconds=10),
+        correlation_id=correlation_id or uuid4().hex,
+        cancel_check=cancel_check,
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -34,7 +50,7 @@ class Source(Protocol):
     def get_schema(self) -> pa.Schema: ...
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan: ...
     def execute(
-        self, partition: object, *, deadline: datetime
+        self, partition: object, *, context: ExecutionContext
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]: ...
 
 
@@ -70,7 +86,9 @@ class AccessContext:
 
 
 class AccessContextPort(Protocol):
-    def open(self, catalog: str | None, target: str) -> AbstractContextManager[AccessContext]:
+    def open(
+        self, catalog: str | None, target: str, *, context: ExecutionContext | None = None
+    ) -> AbstractContextManager[AccessContext]:
         """Bind source, policy and admission consistently; lease provider until exit."""
         ...
 

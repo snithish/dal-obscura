@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pyarrow as pa
 import pytest
+from dal_obscura_plugin_api import ExecutionContext
 from deltalake import DeltaTable
 
 from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
@@ -27,7 +28,8 @@ def test_core_delta_tasks_restore_parallel_deletes_after_later_update(tmp_path):
         def read(payload):
             task = codec.decode(payload)
             schema, batches = task.table_format.execute(
-                task.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+                task.partition,
+                context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
             )
             return pa.Table.from_batches(list(batches), schema=schema)
 

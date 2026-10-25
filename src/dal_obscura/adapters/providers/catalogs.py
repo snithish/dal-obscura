@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from threading import RLock
 
+from dal_obscura_plugin_api import ExecutionContext
+from dal_obscura_plugin_api.execution import close_all_preserving_error
 from dal_obscura_plugin_api.storage import PathRuleEnforcer
 
 from dal_obscura.adapters.providers.adapters import PublicPluginCatalogAdapter
@@ -47,6 +48,7 @@ class CatalogRegistry:
         config: ServiceConfig,
         *,
         plugin_registry: PluginRegistry,
+        context: ExecutionContext | None = None,
     ) -> None:
         self._plugin_registry = plugin_registry
         self._closed = False
@@ -54,10 +56,10 @@ class CatalogRegistry:
         try:
             for name, catalog_config in config.catalogs.items():
                 self._catalogs[name] = _build_catalog(
-                    catalog_config, plugin_registry=self._plugin_registry
+                    catalog_config, plugin_registry=self._plugin_registry, context=context
                 )
         except BaseException:
-            _close_catalogs(self._catalogs.values())
+            close_all_preserving_error(self._catalogs.values())
             raise
         self._swap_lock = RLock()
 
@@ -65,6 +67,8 @@ class CatalogRegistry:
         self,
         catalog: str | None,
         target: str,
+        *,
+        context: ExecutionContext | None = None,
     ) -> Source:
         self._ensure_open()
         if catalog is None:
@@ -73,7 +77,7 @@ class CatalogRegistry:
             implementation = self._catalogs.get(catalog)
             if implementation is None:
                 raise ValueError(f"Unknown catalog: {catalog}")
-            return implementation.resolve_table(target)
+            return implementation.resolve_table(target, context=context)
 
     def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
         self._ensure_open()
@@ -90,32 +94,18 @@ class CatalogRegistry:
             self._closed = True
             catalogs = tuple(self._catalogs.values())
             self._catalogs = {}
-        _close_catalogs(catalogs)
+        close_all_preserving_error(catalogs)
 
     def _ensure_open(self) -> None:
         if self._closed:
             raise ValueError("Catalog registry is closed")
 
 
-def _close_catalogs(catalogs: Iterable[object]) -> None:
-    active_error = sys.exc_info()[1]
-    first_error: Exception | None = None
-    for catalog in catalogs:
-        close = getattr(catalog, "close", None)
-        if callable(close):
-            try:
-                close()
-            except Exception as exc:
-                if first_error is None:
-                    first_error = exc
-    if first_error is not None and active_error is None:
-        raise first_error
-
-
 def _build_catalog(
     config: CatalogConfig,
     *,
     plugin_registry: PluginRegistry,
+    context: ExecutionContext | None = None,
 ) -> PublicPluginCatalogAdapter:
     factory = plugin_registry.load("catalog", config.plugin_id)
     return PublicPluginCatalogAdapter(
@@ -127,4 +117,5 @@ def _build_catalog(
         config.path_enforcer,
         config.revision,
         plugin_registry.format_options,
+        context=context,
     )

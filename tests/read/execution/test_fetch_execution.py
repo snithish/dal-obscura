@@ -30,7 +30,7 @@ def test_zero_output_scan_stops_at_input_deadline_before_another_pull(monkeypatc
     schema = pa.schema([("id", pa.int64())])
 
     class AdvancingSource(StubTableFormat):
-        def execute(self, partition, *, deadline):
+        def execute(self, partition, *, context):
             def batches():
                 try:
                     for value in range(4):
@@ -105,7 +105,7 @@ def test_fetch_validates_projected_execution_schema_instead_of_full_base_schema(
     projected = pa.schema([base.field("id")], metadata=base.metadata)
 
     class ProjectedSource(StubTableFormat):
-        def execute(self, partition, *, deadline):
+        def execute(self, partition, *, context):
             return projected, [pa.record_batch([[7]], schema=projected)]
 
     source = ProjectedSource(
@@ -128,14 +128,14 @@ def test_fetch_validates_projected_execution_schema_instead_of_full_base_schema(
 def test_fetch_is_lazy_and_checks_injected_cancellation_after_source_pull():
     from threading import Event
 
-    from dal_obscura.application.reads.execution import StreamCancelledError
-
     schema = pa.schema([("id", pa.int64())])
     cancelled = Event()
     counts = {"opened": 0, "pulls": 0, "closed": 0}
 
     class CancellingSource(StubTableFormat):
-        def execute(self, partition, *, deadline):
+        def execute(self, partition, *, context):
+            assert context.correlation_id == "cancelled-read"
+            assert context.cancel_check is not None
             counts["opened"] += 1
 
             def batches():
@@ -143,6 +143,7 @@ def test_fetch_is_lazy_and_checks_injected_cancellation_after_source_pull():
                     for value in range(4):
                         counts["pulls"] += 1
                         cancelled.set()
+                        context.check_active()
                         yield pa.record_batch([[value]], schema=schema)
                 finally:
                     counts["closed"] += 1
@@ -161,10 +162,13 @@ def test_fetch_is_lazy_and_checks_injected_cancellation_after_source_pull():
         PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
     )
     result = reader.fetch(
-        planned.ticket_tokens[0], AUTHORIZATION_HEADER, cancel_check=cancelled.is_set
+        planned.ticket_tokens[0],
+        AUTHORIZATION_HEADER,
+        cancel_check=cancelled.is_set,
+        correlation_id="cancelled-read",
     )
     assert counts == {"opened": 0, "pulls": 0, "closed": 0}
-    with pytest.raises(StreamCancelledError, match="cancelled"):
+    with pytest.raises(InterruptedError, match="cancelled"):
         list(result.result_batches)
     assert counts == {"opened": 1, "pulls": 1, "closed": 1}
 
@@ -180,7 +184,7 @@ def test_lazy_provider_initialization_preserves_error_kind_and_releases_slot(den
     schema = pa.schema([("id", pa.int64())])
 
     class FailedSource(StubTableFormat):
-        def execute(self, partition, *, deadline):
+        def execute(self, partition, *, context):
             if denied:
                 raise PermissionError("provider denied initialization")
             raise ValueError("provider rejected initialization")

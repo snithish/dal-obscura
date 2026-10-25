@@ -6,13 +6,13 @@ from importlib import metadata
 
 from packaging.utils import canonicalize_name
 
-from dal_obscura.plugins.registry import (
+from dal_obscura.plugins.artifacts import (
     ENTRY_POINT_GROUPS,
     PluginAdmissionError,
-    PluginRegistry,
     build_plugin_lock,
     load_static_plugin_descriptor,
 )
+from dal_obscura.plugins.registry import PluginRegistry
 
 
 def inspect_distributions(distributions: list[str]) -> dict[str, object]:

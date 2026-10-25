@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Mapping
+from uuid import uuid4
 
 import pyarrow as pa
 import pyarrow.flight as flight
@@ -73,23 +74,38 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.SchemaResult:
         """Returns the caller-visible masked schema without minting read tickets."""
+        correlation_id = uuid4().hex
         with self._metrics.measure("flight.get_schema"):
             try:
                 auth_request = authentication_request_from_context(context, method="get_schema")
                 request = parse_descriptor(descriptor)
-                result = self._reads.schema(request, auth_request)
+                result = self._reads.schema(
+                    request,
+                    auth_request,
+                    cancel_check=context.is_cancelled,
+                    correlation_id=correlation_id,
+                )
             except AccessContextUnavailable as exc:
                 raise flight.FlightUnavailableError(str(exc)) from exc
+            except InterruptedError:
+                raise flight.FlightCancelledError("Request cancelled") from None
+            except TimeoutError:
+                raise flight.FlightTimedOutError("Request deadline exceeded") from None
             except PermissionError as exc:
-                self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
+                self._logger.warning(
+                    "auth_or_authz_failed", extra=self._log_extra(correlation_id=correlation_id)
+                )
                 raise flight.FlightUnauthorizedError("Unauthorized") from exc
             except ValueError as exc:
-                self._logger.warning("invalid_request", extra=self._log_extra())
+                self._logger.warning(
+                    "invalid_request", extra=self._log_extra(correlation_id=correlation_id)
+                )
                 raise pa.ArrowInvalid("Invalid request") from exc
 
             self._logger.info(
                 "schema_request",
                 extra=self._log_extra(
+                    correlation_id=correlation_id,
                     target=result.target,
                     catalog=result.catalog,
                     principal=result.principal_id,
@@ -103,25 +119,40 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.FlightInfo:
         """Plans a dataset read and returns one endpoint per signed ticket."""
+        correlation_id = uuid4().hex
         with self._metrics.measure("flight.get_flight_info"):
             try:
                 auth_request = authentication_request_from_context(
                     context, method="get_flight_info"
                 )
                 request = parse_descriptor(descriptor)
-                result = self._reads.plan(request, auth_request)
+                result = self._reads.plan(
+                    request,
+                    auth_request,
+                    cancel_check=context.is_cancelled,
+                    correlation_id=correlation_id,
+                )
             except AccessContextUnavailable as exc:
                 raise flight.FlightUnavailableError(str(exc)) from exc
+            except InterruptedError:
+                raise flight.FlightCancelledError("Request cancelled") from None
+            except TimeoutError:
+                raise flight.FlightTimedOutError("Request deadline exceeded") from None
             except PermissionError as exc:
-                self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
+                self._logger.warning(
+                    "auth_or_authz_failed", extra=self._log_extra(correlation_id=correlation_id)
+                )
                 raise flight.FlightUnauthorizedError("Unauthorized") from exc
             except ValueError as exc:
-                self._logger.warning("invalid_request", extra=self._log_extra())
+                self._logger.warning(
+                    "invalid_request", extra=self._log_extra(correlation_id=correlation_id)
+                )
                 raise pa.ArrowInvalid("Invalid request") from exc
 
             self._logger.info(
                 "plan_request",
                 extra=self._log_extra(
+                    correlation_id=correlation_id,
                     target=result.target,
                     catalog=result.catalog,
                     principal=result.principal_id,
@@ -146,6 +177,7 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, ticket: flight.Ticket
     ) -> flight.RecordBatchStream:
         """Executes a previously planned read and streams the masked result batches."""
+        correlation_id = uuid4().hex
         with self._metrics.measure("flight.do_get"):
             auth_request = authentication_request_from_context(context, method="do_get")
             try:
@@ -153,17 +185,31 @@ class DataAccessFlightService(flight.FlightServerBase):
             except UnicodeDecodeError as exc:
                 raise pa.ArrowInvalid("Invalid ticket") from exc
             try:
-                result = self._reads.fetch(token, auth_request, cancel_check=context.is_cancelled)
+                result = self._reads.fetch(
+                    token,
+                    auth_request,
+                    cancel_check=context.is_cancelled,
+                    correlation_id=correlation_id,
+                )
+            except InterruptedError:
+                raise flight.FlightCancelledError("Request cancelled") from None
+            except TimeoutError:
+                raise flight.FlightTimedOutError("Request deadline exceeded") from None
             except PermissionError as exc:
-                self._logger.warning("unauthorized", extra=self._log_extra())
+                self._logger.warning(
+                    "unauthorized", extra=self._log_extra(correlation_id=correlation_id)
+                )
                 raise flight.FlightUnauthorizedError("Unauthorized") from exc
             except ValueError as exc:
-                self._logger.error("ticket_payload_mismatch", extra=self._log_extra())
+                self._logger.error(
+                    "ticket_payload_mismatch", extra=self._log_extra(correlation_id=correlation_id)
+                )
                 raise flight.FlightInternalError("Ticket payload mismatch") from exc
 
             self._logger.info(
                 "do_get",
                 extra=self._log_extra(
+                    correlation_id=correlation_id,
                     target=result.target,
                     catalog=result.catalog,
                     principal=result.principal_id,

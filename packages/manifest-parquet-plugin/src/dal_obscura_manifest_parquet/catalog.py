@@ -13,10 +13,10 @@ from dal_obscura_plugin_api import (
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
-    PluginDescriptor,
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 from dal_obscura_plugin_api.storage import StorageRoot
 
@@ -24,23 +24,8 @@ _MAX_MANIFEST_BYTES = 1_048_576
 _MAX_TABLES = 10_000
 _MAX_FILES_PER_TABLE = 100_000
 
-CATALOG_DESCRIPTOR = PluginDescriptor(
-    kind="catalog",
-    plugin_id="manifest",
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-manifest-parquet",
-    version="0.3.0",
-    capabilities=frozenset({"nested_schema", "splittable_scan"}),
-    output_formats=frozenset({"parquet.dataset"}),
-    handle_versions=frozenset({1}),
-    display_name="Manifest Parquet dataset",
-    config_schema={
-        "fields": [
-            {"name": "manifest_path", "type": "string", "required": True},
-            {"name": "root", "type": "string", "required": True},
-        ]
-    },
+CATALOG_DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-manifest-parquet", __package__, "catalog", "manifest"
 )
 
 

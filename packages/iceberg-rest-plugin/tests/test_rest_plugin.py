@@ -39,7 +39,8 @@ def test_rest_catalog_context_cancellation_is_fail_closed():
         RestCatalog(_config(), context)
 
 
-def test_rest_catalog_requests_receive_deadline_bounded_timeout(monkeypatch):
+@pytest.mark.parametrize("configured", [False, True])
+def test_rest_catalog_requests_receive_deadline_bounded_timeout(monkeypatch, configured):
     calls = []
 
     def request(self, method, url, **kwargs):
@@ -52,15 +53,16 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout(monkeypatch):
 
     monkeypatch.setattr(RequestsSession, "request", request)
     operation = ExecutionContext(datetime.now(UTC) + timedelta(seconds=2), "rest-timeout")
-    plugin = RestCatalog(_config(), operation)
+    options = {"connect-timeout-ms": 250, "read-timeout-ms": 500} if configured else {}
+    plugin = RestCatalog(_config(**options), operation)
     try:
         assert plugin.list_namespaces(operation) == (("default",),)
     finally:
         plugin.close()
     assert any(url.endswith("/namespaces") for url, _, _ in calls)
     for _, (connect, read), redirects in calls:
-        assert 0 < connect <= 2
-        assert 0 < read <= 2
+        assert 0 < connect <= (0.25 if configured else 2)
+        assert 0 < read <= (0.5 if configured else 2)
         assert redirects is False
 
 
@@ -326,6 +328,7 @@ def test_rest_catalog_closes_owned_http_session_once_and_is_terminal(monkeypatch
         ),
         pytest.param({"read-timeout-ms": "0"}, "timeout", id="zero-read-timeout"),
         pytest.param({"read-timeout-ms": "not-a-number"}, "timeout", id="invalid-read-timeout"),
+        pytest.param({"connect-timeout-ms": True}, "timeout", id="boolean-connect-timeout"),
     ],
 )
 def test_rest_catalog_rejects_invalid_configuration(options, message):

@@ -11,14 +11,27 @@ from dal_obscura_plugin_api.contracts import ExecutionContext
 
 def close_preserving_error(resource: object) -> None:
     """Close a resource without replacing an exception already in flight."""
-    active_error = sys.exc_info()[1]
-    close = getattr(resource, "close", None)
-    if callable(close):
-        try:
+    active_error = sys.exception()
+    try:
+        close = getattr(resource, "close", None)
+        if callable(close):
             close()
-        except Exception:
-            if active_error is None:
-                raise
+    except BaseException:
+        if active_error is None:
+            raise
+
+
+def close_all_preserving_error(resources: Iterable[object]) -> None:
+    """Attempt every close, retaining the primary error or first cleanup failure."""
+    first_error: BaseException | None = None
+    for resource in resources:
+        try:
+            close_preserving_error(resource)
+        except BaseException as exc:
+            if first_error is None:
+                first_error = exc
+    if first_error is not None:
+        raise first_error
 
 
 def checked_iterator[T](values: Iterable[T], context: ExecutionContext) -> Generator[T]:

@@ -7,14 +7,14 @@ from importlib import metadata
 
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.plugins.registry import (
+from dal_obscura.plugins.artifacts import (
     ENTRY_POINT_GROUPS,
     PluginAdmissionError,
     PluginLock,
-    PluginRegistry,
     build_plugin_lock,
     load_static_plugin_descriptor,
 )
+from dal_obscura.plugins.registry import PluginRegistry
 
 _LOCAL_SELECTION = {
     ("catalog", "iceberg.catalog"): "dal-obscura-iceberg",

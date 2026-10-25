@@ -33,6 +33,7 @@ def test_load_plugin_lock_file_returns_five_part_allowlist(tmp_path) -> None:
     ("document", "message"),
     [
         ({"version": 2, "plugins": []}, "version"),
+        ({"version": True, "plugins": []}, "version"),
         ({"version": 1, "plugins": []}, "bounded"),
         (
             {
@@ -59,6 +60,11 @@ def test_load_plugin_lock_file_rejects_symlink(tmp_path) -> None:
 
     with pytest.raises(PluginAdmissionError, match="symbolic"):
         load_plugin_lock_file(link)
+
+
+def test_load_plugin_lock_file_rejects_non_regular_files(tmp_path) -> None:
+    with pytest.raises(PluginAdmissionError, match="regular file"):
+        load_plugin_lock_file(tmp_path)
 
 
 def test_load_plugin_lock_file_rejects_duplicate_document_keys(tmp_path) -> None:

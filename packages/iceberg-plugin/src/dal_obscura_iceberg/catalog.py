@@ -9,10 +9,10 @@ from dal_obscura_plugin_api import (
     CatalogConfig,
     DiscoveryPage,
     ExecutionContext,
-    PluginDescriptor,
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import (
     active,
     close_preserving_error,
@@ -32,37 +32,8 @@ from dal_obscura_iceberg.discovery import (
 
 _ICEBERG_CATALOG_ID = "iceberg.catalog"
 _ICEBERG_FORMAT_ID = "iceberg"
-DESCRIPTOR = PluginDescriptor(
-    kind="catalog",
-    plugin_id=_ICEBERG_CATALOG_ID,
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-iceberg",
-    version="0.3.0",
-    display_name="Apache Iceberg catalog",
-    capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
-    output_formats=frozenset({_ICEBERG_FORMAT_ID}),
-    handle_versions=frozenset({1}),
-    config_schema={
-        "defaults": {"type": "sql"},
-        "fields": [
-            {
-                "name": "type",
-                "type": "enum",
-                "required": True,
-                "options": ["sql", "rest", "glue", "hive", "dynamodb", "in-memory", "bigquery"],
-            },
-            {"name": "uri", "type": "string", "required": False, "secret": False},
-            {"name": "warehouse", "type": "string", "required": False, "secret": False},
-            {"name": "user", "type": "string", "required": False, "secret": False},
-            {
-                "name": "password",
-                "type": "secret_reference",
-                "required": False,
-                "secret": True,
-            },
-        ],
-    },
+DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-iceberg", __package__, "catalog", "iceberg.catalog"
 )
 
 

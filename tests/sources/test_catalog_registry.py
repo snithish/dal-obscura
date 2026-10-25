@@ -7,6 +7,7 @@ import pytest
 from dal_obscura_iceberg import catalog as iceberg_catalog
 from dal_obscura_iceberg.catalog import IcebergCatalog
 from dal_obscura_iceberg.format import IcebergFormatPlugin
+from dal_obscura_plugin_api import ExecutionContext
 
 from dal_obscura.adapters.providers import catalogs as registry_module
 from dal_obscura.adapters.providers.adapters import PublicPluginCatalogAdapter
@@ -20,7 +21,10 @@ from dal_obscura.plugins.bootstrap import (
 )
 
 
-def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch) -> None:
+@pytest.mark.parametrize("cleanup_error", [RuntimeError, KeyboardInterrupt])
+def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(
+    monkeypatch, cleanup_error
+) -> None:
     closed: list[str] = []
 
     class FakeCatalog:
@@ -30,12 +34,12 @@ def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch
         def close(self) -> None:
             closed.append(self.name)
             if self.name == "first":
-                raise RuntimeError("first close failed")
+                raise cleanup_error("first close failed")
 
     monkeypatch.setattr(
         registry_module,
         "_build_catalog",
-        lambda config, *, plugin_registry=None: FakeCatalog(config.name),
+        lambda config, *, plugin_registry=None, context=None: FakeCatalog(config.name),
     )
     registry = CatalogRegistry(
         ServiceConfig(
@@ -47,7 +51,7 @@ def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch
         plugin_registry=create_plugin_registry(),
     )
 
-    with pytest.raises(RuntimeError, match="first close failed"):
+    with pytest.raises(cleanup_error, match="first close failed"):
         registry.close()
 
     assert closed == ["first", "second"]
@@ -128,7 +132,8 @@ def test_catalog_registry_reads_iceberg_through_admitted_plugin_factory(tmp_path
         rows = []
         for task in plan.tasks:
             output_schema, batches = task.table_format.execute(
-                task.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+                task.partition,
+                context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
             )
             assert output_schema.equals(projected, check_metadata=True)
             rows.extend(pa.Table.from_batches(batches, schema=output_schema).to_pylist())

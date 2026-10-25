@@ -11,31 +11,20 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from dal_obscura_plugin_api import (
     ExecutionContext,
-    PluginDescriptor,
     ScanRequest,
     ScanTask,
     SchemaDescriptor,
     TableHandle,
 )
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 from dal_obscura_plugin_api.options import batch_rows
 from dal_obscura_plugin_api.storage import StorageRoot
 
 _MAX_BATCH_ROWS = 65_536
 
-FORMAT_DESCRIPTOR = PluginDescriptor(
-    kind="table_format",
-    plugin_id="parquet.dataset",
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-manifest-parquet",
-    version="0.3.0",
-    capabilities=frozenset({"nested_schema", "splittable_scan"}),
-    handle_versions=frozenset({1}),
-    config_schema={
-        "fields": [{"name": "batch_rows", "type": "integer", "required": False, "secret": False}]
-    },
-    display_name="Manifest Parquet dataset format",
+FORMAT_DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-manifest-parquet", __package__, "table_format", "parquet.dataset"
 )
 
 

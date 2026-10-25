@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-import stat
 from pathlib import Path
 from typing import cast
 
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.plugins.registry import PluginAdmissionError, PluginLock
+from dal_obscura.plugins.artifacts import PluginAdmissionError, PluginLock, read_metadata_file
 
 MAX_PLUGIN_LOCK_BYTES = 1_048_576
 MAX_PLUGIN_LOCK_ENTRIES = 256
@@ -18,30 +17,22 @@ _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], PluginLock]:  # noqa: C901
+def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], PluginLock]:
     """Read a bounded lock file without importing any plugin factories."""
 
     lock_path = Path(path)
     if not str(lock_path).strip():
         raise PluginAdmissionError("Plugin lock path must be non-empty")
-    try:
-        if lock_path.is_symlink():
-            raise PluginAdmissionError("Plugin lock must not be a symbolic link")
-        mode = lock_path.stat().st_mode
-        if mode & (stat.S_IWGRP | stat.S_IWOTH):
-            raise PluginAdmissionError("Plugin lock must not be group- or world-writable")
-        raw = lock_path.read_bytes()
-    except PluginAdmissionError:
-        raise
-    except OSError as exc:
-        raise PluginAdmissionError("Plugin lock is unavailable") from exc
-    if len(raw) > MAX_PLUGIN_LOCK_BYTES:
-        raise PluginAdmissionError("Plugin lock is too large")
+    raw = read_metadata_file(lock_path, MAX_PLUGIN_LOCK_BYTES, "Plugin lock", immutable=True)
     try:
         document = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_object)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise PluginAdmissionError("Plugin lock is not valid JSON") from exc
-    if not isinstance(document, dict) or document.get("version") != 1:
+    if (
+        not isinstance(document, dict)
+        or type(document.get("version")) is not int
+        or document["version"] != 1
+    ):
         raise PluginAdmissionError("Plugin lock version is unsupported")
     entries = document.get("plugins")
     if not isinstance(entries, list) or not entries or len(entries) > MAX_PLUGIN_LOCK_ENTRIES:

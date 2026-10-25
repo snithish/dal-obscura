@@ -13,10 +13,10 @@ from dal_obscura_plugin_api import (
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
-    PluginDescriptor,
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 from pyiceberg.catalog.rest import RestCatalog as PyIcebergRestCatalog
 from requests import Session
@@ -45,29 +45,8 @@ _ACTIVE_REQUEST_BUDGET: ContextVar[tuple[ExecutionContext, float, float] | None]
     "dal_obscura_rest_request_budget", default=None
 )
 
-DESCRIPTOR = PluginDescriptor(
-    kind="catalog",
-    plugin_id="iceberg.rest",
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-iceberg-rest",
-    version="0.3.0",
-    display_name="Iceberg REST catalog",
-    capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
-    output_formats=frozenset({"iceberg"}),
-    handle_versions=frozenset({1}),
-    config_schema={
-        "fields": [
-            {"name": "uri", "type": "uri", "required": True, "secret": False},
-            {"name": "warehouse", "type": "string", "required": False, "secret": False},
-            {"name": "token", "type": "secret_reference", "required": False, "secret": True},
-            {"name": "credential", "type": "secret_reference", "required": False, "secret": True},
-            {"name": "scope", "type": "string", "required": False, "secret": False},
-            {"name": "oauth2-server-uri", "type": "uri", "required": False, "secret": False},
-            {"name": "connect-timeout-ms", "type": "integer", "required": False, "secret": False},
-            {"name": "read-timeout-ms", "type": "integer", "required": False, "secret": False},
-        ]
-    },
+DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-iceberg-rest", __package__, "catalog", "iceberg.rest"
 )
 
 

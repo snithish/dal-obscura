@@ -60,12 +60,14 @@ def test_schema_read_reuses_the_schema_admitted_with_the_source(setup, monkeypat
         result = reader.schema(
             PlanRequest(catalog="analytics", target="default.users", columns=["id"]),
             AuthenticationRequest(headers={}),
+            correlation_id="schema-read",
         )
     finally:
         registry.close()
     assert calls == 1
     assert result.output_schema.equals(pa.schema([("id", pa.int64())]), check_metadata=True)
     assert result.policy_version == 4
+    assert Provider.created[0].contexts[0].correlation_id == "schema-read"
 
 
 class Provider:
@@ -75,11 +77,13 @@ class Provider:
         self.config = config
         self.closed = False
         self.targets = []
+        self.contexts = []
         self.created.append(self)
 
-    def resolve(self, catalog, target):
+    def resolve(self, catalog, target, *, context=None):
         assert not self.closed
         self.targets.append(target)
+        self.contexts.append(context)
         return _table()
 
     def close(self):
@@ -241,13 +245,13 @@ def test_use_cases_authorize_same_snapshot_as_provider_discovery(setup, monkeypa
     original = Provider.resolve
     edited = False
 
-    def resolve(self, catalog, target):
+    def resolve(self, catalog, target, *, context=None):
         nonlocal edited
         assert checked_out == 0, "Provider IO must not hold a configuration connection"
         if not edited:
             edited = True
             _edit(factory, policy=True)
-        return original(self, catalog, target)
+        return original(self, catalog, target, context=context)
 
     monkeypatch.setattr(Provider, "resolve", resolve)
     registry = LiveConfigCatalogRegistry(store, plugin_registry=create_plugin_registry())

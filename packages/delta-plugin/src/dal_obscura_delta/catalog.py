@@ -13,48 +13,22 @@ from dal_obscura_plugin_api import (
     CatalogConfig,
     DiscoveryPage,
     ExecutionContext,
-    PluginDescriptor,
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 from deltalake import DeltaTable
 
 from dal_obscura_delta.snapshot import open_snapshot
 from dal_obscura_delta.storage import DeltaStorage, storage_options
 
-CATALOG_DESCRIPTOR = PluginDescriptor(
-    kind="catalog",
-    plugin_id="delta.directory",
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-delta",
-    version="0.3.0",
-    capabilities=frozenset(
-        {"nested_schema", "snapshot_reads", "splittable_scan", "delete_files", "cancellation"}
-    ),
-    output_formats=frozenset({"delta"}),
-    handle_versions=frozenset({1}),
-    display_name="Delta table directory",
-    config_schema={
-        "fields": [
-            {"name": "root", "type": "string", "required": True},
-            {"name": "tables_path", "type": "string", "required": True},
-        ]
-    },
+CATALOG_DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-delta", __package__, "catalog", "delta.directory"
 )
 
-LOCATION_DESCRIPTOR = PluginDescriptor(
-    kind="catalog",
-    plugin_id="delta.catalog",
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-delta",
-    version="0.3.0",
-    capabilities=CATALOG_DESCRIPTOR.capabilities,
-    output_formats=frozenset({"delta"}),
-    handle_versions=frozenset({1}),
-    display_name="Delta Lake catalog locations",
+LOCATION_DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-delta", __package__, "catalog", "delta.catalog"
 )
 
 

@@ -22,8 +22,10 @@ def make_stream(schema: pa.Schema, batches: Iterable[pa.RecordBatch]) -> flight.
 def _resource_guard(batches: Iterable[pa.RecordBatch]) -> Iterator[pa.RecordBatch]:
     try:
         yield from batches
-    except StreamCancelledError as exc:
-        raise flight.FlightCancelledError(str(exc)) from exc
+    except StreamCancelledError, InterruptedError:
+        raise flight.FlightCancelledError("Stream cancelled") from None
+    except TimeoutError:
+        raise flight.FlightTimedOutError("Read deadline exceeded") from None
     except SourceInitializationPermissionError as exc:
         raise flight.FlightUnauthorizedError("Unauthorized") from exc
     except SourceInitializationValueError as exc:

@@ -264,7 +264,8 @@ def test_runner_checks_partial_projection_with_metadata_and_closes_overbudget_pl
     assert closed == ["plan", "plan"]
 
 
-def test_runner_closes_plan_when_iterator_construction_and_cleanup_fail():
+@pytest.mark.parametrize("cleanup_error", [RuntimeError, KeyboardInterrupt])
+def test_runner_closes_plan_when_iterator_construction_and_cleanup_fail(cleanup_error):
     closed = []
 
     class BrokenPlan:
@@ -273,7 +274,7 @@ def test_runner_closes_plan_when_iterator_construction_and_cleanup_fail():
 
         def close(self):
             closed.append("plan")
-            raise RuntimeError("plan close failed")
+            raise cleanup_error("plan close failed")
 
     class BrokenFormat(_ConformingFormat):
         def plan(self, request, context):

@@ -6,13 +6,15 @@ from collections import OrderedDict
 from collections.abc import Generator, Iterable, Mapping
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from hashlib import sha256
 from threading import Condition
 from time import monotonic
 from typing import Any, cast
 
 import pyarrow as pa
-from dal_obscura_plugin_api.execution import close_preserving_error
+from dal_obscura_plugin_api import ExecutionContext
+from dal_obscura_plugin_api.execution import close_all_preserving_error, close_preserving_error
 from dal_obscura_plugin_api.options import PluginOptions
 from dal_obscura_plugin_api.paths import (
     FieldSegment,
@@ -40,6 +42,7 @@ from dal_obscura.application.reads.sources import (
     AccessContextUnavailable,
     AdmittedPluginSnapshot,
     PublishedSnapshotReader,
+    new_execution_context,
 )
 from dal_obscura.kernel.identity.principal import Principal
 from dal_obscura.kernel.plans.snapshot import PublishedAssetSnapshot
@@ -134,19 +137,14 @@ class LiveConfigCatalogRegistry:
             idle = [key for key, entry in self._providers.items() if entry.users == 0]
             registries = [self._providers.pop(key).registry for key in idle]
             self._condition.notify_all()
-        first_error: Exception | None = None
-        for registry in registries:
-            try:
-                assert registry is not None
-                registry.close()
-            except Exception as exc:
-                if first_error is None:
-                    first_error = exc
-        if first_error is not None:
-            raise first_error
+        close_all_preserving_error(registries)
 
     @contextmanager
-    def open(self, catalog: str | None, target: str) -> Generator[AccessContext]:
+    def open(
+        self, catalog: str | None, target: str, *, context: ExecutionContext | None = None
+    ) -> Generator[AccessContext]:
+        context = context or new_execution_context()
+        context.check_active()
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         with self._condition:
@@ -196,12 +194,14 @@ class LiveConfigCatalogRegistry:
                 separators=(",", ":"),
             ).encode()
         ).hexdigest()
-        entry = self._acquire(key, catalog, config)
+        entry = self._acquire(key, catalog, config, context)
         try:
             assert entry.registry is not None
-            table_format = entry.registry.resolve(catalog, _asset_table_identifier(asset))
+            table_format = entry.registry.resolve(
+                catalog, _asset_table_identifier(asset), context=context
+            )
             scope = (
-                table_format.open()
+                table_format.open(context=context)
                 if isinstance(table_format, PublicPluginTableFormat)
                 else nullcontext(table_format)
             )
@@ -212,9 +212,12 @@ class LiveConfigCatalogRegistry:
         finally:
             self._release(key, entry)
 
-    def _acquire(self, key: str, catalog: str, config: CatalogConfig) -> _ProviderEntry:
+    def _acquire(
+        self, key: str, catalog: str, config: CatalogConfig, context: ExecutionContext
+    ) -> _ProviderEntry:
         deadline = monotonic() + self._provider_wait_seconds
         while True:
+            context.check_active()
             with self._condition:
                 if self._closed:
                     raise RuntimeError("Live catalog registry is closed")
@@ -234,12 +237,18 @@ class LiveConfigCatalogRegistry:
                     else next((k for k, item in self._providers.items() if item.users == 0), None)
                 )
                 if idle_key is None:
-                    remaining = deadline - monotonic()
+                    remaining = min(
+                        deadline - monotonic(),
+                        (context.deadline - datetime.now(UTC)).total_seconds(),
+                    )
                     if remaining <= 0:
+                        context.check_active()
                         raise AccessContextUnavailable(
                             "Catalog provider capacity is unavailable; retry later"
                         )
-                    self._condition.wait(timeout=remaining)
+                    self._condition.wait(
+                        timeout=min(remaining, 0.1) if context.cancel_check else remaining
+                    )
                     continue
                 idle = self._providers[idle_key]
                 idle.users = 1
@@ -258,6 +267,7 @@ class LiveConfigCatalogRegistry:
             registry = CatalogRegistry(
                 ServiceConfig(catalogs={catalog: config}),
                 plugin_registry=self._plugin_registry,
+                context=context,
             )
         except BaseException:
             with self._condition:

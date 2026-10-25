@@ -40,7 +40,9 @@ class BytesPeerContext(DummyContext):
 class RecordingGetSchemaUseCase:
     auth_request: AuthenticationRequest | None = None
 
-    def schema(self, request: object, auth_request: AuthenticationRequest) -> GetSchemaResult:
+    def schema(
+        self, request: object, auth_request: AuthenticationRequest, **kwargs
+    ) -> GetSchemaResult:
         del request
         self.auth_request = auth_request
         return GetSchemaResult(

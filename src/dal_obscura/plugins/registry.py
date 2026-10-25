@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from functools import wraps
 from importlib import metadata
-from pathlib import Path
 from threading import RLock
 from typing import Literal, cast, overload
 
@@ -24,29 +21,24 @@ from dal_obscura_plugin_api import (
 from dal_obscura_plugin_api.options import PluginOptions
 from dal_obscura_plugin_api.secrets import SecretBackendFactory
 
+from dal_obscura.plugins.artifacts import (
+    ENTRY_POINT_GROUPS,
+    PluginAdmissionError,
+    PluginLock,
+    artifact_digest,
+    descriptor_digest,
+    load_static_plugin_descriptor,
+)
 from dal_obscura.plugins.lifecycle import (
     PluginLifecycleState,
     transition_plugin_lifecycle,
 )
 
-ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
-    "catalog": "dal_obscura.catalogs.v3",
-    "table_format": "dal_obscura.table_formats.v3",
-    "secret_backend": "dal_obscura.secret_backends.v3",
-}
-STATIC_DESCRIPTOR_FILENAME = "dal_obscura-plugin.json"
-MAX_STATIC_DESCRIPTOR_BYTES = 65_536
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
-_MODULE_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
-
-
-class PluginAdmissionError(ValueError):
-    """Raised when installed plugin metadata is not explicitly admitted."""
 
 
 FactoryLoader = Callable[[metadata.EntryPoint], object]
 DescriptorLoader = Callable[[metadata.EntryPoint], PluginDescriptor]
-PluginLock = tuple[str, str, str, str, str]
 PluginStatus = Literal["enabled", "not_installed", "incompatible"]
 
 
@@ -167,17 +159,13 @@ class PluginRegistry:
         descriptor = self.admitted().get(("table_format", plugin_id))
         if descriptor is None:
             raise PluginAdmissionError(f"Plugin is not admitted: table_format:{plugin_id}")
-        raw_fields = cast(
-            tuple[Mapping[str, object], ...], descriptor.config_schema.get("fields", ())
-        )
-        fields = {cast(str, field["name"]): field for field in raw_fields}
+        fields = {field.name: field for field in descriptor.config_fields or ()}
         if set(options) - set(fields):
             raise ValueError("Unsupported format options")
-        if any(
-            fields[key].get("secret") or fields[key].get("type") == "secret_reference"
-            for key in options
-        ):
+        if any(fields[key].secret for key in options):
             raise ValueError("Format options cannot contain secrets")
+        for key, value in options.items():
+            fields[key].validate(value)
         return PluginOptions({plugin_id: options}).for_plugin(plugin_id)
 
     def identity(self, kind: PluginKind, plugin_id: str) -> PluginLock:
@@ -244,8 +232,10 @@ class PluginRegistry:
     ]:
         descriptors: dict[tuple[PluginKind, str], PluginDescriptor] = {}
         entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
+        points = self._entry_points_fn()
+        artifact_digests: dict[int, str] = {}
         for kind, group in ENTRY_POINT_GROUPS.items():
-            for entry in self._select(group):
+            for entry in points.select(group=group):
                 plugin_id = str(entry.name)
                 # Ignore malformed, unallowlisted metadata. An installed
                 # third-party distribution must not be able to make reload
@@ -261,7 +251,13 @@ class PluginRegistry:
                     continue
                 if len(admitted) != 5:
                     raise PluginAdmissionError(f"Invalid plugin lock for {kind}:{plugin_id}")
-                distribution, version, api_version, descriptor_digest, artifact_digest = admitted
+                (
+                    distribution,
+                    version,
+                    api_version,
+                    expected_descriptor_digest,
+                    expected_artifact_digest,
+                ) = admitted
                 if entry.dist is None:
                     raise PluginAdmissionError(
                         f"Plugin provenance is unavailable for {kind}:{plugin_id}"
@@ -291,11 +287,16 @@ class PluginRegistry:
                     raise PluginAdmissionError(
                         f"Plugin descriptor uses unsupported config version for {kind}:{plugin_id}"
                     )
-                if _descriptor_digest(descriptor) != descriptor_digest:
+                if descriptor_digest(descriptor) != expected_descriptor_digest:
                     raise PluginAdmissionError(
                         f"Plugin descriptor digest mismatch for {kind}:{plugin_id}"
                     )
-                if _artifact_digest(entry) != artifact_digest:
+                # Entry points from one enumeration share their Distribution.
+                # Keep fingerprints only for this pass so reload rechecks bytes.
+                distribution_key = id(entry.dist)
+                if distribution_key not in artifact_digests:
+                    artifact_digests[distribution_key] = artifact_digest(entry)
+                if artifact_digests[distribution_key] != expected_artifact_digest:
                     raise PluginAdmissionError(
                         f"Plugin artifact digest mismatch for {kind}:{plugin_id}"
                     )
@@ -307,154 +308,6 @@ class PluginRegistry:
     def _validate_id(plugin_id: str) -> None:
         if not _PLUGIN_ID.fullmatch(plugin_id):
             raise PluginAdmissionError(f"Invalid plugin ID: {plugin_id!r}")
-
-
-def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescriptor:  # noqa: C901
-    """Loads a plugin descriptor from distribution metadata without importing code.
-
-    Qualified wheels may include ``dal_obscura-plugin.json`` at their root.  The
-    descriptor is parsed from the installed distribution's metadata and its
-    identity is tied to the entry-point group/name and package provenance.  A
-    missing or malformed file fails closed. Every admitted wheel must provide a
-    static descriptor matching the current SDK entry-point group.
-    """
-
-    distribution = entry.dist
-    if distribution is None:
-        raise PluginAdmissionError("Plugin provenance is unavailable")
-    try:
-        raw = distribution.read_text(STATIC_DESCRIPTOR_FILENAME)
-        if raw is None:
-            # setuptools package-data is conventionally stored beneath the
-            # entry-point's top-level package rather than at distribution root.
-            # Read only that deterministic package-local path; never inspect or
-            # import arbitrary paths supplied by plugin metadata.
-            module_path = str(entry.value).split(":", 1)[0]
-            if not _MODULE_PATH.fullmatch(module_path):
-                raise PluginAdmissionError("Plugin entry-point module is invalid")
-            package = module_path.split(".", 1)[0]
-            package_path = f"{package}/{STATIC_DESCRIPTOR_FILENAME}"
-            raw = distribution.read_text(package_path)
-            if raw is None:
-                # ``PathDistribution.read_text`` may return ``None`` for
-                # package-data paths even when the file is present in the
-                # installed wheel.  Resolve only the exact path advertised
-                # by ``files``; never walk or import arbitrary distribution
-                # content.
-                files = distribution.files
-                locate_file = getattr(distribution, "locate_file", None)
-                if (
-                    files is not None
-                    and callable(locate_file)
-                    and any(str(path) == package_path for path in files)
-                ):
-                    raw = locate_file(package_path).read_text(encoding="utf-8")
-    except (AttributeError, OSError, UnicodeError) as exc:
-        raise PluginAdmissionError("Plugin static descriptor is unreadable") from exc
-    if raw is None:
-        raise PluginAdmissionError("Plugin static descriptor is missing")
-    if len(raw.encode("utf-8")) > MAX_STATIC_DESCRIPTOR_BYTES:
-        raise PluginAdmissionError("Plugin static descriptor is too large")
-    try:
-        payload = json.loads(raw, object_pairs_hook=_unique_json_object)
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise PluginAdmissionError("Plugin static descriptor is invalid JSON") from exc
-    if not isinstance(payload, dict):
-        raise PluginAdmissionError("Plugin static descriptor must be an object")
-    expected_kind = next(
-        (kind for kind, group in ENTRY_POINT_GROUPS.items() if group == entry.group),
-        None,
-    )
-    if expected_kind is None:
-        raise PluginAdmissionError("Plugin entry-point group is unsupported")
-    allowed = {
-        "kind",
-        "plugin_id",
-        "api_version",
-        "config_version",
-        "capabilities",
-        "output_formats",
-        "handle_versions",
-        "config_schema",
-        "display_name",
-        "descriptors",
-    }
-    if set(payload) - allowed:
-        raise PluginAdmissionError("Plugin static descriptor contains unknown fields")
-    descriptor_payload: Mapping[str, object]
-    raw_descriptors = payload.get("descriptors")
-    if raw_descriptors is not None:
-        if not isinstance(raw_descriptors, list) or not raw_descriptors:
-            raise PluginAdmissionError("Plugin static descriptors are invalid")
-        candidates = [
-            item
-            for item in raw_descriptors
-            if isinstance(item, Mapping)
-            and item.get("kind") == expected_kind
-            and item.get("plugin_id") == str(entry.name)
-        ]
-        if len(candidates) != 1:
-            raise PluginAdmissionError("Plugin static descriptor identity is ambiguous")
-        descriptor_payload = candidates[0]
-        descriptor_allowed = allowed - {"descriptors"}
-        if set(descriptor_payload) - descriptor_allowed:
-            raise PluginAdmissionError("Plugin static descriptor contains unknown fields")
-    else:
-        descriptor_payload = payload
-    kind = descriptor_payload.get("kind")
-    plugin_id = descriptor_payload.get("plugin_id")
-    api_version = descriptor_payload.get("api_version")
-    config_version = descriptor_payload.get("config_version")
-    capabilities = descriptor_payload.get("capabilities", [])
-    output_formats = descriptor_payload.get("output_formats", [])
-    handle_versions = descriptor_payload.get("handle_versions", [1])
-    config_schema = descriptor_payload.get("config_schema", {})
-    display_name = descriptor_payload.get("display_name", "")
-    if kind != expected_kind or plugin_id != str(entry.name):
-        raise PluginAdmissionError("Plugin static descriptor identity mismatch")
-    if not isinstance(api_version, str) or not isinstance(config_version, int):
-        raise PluginAdmissionError("Plugin static descriptor version fields are invalid")
-    if not isinstance(capabilities, list) or any(
-        not isinstance(item, str) for item in capabilities
-    ):
-        raise PluginAdmissionError("Plugin static descriptor capabilities are invalid")
-    if not isinstance(output_formats, list) or any(
-        not isinstance(item, str) for item in output_formats
-    ):
-        raise PluginAdmissionError("Plugin static descriptor output formats are invalid")
-    if not isinstance(handle_versions, list) or any(
-        not isinstance(item, int) or isinstance(item, bool) for item in handle_versions
-    ):
-        raise PluginAdmissionError("Plugin static descriptor handle versions are invalid")
-    if not isinstance(config_schema, Mapping) or not isinstance(display_name, str):
-        raise PluginAdmissionError("Plugin static descriptor fields are invalid")
-    capability_values = cast(list[str], capabilities)
-    output_format_values = cast(list[str], output_formats)
-    handle_version_values = cast(list[int], handle_versions)
-    return PluginDescriptor(
-        kind=cast(PluginKind, kind),
-        plugin_id=plugin_id,
-        api_version=api_version,
-        config_version=config_version,
-        distribution=distribution.name,
-        version=distribution.version,
-        capabilities=frozenset(capability_values),
-        output_formats=frozenset(output_format_values),
-        handle_versions=frozenset(handle_version_values),
-        config_schema=config_schema,
-        display_name=display_name,
-    )
-
-
-def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    """Reject duplicate descriptor keys instead of silently choosing one."""
-
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON key: {key}")
-        result[key] = value
-    return result
 
 
 def _status_incompatibility(
@@ -473,67 +326,3 @@ def _status_incompatibility(
     if _api_version != PLUGIN_API_VERSION:
         return "plugin API version is unsupported"
     return "plugin admission metadata is incompatible"
-
-
-def _descriptor_digest(descriptor: PluginDescriptor) -> str:
-    payload = descriptor.to_json()
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def build_plugin_lock(
-    kind: PluginKind,
-    entry: metadata.EntryPoint,
-    descriptor: PluginDescriptor,
-) -> PluginLock:
-    """Build a descriptor/artifact-pinned lock for a qualified entry point.
-
-    Release tooling should call this against the built distribution, then
-    persist the returned five-part tuple in its immutable admission manifest.
-    It refuses to generate a lock when provenance or descriptor identity does
-    not match the entry point.
-    """
-
-    if descriptor.kind != kind or descriptor.plugin_id != str(entry.name):
-        raise PluginAdmissionError("Plugin descriptor does not match entry point")
-    if entry.dist is None:
-        raise PluginAdmissionError("Plugin provenance is unavailable")
-    distribution = entry.dist.name
-    version = entry.dist.version
-    if descriptor.distribution != distribution or descriptor.version != version:
-        raise PluginAdmissionError("Plugin descriptor provenance does not match entry point")
-    return (
-        distribution,
-        version,
-        descriptor.api_version,
-        _descriptor_digest(descriptor),
-        _artifact_digest(entry),
-    )
-
-
-def _artifact_digest(entry: metadata.EntryPoint) -> str:
-    distribution = entry.dist
-    if distribution is None or distribution.files is None:
-        raise PluginAdmissionError("Plugin artifact files are unavailable")
-    digest = hashlib.sha256()
-    try:
-        for relative in sorted(distribution.files, key=str):
-            # Installers rewrite these files and bytecode for each environment.
-            # Hash shipped code and distribution metadata, not local provenance.
-            parts = Path(str(relative)).parts
-            if "__pycache__" in parts or (
-                any(part.endswith(".dist-info") for part in parts)
-                and parts[-1]
-                in {"RECORD", "INSTALLER", "REQUESTED", "direct_url.json", "uv_cache.json"}
-            ):
-                continue
-            path = Path(str(distribution.locate_file(str(relative))))
-            if not path.is_file():
-                raise PluginAdmissionError("Plugin artifact file is unavailable")
-            digest.update(str(relative).encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(path.read_bytes())
-            digest.update(b"\0")
-    except OSError as exc:
-        raise PluginAdmissionError("Plugin artifact files are unreadable") from exc
-    return digest.hexdigest()

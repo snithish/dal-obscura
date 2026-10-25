@@ -28,7 +28,7 @@ from dal_obscura.application.reads.ports import (
     RowTransformPort,
     ScanTaskCodec,
 )
-from dal_obscura.application.reads.sources import AccessContextPort
+from dal_obscura.application.reads.sources import AccessContextPort, new_execution_context
 from dal_obscura.application.reads.tickets.contracts import TicketCodecPort, TicketStorePort
 from dal_obscura.application.reads.tickets.payload import (
     TicketPayload,
@@ -89,10 +89,22 @@ class ReadService:
     nonce_factory: Callable[[], str] = _nonce
     ticket_id_factory: Callable[[], str] = _ticket_id
 
-    def schema(self, request: PlanRequest, auth_request: AuthenticationRequest) -> GetSchemaResult:
+    def schema(
+        self,
+        request: PlanRequest,
+        auth_request: AuthenticationRequest,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
+        correlation_id: str | None = None,
+    ) -> GetSchemaResult:
         principal = self.identity.authenticate(auth_request)
-        with self.access_context.open(request.catalog, request.target) as context:
+        operation = new_execution_context(cancel_check=cancel_check, correlation_id=correlation_id)
+        operation.check_active()
+        with self.access_context.open(
+            request.catalog, request.target, context=operation
+        ) as context:
             admitted = admit_read(context, principal, request, self.projection_compiler)
+            operation.check_active()
             return GetSchemaResult(
                 output_schema=admitted.output_schema,
                 target=request.target,
@@ -102,9 +114,20 @@ class ReadService:
                 catalog=request.catalog,
             )
 
-    def plan(self, request: PlanRequest, auth_request: AuthenticationRequest) -> PlanAccessResult:
+    def plan(
+        self,
+        request: PlanRequest,
+        auth_request: AuthenticationRequest,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
+        correlation_id: str | None = None,
+    ) -> PlanAccessResult:
         principal = self.identity.authenticate(auth_request)
-        with self.access_context.open(request.catalog, request.target) as context:
+        operation = new_execution_context(cancel_check=cancel_check, correlation_id=correlation_id)
+        operation.check_active()
+        with self.access_context.open(
+            request.catalog, request.target, context=operation
+        ) as context:
             admitted = admit_read(context, principal, request, self.projection_compiler)
             table_format = context.table_format
             base_schema, decision = admitted.schema, admitted.decision
@@ -165,6 +188,7 @@ class ReadService:
                     asset_id=asset_id,
                 )
                 payloads.append(payload)
+            operation.check_active()
             self.ticket_store.store_many(payloads, max_exchanges=self.settings.max_ticket_exchanges)
             ticket_tokens = [self.ticket_codec.sign_payload(payload) for payload in payloads]
 
@@ -192,6 +216,7 @@ class ReadService:
         auth_request: AuthenticationRequest,
         *,
         cancel_check: Callable[[], bool] | None = None,
+        correlation_id: str | None = None,
     ) -> FetchStreamResult:
         client_payload = self.ticket_codec.verify(ticket)
         if client_payload.ticket_id is None:
@@ -231,12 +256,15 @@ class ReadService:
             raise
 
         stream_deadline = min(payload.expires_at, now + self.settings.max_stream_seconds)
+        operation = new_execution_context(
+            deadline=datetime.fromtimestamp(stream_deadline, UTC),
+            correlation_id=correlation_id,
+            cancel_check=cancel_check,
+        )
 
         def open_source():
             try:
-                return task.table_format.execute(
-                    task.partition, deadline=datetime.fromtimestamp(stream_deadline, UTC)
-                )
+                return task.table_format.execute(task.partition, context=operation)
             except PermissionError as exc:
                 raise SourceInitializationPermissionError("Source initialization denied") from exc
             except ValueError as exc:

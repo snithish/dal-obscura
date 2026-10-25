@@ -57,7 +57,8 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
     serialized = codec.encode(plan.tasks[0])
     restored = codec.decode(serialized)
     output_schema, batches = restored.table_format.execute(
-        restored.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        restored.partition,
+        context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
     assert output_schema == table.schema
     assert pa.Table.from_batches(list(batches)).to_pylist() == [{"id": 1}]
@@ -66,7 +67,8 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
         PlanRequest(target="default.users", columns=["id"]), max_tickets=4
     )
     projected_schema, projected_batches = projected.tasks[0].table_format.execute(
-        projected.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        projected.tasks[0].partition,
+        context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
     assert projected_schema.names == ["id"]
     assert pa.Table.from_batches(list(projected_batches)).to_pylist() == [{"id": 1}]

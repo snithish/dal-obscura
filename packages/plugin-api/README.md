@@ -24,6 +24,19 @@ Descriptors declare plugin identity, capabilities, output formats, handle versio
 and configuration schema. Ship `dal_obscura-plugin.json` as package data beside the
 entry-point module. The host admits exact installed distribution, version, API,
 descriptor and artifact locks before importing the factory.
+Use `load_packaged_descriptor` from `dal_obscura_plugin_api.descriptors` in the
+provider module to read the same packaged metadata at runtime. Pass the installed
+distribution name, `__package__`, plugin kind and plugin ID. The helper obtains the
+distribution version from installed metadata. Keep capabilities and configuration
+fields in the JSON file so admission and runtime describe the same contract.
+The SDK validates declared fields and exposes immutable `config_fields` on the
+descriptor. Fields support strings, URI strings, booleans, integers, finite
+numbers, string enums and scoped secret references. Names must fit the operator
+form's identifier syntax. Defaults must name declared fields and match their
+types. Omitted `fields` leaves catalog option validation to the provider; an
+empty list declares no options. Formats admit only declared non-secret options
+into signed work. The host still owns secret grants, endpoint policy and bounds
+on stored configuration.
 
 ## Execution
 
@@ -32,6 +45,10 @@ options and an optional host path-admission callback. Use `@active` on synchrono
 methods with a named `context` argument. The decorator guards entry/exit and
 pulls from generator methods. Use `checked_iterator(values, context)` for lazy
 iterables returned by ordinary methods. Close resources on every exit path.
+Use `close_preserving_error` from `execution` for one resource and
+`close_all_preserving_error` for a collection. Cleanup retains any active failure,
+including cancellation, and otherwise exposes the first cleanup failure after
+attempting all resources.
 
 Long provider operations still need checkpoints between blocking calls. Decorators
 cannot interrupt opaque blocking IO. Honor `context.check_path` before storage IO

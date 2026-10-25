@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 
 if TYPE_CHECKING:
@@ -18,7 +19,6 @@ if TYPE_CHECKING:
 import pyarrow as pa
 from dal_obscura_plugin_api import (
     ExecutionContext,
-    PluginDescriptor,
     ScanRequest,
     ScanTask,
     SchemaDescriptor,
@@ -42,24 +42,8 @@ _MAX_FILES = 10_000
 
 
 class IcebergFormatPlugin:
-    descriptor = PluginDescriptor(
-        kind="table_format",
-        plugin_id="iceberg",
-        api_version="3",
-        config_version=1,
-        distribution="dal-obscura-iceberg",
-        version="0.3.0",
-        display_name="Apache Iceberg",
-        capabilities=frozenset(
-            {
-                "nested_schema",
-                "snapshot_reads",
-                "splittable_scan",
-                "delete_files",
-                "cancellation",
-            }
-        ),
-        handle_versions=frozenset({1}),
+    descriptor = load_packaged_descriptor(
+        "dal-obscura-iceberg", __package__, "table_format", "iceberg"
     )
 
     def __init__(

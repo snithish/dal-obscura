@@ -141,13 +141,14 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
     _schema, batches = plan.tasks[0].table_format.execute(
-        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        plan.tasks[0].partition,
+        context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
     with pytest.raises(ValueError, match="batch schema"):
         list(batches)
 
 
-def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch) -> None:
+def test_public_format_stops_lazy_batches_when_context_is_cancelled() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(
         catalog_plugin_id="manifest",
@@ -185,17 +186,6 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
 
             return schema, batches()
 
-    from dal_obscura.adapters.providers import adapters as public_plugin_adapter
-
-    monkeypatch.setattr(
-        public_plugin_adapter,
-        "_context",
-        lambda deadline=None: ExecutionContext(
-            deadline=datetime.now(UTC) + timedelta(minutes=1),
-            correlation_id="cancelled-plugin",
-            cancel_check=lambda: cancelled[0],
-        ),
-    )
     table_format = PublicPluginTableFormat(
         catalog_name="fixture",
         table_name="default.users",
@@ -205,7 +195,10 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
     _schema, batches = plan.tasks[0].table_format.execute(
-        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        plan.tasks[0].partition,
+        context=ExecutionContext(
+            datetime.now(UTC) + timedelta(minutes=1), "cancelled-plugin", lambda: cancelled[0]
+        ),
     )
     with pytest.raises(InterruptedError, match="cancelled"):
         list(batches)
@@ -253,7 +246,8 @@ def test_public_format_closes_plugin_after_lazy_output_is_consumed() -> None:
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
     _schema, batches = plan.tasks[0].table_format.execute(
-        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        plan.tasks[0].partition,
+        context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
 
     observed = [batch.to_pylist() for batch in batches]
@@ -483,7 +477,8 @@ def test_unstarted_execution_does_not_open_plugin_resources():
     plan = table.plan(PlanRequest(target="default.users", columns=["id"]), 2)
     calls.clear()
     output_schema, batches = table.execute(
-        plan.tasks[0].partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        plan.tasks[0].partition,
+        context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
     assert output_schema == schema
     assert calls == []
@@ -506,9 +501,39 @@ def test_execution_uses_the_read_deadline_instead_of_the_planning_timeout():
 
     table = replace(table, format_factory=opened)
     deadline = datetime.now(UTC) + timedelta(minutes=30)
-    _, batches = table.execute(plan.tasks[0].partition, deadline=deadline)
+    _, batches = table.execute(
+        plan.tasks[0].partition, context=ExecutionContext(deadline, "read-deadline")
+    )
     list(batches)
     assert observed == [deadline]
+
+
+def test_provider_methods_receive_host_options_and_path_admission():
+    from dataclasses import replace
+
+    schema = pa.schema([("id", pa.int64())])
+    table, _ = _contract_format(schema)
+    factory = table.format_factory
+
+    def opened(handle, context):
+        plugin = factory(handle, context)
+        original_schema = plugin.schema
+
+        def schema_for_request(context):
+            assert context.options == {"batch_rows": 2}
+            assert context.check_path is not None
+            context.check_path("s3://allowed/metadata.json")
+            with pytest.raises(PermissionError):
+                context.check_path("s3://other/metadata.json")
+            return original_schema(context)
+
+        plugin.schema = schema_for_request
+        return plugin
+
+    table = replace(
+        table, format_factory=opened, options={"batch_rows": 2}, path_roots=("s3://allowed/",)
+    )
+    assert table.get_schema().equals(schema, check_metadata=True)
 
 
 def test_expired_batch_context_does_not_read_source():

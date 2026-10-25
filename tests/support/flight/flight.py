@@ -99,7 +99,7 @@ class StubTableFormat(FixtureSource):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[Any]]:
+    def execute(self, partition: object, *, context) -> tuple[pa.Schema, Iterable[Any]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("StubTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)

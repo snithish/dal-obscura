@@ -72,6 +72,11 @@ Authentication captures a principal and one published configuration. Source,
 policy and schema admission use the same snapshot. Database transactions finish
 before provider IO. Planning retains one opened format and schema descriptor.
 Every task and output schema is validated before ticket issuance becomes atomic.
+One operation context carries the deadline, cancellation and correlation ID through
+catalog construction, resolution, schema admission and planning. Provider reuse
+does not reuse a previous request's context. Fetch creates a context for its own
+RPC using the captured ticket and stream limits. Host options and path admission
+remain available to both factories and provider methods.
 
 A ticket carries bounded passive work, captured identity and schema information.
 Fetch verifies signature, principal context, expiry, exchange limits and explicit
@@ -103,3 +108,7 @@ and upstream fix are recorded in its Cargo configuration.
 Bundled plugins use the same SDK and artifact admission as other installed plugins.
 Plugin metadata and global options are captured at startup. Request handling does
 not change shared configuration or rebuild the admission registry.
+The SDK owns descriptor decoding. Static artifact inspection owns bounded metadata
+IO and lock fingerprints. The registry owns admitted snapshots and factory resolution. Each
+admission pass shares a distribution fingerprint across its entry points; another
+pass reads the installed bytes again.

@@ -5,8 +5,8 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 from dal_obscura_iceberg.format import IcebergFormatPlugin
+from dal_obscura_plugin_api import ExecutionContext, TableHandle, TableIdentifier
 from dal_obscura_plugin_api import ScanTask as PluginScanTask
-from dal_obscura_plugin_api import TableHandle, TableIdentifier
 
 from dal_obscura.adapters.providers.adapters import PublicPluginPartition, PublicPluginTableFormat
 from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
@@ -206,7 +206,8 @@ def test_scan_envelope_captures_format_options_for_fetch(tmp_path):
     worker.reload()
     restored = SourceTaskCodec(worker).decode(payload)
     schema, batches = restored.table_format.execute(
-        restored.partition, deadline=datetime.now(UTC) + timedelta(minutes=1)
+        restored.partition,
+        context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
     values = list(batches)
     assert [batch.num_rows for batch in values] == [1, 1]

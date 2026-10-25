@@ -11,6 +11,7 @@ from typing import Literal, Protocol, cast
 
 import pyarrow as pa
 
+from dal_obscura_plugin_api.configuration import ConfigField, config_fields
 from dal_obscura_plugin_api.schema.projection import ScanRequest
 from dal_obscura_plugin_api.tasks import ScanTask, _freeze_json, _mutable_json
 
@@ -64,6 +65,7 @@ class PluginDescriptor:
     display_name: str = ""
     output_formats: frozenset[str] = frozenset()
     handle_versions: frozenset[int] = frozenset({1})
+    config_fields: tuple[ConfigField, ...] | None = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if not _PLUGIN_ID.fullmatch(self.plugin_id):
@@ -100,6 +102,7 @@ class PluginDescriptor:
         ):
             raise ValueError("Plugin handle versions must be positive bounded integers")
         _validate_config_schema(self.config_schema)
+        object.__setattr__(self, "config_fields", config_fields(self.config_schema))
         object.__setattr__(self, "config_schema", _freeze_json(self.config_schema))
         for name in ("capabilities", "output_formats", "handle_versions"):
             object.__setattr__(self, name, frozenset(getattr(self, name)))

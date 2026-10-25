@@ -80,7 +80,7 @@ class StubTableFormat(FixtureSource):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object, *, context) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("StubTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
@@ -111,7 +111,7 @@ class TrackingTableFormat(FixtureSource):
             residual_row_filter=request.row_filter,
         )
 
-    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object, *, context) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("TrackingTableFormat requires a StubInputPartition")
         return self.schema, iter(())
@@ -147,7 +147,7 @@ class PretendPushdownTableFormat(FixtureSource):
             else deserialize_row_filter(self.residual_sql),
         )
 
-    def execute(self, partition: object, *, deadline) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+    def execute(self, partition: object, *, context) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, StubInputPartition):
             raise TypeError("PretendPushdownTableFormat requires a StubInputPartition")
         return self.schema, iter(self.batches)
@@ -345,7 +345,7 @@ def encode_scan_task(table_format: Source, schema: pa.Schema) -> str:
 
 class _UnusedSource:
     @contextmanager
-    def open(self, catalog, target):
+    def open(self, catalog, target, *, context=None):
         raise AssertionError("This fetch scenario must not discover a source")
         yield
 
@@ -379,7 +379,7 @@ class StaticAccessContext:
     catalog_registry: Any
 
     @contextmanager
-    def open(self, catalog: str | None, target: str) -> Generator[AccessContext]:
+    def open(self, catalog: str | None, target: str, *, context=None) -> Generator[AccessContext]:
         table = self.catalog_registry.resolve(catalog, target)
         yield AccessContext(table, self.authorizer, table.get_schema())
 

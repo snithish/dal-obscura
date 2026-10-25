@@ -14,12 +14,12 @@ import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from dal_obscura_plugin_api import (
     ExecutionContext,
-    PluginDescriptor,
     ScanRequest,
     ScanTask,
     SchemaDescriptor,
     TableHandle,
 )
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 from dal_obscura_plugin_api.options import batch_rows
 from pyarrow.dataset import ParquetFileFormat
@@ -27,28 +27,8 @@ from pyarrow.dataset import ParquetFileFormat
 from dal_obscura_delta.snapshot import MAX_DV_ROWS, MAX_FILES, open_snapshot
 from dal_obscura_delta.storage import DeltaStorage
 
-FORMAT_DESCRIPTOR = PluginDescriptor(
-    kind="table_format",
-    plugin_id="delta",
-    api_version="3",
-    config_version=1,
-    distribution="dal-obscura-delta",
-    version="0.3.0",
-    capabilities=frozenset(
-        {
-            "nested_schema",
-            "snapshot_reads",
-            "splittable_scan",
-            "projection_pushdown",
-            "delete_files",
-            "cancellation",
-        }
-    ),
-    handle_versions=frozenset({1}),
-    config_schema={
-        "fields": [{"name": "batch_rows", "type": "integer", "required": False, "secret": False}]
-    },
-    display_name="Delta Lake snapshot format",
+FORMAT_DESCRIPTOR = load_packaged_descriptor(
+    "dal-obscura-delta", __package__, "table_format", "delta"
 )
 _KEEP_SCHEMA = pa.schema([pa.field("keep", pa.bool_(), nullable=False)])
 _BATCH_ROWS = 8192

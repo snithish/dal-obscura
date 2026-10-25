@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from contextlib import ExitStack
 from pathlib import Path
 
-from dal_obscura_plugin_api import ExecutionContext, PluginDescriptor
+from dal_obscura_plugin_api import ExecutionContext
+from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
 from dal_obscura_plugin_api.execution import active
 
 _MOUNTED_SECRET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}\Z")
@@ -15,13 +16,8 @@ MAX_MOUNTED_SECRET_BYTES = 64 * 1024
 
 
 class EnvironmentBackend:
-    descriptor = PluginDescriptor(
-        kind="secret_backend",
-        plugin_id="environment",
-        api_version="3",
-        config_version=1,
-        distribution="dal-obscura-secrets",
-        version="0.3.0",
+    descriptor = load_packaged_descriptor(
+        "dal-obscura-secrets", __package__, "secret_backend", "environment"
     )
 
     """Secret provider that reads secrets from environment variables."""
@@ -44,13 +40,8 @@ class EnvironmentBackend:
 
 
 class MountedFileBackend:
-    descriptor = PluginDescriptor(
-        kind="secret_backend",
-        plugin_id="mounted_file",
-        api_version="3",
-        config_version=1,
-        distribution="dal-obscura-secrets",
-        version="0.3.0",
+    descriptor = load_packaged_descriptor(
+        "dal-obscura-secrets", __package__, "secret_backend", "mounted_file"
     )
 
     """Read scoped flat files from a fixed operator-owned POSIX mount."""

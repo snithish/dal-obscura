@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
-import math
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator
 from math import isfinite
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
@@ -154,27 +153,21 @@ def validate_descriptor_options(
 ) -> None:
     """Enforce the bounded declarative fields exposed by an admitted plugin."""
 
-    raw_fields = descriptor.config_schema.get("fields")
-    if not isinstance(raw_fields, (list, tuple)):
+    fields = descriptor.config_fields
+    if fields is None:
         return
-    field_specs = [
-        cast(Mapping[str, object], item) for item in raw_fields if isinstance(item, Mapping)
-    ]
-    fields = {item.get("name") for item in field_specs if isinstance(item.get("name"), str)}
-    raw_defaults = descriptor.config_schema.get("defaults")
-    if isinstance(raw_defaults, Mapping):
-        fields.update(key for key in raw_defaults if isinstance(key, str))
-    if unknown := sorted(set(options) - fields):
+    names = {field.name for field in fields}
+    if unknown := sorted(set(options) - names):
         raise ValidationFailure(f"{kind} options contain unsupported fields: " + ", ".join(unknown))
     required: set[str] = set()
-    for item in field_specs:
-        name = item.get("name")
-        if isinstance(name, str) and name in options:
-            _validate_descriptor_value(
-                name, item.get("type"), options[name], kind=kind, choices=item.get("options")
-            )
-        if item.get("required") is True and isinstance(name, str):
-            required.add(name)
+    for field in fields:
+        if field.name in options:
+            try:
+                field.validate(options[field.name])
+            except ValueError as exc:
+                raise ValidationFailure(f"{kind} option {field.name!r} {exc}") from exc
+        if field.required:
+            required.add(field.name)
     missing = sorted(
         name for name in required if name not in options or options[name] in (None, "")
     )
@@ -182,47 +175,6 @@ def validate_descriptor_options(
         raise ValidationFailure(
             f"{kind} options are missing required fields: " + ", ".join(missing)
         )
-
-
-def _validate_descriptor_value(  # noqa: C901
-    name: str,
-    field_type: object,
-    value: object,
-    *,
-    kind: str,
-    choices: object = None,
-) -> None:
-    if field_type in (None, "string", "uri") and not isinstance(value, str):
-        raise ValidationFailure(f"{kind} option {name!r} must be a string")
-    if field_type == "boolean" and not isinstance(value, bool):
-        raise ValidationFailure(f"{kind} option {name!r} must be a boolean")
-    if field_type == "integer" and (isinstance(value, bool) or not isinstance(value, int)):
-        raise ValidationFailure(f"{kind} option {name!r} must be an integer")
-    if field_type == "number" and (
-        isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
-    ):
-        raise ValidationFailure(f"{kind} option {name!r} must be a finite number")
-    if field_type == "enum":
-        if not isinstance(choices, (list, tuple)) or not choices:
-            raise ValidationFailure(f"{kind} option {name!r} has no valid enum choices")
-        if value not in choices:
-            raise ValidationFailure(f"{kind} option {name!r} must be one of the declared choices")
-    if field_type == "secret_reference":
-        if not isinstance(value, dict) or set(value) != {"secret", "scope"}:
-            raise ValidationFailure(f"{kind} option {name!r} must be an explicit secret reference")
-        reference = cast(dict[str, object], value)
-        secret_name = reference.get("secret")
-        if not isinstance(secret_name, str) or not secret_name.strip():
-            raise ValidationFailure(f"{kind} option {name!r} has an invalid secret reference")
-        if "scope" in reference and (
-            not isinstance(reference.get("scope"), str)
-            or not str(reference["scope"]).strip()
-            or len(str(reference["scope"])) > _MAX_OPTION_STRING
-        ):
-            raise ValidationFailure(f"{kind} option {name!r} has an invalid secret scope")
-        return
-    if field_type not in (None, "string", "uri", "boolean", "integer", "enum", "number"):
-        raise ValidationFailure(f"{kind} option {name!r} has an unsupported field type")
 
 
 def _walk_strings(value: object, prefix: str = "options") -> Iterator[tuple[str, str]]:

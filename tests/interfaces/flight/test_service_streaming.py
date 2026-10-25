@@ -654,7 +654,7 @@ def _assert_stream_failure(
     try:
         with (
             flight.FlightClient(f"grpc://127.0.0.1:{server.port}") as client,
-            pytest.raises(expected_error, match=message),
+            pytest.raises(expected_error, match=message) as caught,
         ):
             reader = client.do_get(flight.Ticket(b"test"))
             if consume_chunks:
@@ -664,6 +664,7 @@ def _assert_stream_failure(
             else:
                 reader.read_all()
         assert closed == [True]
+        return str(caught.value)
     finally:
         server.shutdown()
         thread.join(timeout=2)
@@ -698,16 +699,35 @@ def test_provider_capacity_failure_returns_unavailable(operation):
 
 
 @pytest.mark.parametrize("after_first_batch", [False, True])
-def test_stream_cancellation_is_cancelled_and_closes_source(after_first_batch):
+@pytest.mark.parametrize("failure_kind", ["supervisor_cancel", "provider_cancel", "deadline"])
+def test_stream_interruption_status_and_cleanup(after_first_batch, failure_kind):
     from dal_obscura.application.reads.execution import StreamCancelledError
 
-    _assert_stream_failure(
+    failure, expected, message = {
+        "supervisor_cancel": (
+            StreamCancelledError("Stream cancelled"),
+            flight.FlightCancelledError,
+            "cancelled",
+        ),
+        "provider_cancel": (
+            InterruptedError("credential-do-not-disclose"),
+            flight.FlightCancelledError,
+            "cancelled",
+        ),
+        "deadline": (
+            TimeoutError("credential-do-not-disclose"),
+            flight.FlightTimedOutError,
+            "Read deadline exceeded",
+        ),
+    }[failure_kind]
+    observed = _assert_stream_failure(
         after_first_batch,
-        StreamCancelledError("Stream cancelled"),
-        flight.FlightCancelledError,
-        "cancelled",
+        failure,
+        expected,
+        message,
         consume_chunks=True,
     )
+    assert "credential-do-not-disclose" not in observed
 
 
 @pytest.mark.parametrize("denied", [False, True])

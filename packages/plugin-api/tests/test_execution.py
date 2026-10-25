@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from dal_obscura_plugin_api import ExecutionContext
-from dal_obscura_plugin_api.execution import active, checked_iterator, close_preserving_error
+from dal_obscura_plugin_api.execution import active, checked_iterator, close_all_preserving_error
 
 
 def context(cancelled):
@@ -79,14 +79,39 @@ def test_generator_guard_checks_each_pull_and_closes_provider():
     assert closed == [True]
 
 
-def test_cleanup_does_not_mask_primary_error() -> None:
-    class FailingClose:
-        def close(self) -> None:
-            raise RuntimeError("cleanup failed")
+@pytest.mark.parametrize("cleanup_error", [RuntimeError, KeyboardInterrupt])
+@pytest.mark.parametrize("primary_error", [None, ValueError, GeneratorExit])
+@pytest.mark.parametrize("lookup_failure", [False, True])
+def test_cleanup_preserves_primary_error_and_exposes_cleanup_only_failure(
+    cleanup_error, primary_error, lookup_failure
+) -> None:
+    closed = []
 
-    with pytest.raises(ValueError, match="primary failure"):
-        try:
-            raise ValueError("primary failure")
-        except ValueError:
-            close_preserving_error(FailingClose())
-            raise
+    class FailingClose:
+        def __init__(self, name):
+            self.name = name
+
+        @property
+        def close(self):
+            if lookup_failure:
+                self.fail()
+            return self.fail
+
+        def fail(self) -> None:
+            closed.append(self.name)
+            raise cleanup_error(f"{self.name} cleanup failed")
+
+    resources = [FailingClose("first"), FailingClose("second")]
+    with pytest.raises(
+        primary_error or cleanup_error,
+        match="primary failure" if primary_error else "first cleanup failed",
+    ):
+        if primary_error is None:
+            close_all_preserving_error(resources)
+        else:
+            try:
+                raise primary_error("primary failure")
+            except BaseException:
+                close_all_preserving_error(resources)
+                raise
+    assert closed == ["first", "second"]
