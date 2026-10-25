@@ -322,11 +322,12 @@ def test_rest_catalog_closes_owned_http_session_once_and_is_terminal(monkeypatch
         pytest.param(
             {"token": {"secret": "REST_TOKEN"}}, "must be strings", id="unresolved-secret"
         ),
-        pytest.param({"connect-timeout-ms": "0"}, "timeout", id="zero-connect-timeout"),
+        pytest.param({"connect-timeout-ms": 0}, "timeout", id="zero-connect-timeout"),
         pytest.param(
             {"connect-timeout-ms": "not-a-number"}, "timeout", id="invalid-connect-timeout"
         ),
-        pytest.param({"read-timeout-ms": "0"}, "timeout", id="zero-read-timeout"),
+        pytest.param({"read-timeout-ms": 0}, "timeout", id="zero-read-timeout"),
+        pytest.param({"read-timeout-ms": 10**1000}, "bounds", id="oversize-read-timeout"),
         pytest.param({"read-timeout-ms": "not-a-number"}, "timeout", id="invalid-read-timeout"),
         pytest.param({"connect-timeout-ms": True}, "timeout", id="boolean-connect-timeout"),
     ],

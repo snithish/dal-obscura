@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime
@@ -13,6 +13,7 @@ from dal_obscura_plugin_api import (
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
+    PluginDescriptor,
     TableHandle,
     TableIdentifier,
 )
@@ -29,18 +30,6 @@ DEFAULT_READ_TIMEOUT_SECONDS = 30.0
 MIN_TIMEOUT_SECONDS = 0.1
 MAX_CONNECT_TIMEOUT_SECONDS = 30.0
 MAX_READ_TIMEOUT_SECONDS = 120.0
-_ALLOWED_OPTIONS = frozenset(
-    {
-        "uri",
-        "warehouse",
-        "token",
-        "credential",
-        "scope",
-        "oauth2-server-uri",
-        "connect-timeout-ms",
-        "read-timeout-ms",
-    }
-)
 _ACTIVE_REQUEST_BUDGET: ContextVar[tuple[ExecutionContext, float, float] | None] = ContextVar(
     "dal_obscura_rest_request_budget", default=None
 )
@@ -57,11 +46,7 @@ class RestCatalog(CatalogPlugin):
         self._config = config
         context.check_active()
         options = dict(config.options)
-        unknown = set(options) - _ALLOWED_OPTIONS
-        if unknown:
-            raise ValueError("REST catalog options contain unsupported keys")
-        if any(not isinstance(value, str) for value in options.values()):
-            raise ValueError("REST catalog options must be strings or resolved secrets")
+        _validate_resolved_options(self.descriptor, options)
         uri = options.get("uri")
         if not isinstance(uri, str) or not uri:
             raise ValueError("REST catalog requires a URI")
@@ -84,13 +69,13 @@ class RestCatalog(CatalogPlugin):
         if oauth_uri is not None:
             _validate_optional_uri(oauth_uri, "oauth2-server-uri", http_only=True)
         self._connect_timeout = _timeout_seconds(
-            cast(str | None, options.get("connect-timeout-ms")),
+            cast(int | None, options.get("connect-timeout-ms")),
             default=DEFAULT_CONNECT_TIMEOUT_SECONDS,
             maximum=MAX_CONNECT_TIMEOUT_SECONDS,
             label="connect-timeout-ms",
         )
         self._read_timeout = _timeout_seconds(
-            cast(str | None, options.get("read-timeout-ms")),
+            cast(int | None, options.get("read-timeout-ms")),
             default=DEFAULT_READ_TIMEOUT_SECONDS,
             maximum=MAX_READ_TIMEOUT_SECONDS,
             label="read-timeout-ms",
@@ -267,8 +252,25 @@ def _validate_optional_uri(value: object, label: str, *, http_only: bool = False
         raise ValueError(f"REST catalog {label} cannot contain credentials or query data")
 
 
+def _validate_resolved_options(descriptor: PluginDescriptor, options: Mapping[str, object]) -> None:
+    """Apply declared types after the host resolves authorized secret references."""
+    fields = {field.name: field for field in descriptor.config_fields or ()}
+    if set(options) - fields.keys():
+        raise ValueError("REST catalog options contain unsupported keys")
+    for name, value in options.items():
+        field = fields[name]
+        if field.secret:
+            if not isinstance(value, str):
+                raise ValueError("REST catalog secrets must be strings after resolution")
+        else:
+            try:
+                field.validate(value)
+            except ValueError as exc:
+                raise ValueError(f"REST catalog {name} {exc}") from exc
+
+
 def _timeout_seconds(
-    value: str | None,
+    value: int | None,
     *,
     default: float,
     maximum: float,
@@ -276,13 +278,9 @@ def _timeout_seconds(
 ) -> float:
     if value is None:
         return default
-    if not value.isdigit():
-        raise ValueError(f"REST catalog {label} must be a positive integer in milliseconds")
-    milliseconds = int(value)
-    seconds = milliseconds / 1000
-    if not MIN_TIMEOUT_SECONDS <= seconds <= maximum:
+    if not MIN_TIMEOUT_SECONDS * 1000 <= value <= maximum * 1000:
         raise ValueError(f"REST catalog {label} is out of bounds")
-    return seconds
+    return value / 1000
 
 
 def _validate_port(port: int | None, label: str) -> None:
