@@ -118,3 +118,56 @@ test("paginated activity reports a distinct-asset lower bound", async ({ page })
     summary.getByText("At least this many; recent activity only", { exact: true }),
   ).toBeVisible();
 });
+
+test("loaded-asset filters state their scope, retain pagination and reveal full owners", async ({
+  page,
+}) => {
+  await uxApi(page);
+  const first = {
+    id: "asset-one",
+    catalog: "retail",
+    name: "retail.orders",
+    backend: "iceberg",
+    table_identifier: "retail.orders",
+    owner_count: 1,
+    owners: ["https://idp.example.invalid/realm|group:stewards"],
+    policy_status: "configured",
+    policy_revision: 3,
+  };
+  await page.route("**/v1/assets/page?*", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          first,
+          {
+            ...first,
+            id: "asset-two",
+            catalog: "support",
+            name: "support.cases",
+            owners: [],
+            owner_count: 0,
+            policy_status: "missing",
+          },
+        ],
+        next_cursor: "more-assets",
+      },
+    }),
+  );
+  await page.goto("/#assets");
+  await page.getByLabel("Policy for loaded assets", { exact: true }).selectOption("missing");
+  await expect(page.getByRole("button", { name: "support.cases", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "retail.orders", exact: true })).toHaveCount(0);
+  await expect(page.getByText("1 of 2 loaded assets shown", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Filters apply only to loaded assets/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more assets", exact: true })).toBeEnabled();
+  await page.getByLabel("Catalog for loaded assets", { exact: true }).selectOption("retail");
+  await expect(
+    page.getByText("No loaded assets match these filters.", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Clear loaded-asset filters", exact: true }).click();
+  await page.getByText("group:stewards", { exact: true }).click();
+  await expect(
+    page.getByText("https://idp.example.invalid/realm|group:stewards", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Not provided", { exact: true })).toBeVisible();
+});

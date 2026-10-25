@@ -1,0 +1,24 @@
+.inventory-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.inventory-filters > .help {
+  flex-basis: 100%;
+  margin: 0;
+}
+.inventory-filters .mantine-NativeSelect-root {
+  flex: 1 1 200px;
+  max-width: 300px;
+}
+.inventory-principal summary {
+  cursor: pointer;
+}
+.inventory-principal > code {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}

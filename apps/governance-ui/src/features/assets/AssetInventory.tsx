@@ -1,5 +1,7 @@
+import "./inventory.css";
+import { useMemo, useState } from "react";
 import { AssetLastChange } from "./InventoryInsights";
-import { Button, Table, Text, TextInput } from "@mantine/core";
+import { Button, NativeSelect, Table, Text, TextInput } from "@mantine/core";
 import type { Asset } from "../../data/api";
 import { Icon } from "../../shared/Icon";
 
@@ -14,6 +16,24 @@ export type AssetInventoryProps = {
 };
 
 export function AssetInventory(props: AssetInventoryProps) {
+  const [catalog, setCatalog] = useState("");
+  const [policy, setPolicy] = useState("");
+  const catalogs = useMemo(
+    () =>
+      [
+        ...new Set([...props.assets.map((asset) => asset.catalog), ...(catalog ? [catalog] : [])]),
+      ].sort(),
+    [props.assets, catalog],
+  );
+  const filtered = useMemo(
+    () =>
+      props.assets.filter(
+        (asset) =>
+          (!catalog || asset.catalog === catalog) && (!policy || asset.policy_status === policy),
+      ),
+    [props.assets, catalog, policy],
+  );
+  const hasFilters = Boolean(catalog || policy);
   return (
     <section className="asset-inventory" aria-label="Governed asset inventory">
       <div className="inventory-toolbar">
@@ -22,7 +42,9 @@ export function AssetInventory(props: AssetInventoryProps) {
           <Text size="sm" c="dimmed" role="status">
             {props.loading
               ? "Updating inventory…"
-              : `${props.assets.length} ${props.assets.length === 1 ? "asset" : "assets"} loaded`}
+              : hasFilters
+                ? `${filtered.length} of ${props.assets.length} loaded assets shown`
+                : `${props.assets.length} ${props.assets.length === 1 ? "asset" : "assets"} loaded`}
           </Text>
         </div>
         <TextInput
@@ -34,7 +56,45 @@ export function AssetInventory(props: AssetInventoryProps) {
           leftSection={<Icon name="search" size={15} />}
         />
       </div>
-      {props.assets.length ? (
+      <div className="inventory-filters">
+        <NativeSelect
+          label="Catalog for loaded assets"
+          value={catalog}
+          onChange={(event) => setCatalog(event.currentTarget.value)}
+          data={[
+            { value: "", label: "All loaded catalogs" },
+            ...catalogs.map((value) => ({ value, label: value })),
+          ]}
+        />
+        <NativeSelect
+          label="Policy for loaded assets"
+          value={policy}
+          onChange={(event) => setPolicy(event.currentTarget.value)}
+          data={[
+            { value: "", label: "All loaded policies" },
+            { value: "configured", label: "Configured" },
+            { value: "missing", label: "Default NULL masks" },
+          ]}
+        />
+        {hasFilters && (
+          <Button
+            variant="subtle"
+            onClick={() => {
+              setCatalog("");
+              setPolicy("");
+            }}
+          >
+            Clear loaded-asset filters
+          </Button>
+        )}
+        <p className="help">
+          Filters apply only to loaded assets.{" "}
+          {props.hasMore
+            ? "Load more assets to extend these results."
+            : "All matching pages have been loaded."}
+        </p>
+      </div>
+      {filtered.length ? (
         <div
           className="asset-inventory-table"
           role="region"
@@ -52,7 +112,7 @@ export function AssetInventory(props: AssetInventoryProps) {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {props.assets.map((asset) => (
+              {filtered.map((asset) => (
                 <Table.Tr key={asset.id}>
                   <Table.Td>
                     <button
@@ -74,7 +134,16 @@ export function AssetInventory(props: AssetInventoryProps) {
                       <ul className="inventory-owner-details">
                         {asset.owners.map((owner) => (
                           <li key={owner}>
-                            <code>{owner}</code>
+                            {owner.includes("|") ? (
+                              <details className="inventory-principal">
+                                <summary>
+                                  <code>{owner.slice(owner.indexOf("|") + 1) || owner}</code>
+                                </summary>
+                                <code>{owner}</code>
+                              </details>
+                            ) : (
+                              <code>{owner}</code>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -103,9 +172,11 @@ export function AssetInventory(props: AssetInventoryProps) {
         </div>
       ) : (
         <Text role="status">
-          {props.search
-            ? "No governed assets match this search. Clear the search to browse again."
-            : "No governed assets are available to your account."}
+          {hasFilters
+            ? "No loaded assets match these filters."
+            : props.search
+              ? "No governed assets match this search. Clear the search to browse again."
+              : "No governed assets are available to your account."}
         </Text>
       )}
       {props.hasMore && (
