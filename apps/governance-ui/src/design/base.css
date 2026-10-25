@@ -1335,3 +1335,7 @@ pre,
     scroll-margin-top: 150px;
   }
 }
+
+.mantine-InputWrapper-error {
+  color: var(--danger);
+}
