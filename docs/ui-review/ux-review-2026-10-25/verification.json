@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-25",
+  "scope": "Governance UI with synthetic backend fixtures",
+  "toolchain": {
+    "node": "24.22.1",
+    "pnpm": "12.3.4"
+  },
+  "checks": {
+    "unit": {
+      "passed": 77,
+      "command": "pnpm --dir apps/governance-ui test"
+    },
+    "stories": {
+      "passed": 72,
+      "command": "pnpm --dir apps/governance-ui test:stories"
+    },
+    "browser": {
+      "passed": 141,
+      "failed": 0,
+      "skipped": 0,
+      "flaky": 0,
+      "workers": 1,
+      "durationSeconds": 152.69353099999998,
+      "command": "pnpm --dir apps/governance-ui test:e2e --workers=1"
+    },
+    "typesAndFormatting": "passed",
+    "generatedApiTypes": "passed",
+    "productionBuild": "passed",
+    "designbookBuild": "passed",
+    "visualReviewCapture": "passed"
+  },
+  "productionBudgetKiB": {
+    "js": 206.17578125,
+    "jsLimit": 220,
+    "css": 44.4638671875,
+    "cssLimit": 50,
+    "fonts": 83.72265625,
+    "fontsLimit": 120
+  },
+  "performance": {
+    "mask-typing": {
+      "fieldCount": 5000,
+      "samplesMs": [
+        5.907832999997481,
+        5.25616699999955,
+        4.159542000001238,
+        4.045583999999508,
+        4.70662500000617,
+        4.3637089999974705,
+        4.9146659999969415,
+        3.779708000001847,
+        5.626792000002752,
+        3.8621670000065933,
+        3.7007080000039423,
+        4.635333999998693
+      ],
+      "p95Ms": 5.907832999997481
+    },
+    "picker-key-latency": {
+      "fieldCount": 10000,
+      "samplesMs": [
+        7.899999998509884,
+        8,
+        8.099999999627471,
+        8.400000000372529,
+        8.400000000372529,
+        8.599999999627471,
+        8.599999999627471,
+        8.700000001117587,
+        9,
+        9,
+        9.100000001490116,
+        9.199999999254942,
+        9.200000001117587,
+        9.300000000745058,
+        9.300000000745058,
+        9.300000000745058,
+        9.400000000372529,
+        9.5,
+        9.800000000745058,
+        9.900000000372529
+      ],
+      "p95Ms": 9.900000000372529
+    },
+    "workspace-web-vitals": {
+      "lcpMs": 400,
+      "cls": 0.003717566821310255
+    }
+  },
+  "limits": [
+    "Catalog and policy filters refine loaded assets only.",
+    "No new server filtering API or authorization semantics.",
+    "Policy save and optional revocation remain one backend transaction.",
+    "Synthetic fixtures do not qualify a live identity provider.",
+    "No user study or manual screen-reader audit was performed.",
+    "A concurrent browser/stories run exceeded the unchanged picker latency budget; this serial run is the isolated qualification."
+  ],
+  "codeIndex": {
+    "status": "incomplete",
+    "errors": 288,
+    "reason": "MPS GPU memory exhausted during refresh; shared daemon and memory limits left unchanged"
+  }
+}
