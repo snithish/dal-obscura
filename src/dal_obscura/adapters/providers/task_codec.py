@@ -35,6 +35,7 @@ class SourceTaskCodec:
         ):
             raise ValueError("Unregistered table format cannot issue scan tickets")
         handle, data, output_schema = table.handle, partition.task, partition.schema
+        options = self.registry.format_options(handle.format_plugin_id, captured=table.options)
         roots = table.path_roots
         envelope = {
             "version": 1,
@@ -43,7 +44,7 @@ class SourceTaskCodec:
             "schema": _encode_schema(task.schema),
             "output_schema": _encode_schema(output_schema, for_execution=True),
             "path_roots": list(roots),
-            "options": PluginOptions({table.format: table.options}).to_json()[table.format],
+            "options": PluginOptions({table.format: options}).to_json()[table.format],
             "task": data.to_json(),
         }
         return json.dumps(envelope, sort_keys=True, separators=(",", ":"), allow_nan=False)

@@ -131,7 +131,9 @@ def build_control_app(
     catalogs_commands = CatalogsCommands(
         work_factory,
         browser=ProviderCatalogBrowser(
-            plugin_registry=plugin_registry, secret_provider=secret_provider
+            plugin_registry=plugin_registry,
+            secret_provider=secret_provider,
+            egress_allowlist=catalog_egress_allowlist,
         ),
         plugin_registry=plugin_registry,
         discovery_cursors=DiscoveryCursors(catalog_cursor_secret),
@@ -274,7 +276,7 @@ def run_control_plane(values: Mapping[str, str], database_url: str, admin_token:
                 ),
                 oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
                 catalog_egress_allowlist=control_config.csv(
-                    values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")
+                    values.get("DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST", "")
                 ),
                 bootstrap_enabled=control_config.bootstrap_enabled(values, profile),
                 max_request_bytes=control_config.positive_int(

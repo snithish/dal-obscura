@@ -18,30 +18,36 @@ class AdmissionPlugins:
     options = PluginOptions({})
 
     def __init__(self, *keys):
-        self.keys = set(keys)
+        self._descriptors = {
+            (kind, plugin_id): PluginDescriptor(
+                kind=kind,
+                plugin_id=plugin_id,
+                api_version="3",
+                config_version=1,
+                distribution="fixture",
+                version="1.0",
+                output_formats=frozenset(
+                    name for entry_kind, name in keys if entry_kind == "table_format"
+                )
+                if kind == "catalog"
+                else frozenset(),
+            )
+            for kind, plugin_id in keys
+        }
         self.schema = pa.schema([])
         self.configs = []
         self.location = None
 
     def admitted(self):
-        return {key: object() for key in self.keys}
+        return dict(self._descriptors)
 
     def format_options(self, plugin_id, *, captured=None):
         return self.options.for_plugin(plugin_id, captured)
 
     def load(self, kind, plugin_id):
         registry = self
-        backend = next(name for kind, name in self.keys if kind == "table_format")
-        descriptor = PluginDescriptor(
-            kind=kind,
-            plugin_id=plugin_id,
-            api_version="3",
-            config_version=1,
-            distribution="fixture",
-            version="1.0",
-            output_formats=frozenset({backend}),
-            handle_versions=frozenset({1}),
-        )
+        backend = next(name for kind, name in self._descriptors if kind == "table_format")
+        descriptor = self._descriptors[(kind, plugin_id)]
         if kind == "catalog":
 
             class Catalog:

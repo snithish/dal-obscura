@@ -40,7 +40,57 @@ def test_asset_binding_requires_admission_for_every_pair(asset_commands, catalog
     assert commands.list_workspace_assets(actor=actor, correlation_id=None) == []
 
 
-def _commands(asset_commands, *, overlap=True, declared_format=True, handle_overlap=True):
+@pytest.mark.parametrize(
+    "config_schema",
+    [
+        {},
+        {"fields": [{"name": "batch_rows", "type": "integer"}], "additionalProperties": True},
+    ],
+    ids=["no-declared-fields", "extra-properties"],
+)
+def test_asset_format_options_require_declared_fields(asset_commands, config_schema):
+    from importlib import metadata
+
+    from dal_obscura.plugins import PluginRegistry, build_plugin_lock, load_static_plugin_descriptor
+    from dal_obscura.plugins.bootstrap import create_plugin_registry
+
+    _, factory, actor = asset_commands
+    installed = create_plugin_registry()
+    entry = next(
+        iter(metadata.entry_points().select(group="dal_obscura.table_formats.v3", name="iceberg"))
+    )
+    descriptor = replace(
+        installed.admitted()[("table_format", "iceberg")], config_schema=config_schema
+    )
+    locks = {key: installed.identity(*key) for key in installed.admitted()}
+    locks[("table_format", "iceberg")] = build_plugin_lock("table_format", entry, descriptor)
+
+    def descriptor_loader(candidate):
+        if (candidate.group, candidate.name) == (entry.group, entry.name):
+            return descriptor
+        return load_static_plugin_descriptor(candidate)
+
+    registry = PluginRegistry(allowlist=locks, descriptor_loader=descriptor_loader)
+    registry.reload()
+    commands = AssetsCommands(
+        factory, schema_loader=ProviderAssetSchemaLoader(), plugin_registry=registry
+    )
+    with pytest.raises(ValidationFailure, match="Table-format options contain unsupported fields"):
+        commands.upsert_workspace_asset(
+            "analytics",
+            "events",
+            "iceberg",
+            "default.events",
+            {"undeclared": "value"},
+            actor=actor,
+            correlation_id=None,
+        )
+    assert commands.list_workspace_assets(actor=actor, correlation_id=None) == []
+
+
+def _commands(
+    asset_commands, *, overlap=True, declared_format=True, handle_overlap=True, option_type="string"
+):
     _, factory, actor = asset_commands
     catalog = PluginDescriptor(
         kind="catalog",
@@ -64,7 +114,9 @@ def _commands(asset_commands, *, overlap=True, declared_format=True, handle_over
         version="1.0.0",
         capabilities=frozenset({"nested_schema"}),
         handle_versions=frozenset({1} if handle_overlap else {2}),
-        config_schema={"fields": [{"name": "format_option", "type": "string", "required": True}]},
+        config_schema={
+            "fields": [{"name": "format_option", "type": option_type, "required": True}]
+        },
     )
 
     class Registry:
@@ -80,6 +132,29 @@ def _commands(asset_commands, *, overlap=True, declared_format=True, handle_over
     return AssetsCommands(
         factory, schema_loader=ProviderAssetSchemaLoader(), plugin_registry=Registry()
     ), actor
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "https://user:sentinel-credential@private.example/v1",
+        "https://private.example/v1?token=sentinel-credential",
+    ],
+)
+def test_format_uri_credentials_are_rejected_before_asset_write(asset_commands, uri):
+    commands, actor = _commands(asset_commands, option_type="uri")
+    with pytest.raises(ValidationFailure, match="no credentials") as error:
+        commands.upsert_workspace_asset(
+            "plugins",
+            "events",
+            "fixture.format",
+            "default.events",
+            {"format_option": uri},
+            actor=actor,
+            correlation_id=None,
+        )
+    assert commands.list_workspace_assets(actor=actor, correlation_id=None) == []
+    assert "sentinel-credential" not in str(error.value)
 
 
 def test_asset_binding_validates_pair_capabilities_and_format_options(asset_commands):

@@ -7,6 +7,7 @@ x-service: &service
   security_opt: [no-new-privileges:true]
   networks: [backend]
 x-trust: &trust
+  DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST: postgres
   SSL_CERT_FILE: /trust/ca.crt
   REQUESTS_CA_BUNDLE: /trust/ca.crt
   LOCAL_ICEBERG_URI: postgresql+psycopg://iceberg:${ICEBERG_DB_PASSWORD}@postgres:5432/iceberg
@@ -84,7 +85,6 @@ services:
       DAL_OBSCURA_CONTROL_PLANE_HOST: 0.0.0.0
       DAL_OBSCURA_CONTROL_PLANE_PORT: "8820"
       DAL_OBSCURA_CONTROL_PLANE_PROFILE: production
-      DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST: postgres
       DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN: ${ADMIN_TOKEN}
       DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED: "false"
       DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS: https://localhost:${UI_PORT}

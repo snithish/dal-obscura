@@ -18,9 +18,16 @@ Catalog writes, persisted configuration capture and asset bindings require an
 admitted startup registry for bundled and external plugins alike. The Iceberg
 catalog exposes common typed fields and allows additional PyIceberg properties.
 Its catalog type can be inferred by PyIceberg when omitted. Providers validate
-backend properties at construction. Stored options pass host credential, egress
-and size validation before reference resolution. Connection edits preserve
-additional properties for descriptors that allow them.
+backend properties at construction. Connection edits preserve additional properties
+for descriptors that allow them.
+
+Set `DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST` to the same comma-separated hosts in
+both processes. Production requires an explicit list. The host validates merged
+catalog options before resolving references, then checks declared URI fields
+against endpoint policy before provider construction or cache lookup. A granted
+URI reference can contain credentials; credential fields remain opaque values.
+Declare endpoint fields as URI fields so the host can distinguish them from
+credentials. Additional provider properties remain the provider's responsibility.
 
 `DAL_OBSCURA_PLUGIN_OPTIONS` is a JSON object of namespaced global arguments:
 
@@ -33,6 +40,9 @@ startup. Plugin defaults apply first, global values next, and instance options
 last. Options are detached and immutable. Catalog arguments arrive in
 `CatalogConfig.options`; format arguments arrive in `ExecutionContext.options`.
 Each plugin validates supported arguments during construction.
+Published asset format options override global format values during planning.
+Tickets capture the effective options; fetching a ticket does not merge in newer
+global settings.
 
 ## Secret backends
 

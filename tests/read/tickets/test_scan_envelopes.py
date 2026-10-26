@@ -162,17 +162,20 @@ def test_scan_envelope_retains_deep_source_metadata_with_a_native_projection():
     assert restored.partition.schema.equals(pa.schema([("id", pa.int64())]), check_metadata=True)
 
 
-def test_scan_envelope_captures_format_options_for_fetch(tmp_path):
+@pytest.mark.parametrize("instance_options, batch_sizes", [({}, [1, 1]), ({"batch_rows": 2}, [2])])
+def test_scan_envelope_captures_format_options_for_fetch(tmp_path, instance_options, batch_sizes):
     from datetime import UTC, datetime, timedelta
 
     import pyarrow.parquet as pq
 
-    from dal_obscura.adapters.providers.catalogs import (
-        CatalogConfig,
-        CatalogRegistry,
-        ServiceConfig,
-    )
+    from dal_obscura.adapters.providers.published import LiveConfigCatalogRegistry
     from dal_obscura.kernel.plans.request import PlanRequest
+    from dal_obscura.kernel.plans.snapshot import (
+        PublishedAssetSnapshot,
+        PublishedCatalog,
+        PublishedSource,
+    )
+    from dal_obscura.kernel.policy.models import AssetPolicy
     from dal_obscura.plugins import PluginRegistry
     from tests.support.plugins.plugins import manifest_registry
     from tests.support.plugins.public_plugins import _fixture
@@ -183,25 +186,29 @@ def test_scan_envelope_captures_format_options_for_fetch(tmp_path):
     locks = {key: installed.identity(*key) for key in installed.admitted()}
     planner = PluginRegistry(allowlist=locks, options={"dal.plugins.parquet.dataset.batch_rows": 1})
     planner.reload()
-    catalogs = CatalogRegistry(
-        ServiceConfig(
-            {
-                "fixture": CatalogConfig(
-                    "fixture",
-                    {"root": str(root), "manifest_path": "manifest.json"},
-                    plugin_id="manifest",
-                )
-            }
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog(
+            "fixture", "manifest", 1, {"root": str(root), "manifest_path": "manifest.json"}
         ),
-        plugin_registry=planner,
+        target="default.users",
+        source=PublishedSource("parquet.dataset", "default.users", instance_options),
+        policy=AssetPolicy(1, "fixture", "default.users", []),
     )
+
+    class SnapshotReader:
+        def get_asset_and_catalog(self, catalog, target):
+            return asset
+
+    catalogs = LiveConfigCatalogRegistry(SnapshotReader(), plugin_registry=planner)
     try:
-        plan = catalogs.resolve("fixture", "default.users").plan(
-            PlanRequest(target="default.users", columns=["id"]), max_tickets=1
-        )
-        payload = SourceTaskCodec(planner).encode(plan.tasks[0])
+        with catalogs.open("fixture", "default.users") as access:
+            plan = access.table_format.plan(
+                PlanRequest(target="default.users", columns=["id"]), max_tickets=1
+            )
+            payload = SourceTaskCodec(planner).encode(plan.tasks[0])
     finally:
         catalogs.close()
+    assert json.loads(payload)["options"] == {"batch_rows": instance_options.get("batch_rows", 1)}
     worker = PluginRegistry(allowlist=locks, options={"dal.plugins.parquet.dataset.batch_rows": 64})
     worker.reload()
     restored = SourceTaskCodec(worker).decode(payload)
@@ -210,7 +217,7 @@ def test_scan_envelope_captures_format_options_for_fetch(tmp_path):
         context=ExecutionContext(datetime.now(UTC) + timedelta(minutes=1), "fixture-read"),
     )
     values = list(batches)
-    assert [batch.num_rows for batch in values] == [1, 1]
+    assert [batch.num_rows for batch in values] == batch_sizes
     assert pa.Table.from_batches(values, schema=schema).equals(expected, check_metadata=True)
 
 
@@ -220,3 +227,71 @@ def test_scan_envelope_requires_captured_options_even_for_version_one():
     del document["options"]
     with pytest.raises(ValueError, match="Invalid read payload"):
         codec.decode(json.dumps(document))
+
+
+def test_scan_envelope_rejects_unadmitted_options_before_serialization():
+    codec, task = envelope()
+    source = replace(
+        task.table_format, options={"endpoint": "https://user:sentinel-credential@host"}
+    )
+    with pytest.raises(ValueError, match="Unsupported format options") as error:
+        codec.encode(replace(task, table_format=source))
+    assert "sentinel-credential" not in str(error.value)
+
+
+def test_live_format_binding_rejects_a_different_admitted_format_before_open(tmp_path):
+    from dal_obscura.adapters.providers.published import LiveConfigCatalogRegistry
+    from dal_obscura.kernel.plans.snapshot import (
+        PublishedAssetSnapshot,
+        PublishedCatalog,
+        PublishedSource,
+    )
+    from dal_obscura.kernel.policy.models import AssetPolicy
+    from dal_obscura.plugins import PluginRegistry
+    from tests.support.plugins.plugins import manifest_registry
+    from tests.support.plugins.public_plugins import _fixture
+
+    root, _ = _fixture(tmp_path)
+    manifest = manifest_registry()
+    locks = {key: manifest.identity(*key) for key in manifest.admitted()}
+    locks[("table_format", "iceberg")] = create_plugin_registry().identity(
+        "table_format", "iceberg"
+    )
+    opened_formats = []
+
+    def factory_loader(entry):
+        factory = entry.load()
+        if entry.name != "parquet.dataset":
+            return factory
+
+        def open_format(handle, context):
+            opened_formats.append(handle.format_plugin_id)
+            return factory(handle, context)
+
+        return open_format
+
+    plugins = PluginRegistry(allowlist=locks, factory_loader=factory_loader)
+    plugins.reload()
+    asset = PublishedAssetSnapshot(
+        catalog=PublishedCatalog(
+            "fixture", "manifest", 1, {"root": str(root), "manifest_path": "manifest.json"}
+        ),
+        target="default.users",
+        source=PublishedSource("iceberg", "default.users", {}),
+        policy=AssetPolicy(1, "fixture", "default.users", []),
+    )
+
+    class SnapshotReader:
+        def get_asset_and_catalog(self, catalog, target):
+            return asset
+
+    catalogs = LiveConfigCatalogRegistry(SnapshotReader(), plugin_registry=plugins)
+    try:
+        with (
+            pytest.raises(ValueError, match="Catalog and table-format plugins do not match"),
+            catalogs.open("fixture", "default.users"),
+        ):
+            pass
+        assert opened_formats == []
+    finally:
+        catalogs.close()

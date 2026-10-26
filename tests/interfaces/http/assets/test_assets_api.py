@@ -107,7 +107,7 @@ def test_workspace_asset_upsert_uses_default_workspace_context(client_factory):
 
     response = client.put(
         "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 7}},
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers=ADMIN_HEADERS,
     )
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
@@ -132,7 +132,7 @@ def test_workspace_asset_upsert_uses_default_workspace_context(client_factory):
             "policy_revision": 0,
         }
     ]
-    assert detail["options"] == {"snapshot": 7}
+    assert detail["options"] == {}
     assert detail["policy_rules"] == []
     assert "tenant" not in _keys_recursive({"assets": assets, "detail": detail})
     assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
@@ -392,7 +392,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids(client_fact
     assert asset_detail == {
         **assets[0],
         "revision": 0,
-        "options": {"snapshot": 1},
+        "options": {},
         "schema_fields": [],
         "policy_rules": asset_detail["policy_rules"],
     }

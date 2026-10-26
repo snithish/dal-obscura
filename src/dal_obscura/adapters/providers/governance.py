@@ -8,11 +8,14 @@ from threading import BoundedSemaphore, Lock
 from typing import Any, cast
 
 import pyarrow as pa
-from dal_obscura_plugin_api import DiscoveryPage
+from dal_obscura_plugin_api import CatalogConfig, DiscoveryPage
 
 from dal_obscura.adapters.providers.discovery import discover_public_catalog_tables
 from dal_obscura.adapters.providers.schema import load_source_schema
-from dal_obscura.application.governance.catalogs.validation import validate_catalog_options
+from dal_obscura.application.governance.catalogs.validation import (
+    validate_catalog_options,
+    validate_resolved_catalog_endpoints,
+)
 from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.application.governance.values import AssetSchemaDiscovery, CatalogDiscovery
 from dal_obscura.identity.claims import PrincipalClaimMapper
@@ -46,17 +49,11 @@ class ProviderAssetSchemaLoader:
             "plugin_id": config.plugin_id,
             "revision": config.revision,
         }
-        options = cast(
-            dict[str, object],
-            resolve_secret_refs(
-                (
-                    self.plugin_registry.options.for_plugin(config.plugin_id, config.options)
-                    if self.plugin_registry is not None
-                    else config.options
-                ),
-                provider=self.secret_provider,
-                expected_scope=f"catalog:{config.instance_id}",
-            ),
+        options = _resolve_catalog_options(
+            config,
+            plugin_registry=self.plugin_registry,
+            secret_provider=self.secret_provider,
+            egress_allowlist=self.egress_allowlist,
         )
         try:
             return load_source_schema(
@@ -131,29 +128,44 @@ def _admit_session_discovery(session_key: str | None) -> Generator[None]:
                 _SESSION_DISCOVERY_SLOTS.pop(session_key, None)
 
 
-def _resolve_catalog_secrets(
-    options: dict[str, Any],
+def _resolve_catalog_options(
+    config: CatalogConfig,
     *,
-    scope: str | None = None,
-    provider: SecretProvider | None = None,
-) -> dict[str, Any]:
+    plugin_registry: PluginRegistry | None,
+    secret_provider: SecretProvider | None,
+    egress_allowlist: tuple[str, ...],
+) -> dict[str, object]:
+    if plugin_registry is None:
+        raise ValidationFailure("Catalog plugin is not admitted")
+    descriptor = plugin_registry.admitted().get(("catalog", config.plugin_id))
+    if descriptor is None:
+        raise ValidationFailure("Catalog plugin is not admitted")
+    options = plugin_registry.options.for_plugin(config.plugin_id, config.options)
+    validate_catalog_options(options, egress_allowlist=egress_allowlist)
     try:
         resolved = resolve_secret_refs(
             options,
-            provider=provider,
-            expected_scope=scope,
+            provider=secret_provider,
+            expected_scope=f"catalog:{config.instance_id}",
         )
     except ValueError as exc:
         raise ValidationFailure("Catalog secret could not be resolved") from exc
-    return cast(dict[str, Any], resolved)
+    resolved = cast(dict[str, object], resolved)
+    validate_resolved_catalog_endpoints(descriptor, resolved, egress_allowlist=egress_allowlist)
+    return resolved
 
 
 class ProviderCatalogBrowser:
     def __init__(
-        self, *, plugin_registry: PluginRegistry | None, secret_provider: SecretProvider | None
+        self,
+        *,
+        plugin_registry: PluginRegistry | None,
+        secret_provider: SecretProvider | None,
+        egress_allowlist: tuple[str, ...] = (),
     ) -> None:
         self.plugin_registry = plugin_registry
         self.secret_provider = secret_provider
+        self.egress_allowlist = egress_allowlist
 
     def discover(
         self,
@@ -166,13 +178,11 @@ class ProviderCatalogBrowser:
         """Read one provider page without retaining a database session."""
 
         config = captured.config
-        configured = (
-            self.plugin_registry.options.for_plugin(config.plugin_id, config.options)
-            if self.plugin_registry is not None
-            else config.options
-        )
-        options = _resolve_catalog_secrets(
-            dict(configured), scope=f"catalog:{config.instance_id}", provider=self.secret_provider
+        options = _resolve_catalog_options(
+            config,
+            plugin_registry=self.plugin_registry,
+            secret_provider=self.secret_provider,
+            egress_allowlist=self.egress_allowlist,
         )
         try:
             with _admit_session_discovery(session_key):

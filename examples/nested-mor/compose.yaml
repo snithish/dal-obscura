@@ -5,6 +5,7 @@ x-example: &example
     context: ../..
     dockerfile: examples/nested-mor/Dockerfile
   environment: &env
+    DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST: postgres,s3,nested-scenarios
     PYTHONPATH: /example:/support
     SCENARIO: ${SCENARIO:-delta}
     SCENARIO_ROWS_PER_PARTITION: ${SCENARIO_ROWS_PER_PARTITION:-1000002}
@@ -101,7 +102,6 @@ services:
       DAL_OBSCURA_CONTROL_PLANE_PORT: "8820"
       DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN: disposable-scenario-admin
       DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED: "true"
-      DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST: postgres,s3,nested-scenarios
     depends_on:
       migrate: {condition: service_completed_successfully}
     healthcheck:

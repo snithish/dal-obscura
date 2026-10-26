@@ -43,8 +43,15 @@ boolean; declared fields retain their type and required checks. Omitted `fields`
 leaves catalog option validation to the provider unless `additionalProperties`
 is `false`. An empty list declares no options by default.
 Formats admit only declared non-secret options into signed work and reject secret
-references even in string fields. The host still owns secret grants, endpoint
+references even in string fields. URI options must not contain credentials or
+credential query parameters. Use worker identity for storage credentials.
+The host still owns secret grants, endpoint
 policy and bounds on stored configuration.
+
+Declare endpoints and storage locations as URI fields. The host checks them after
+secret resolution before provider construction, while credential fields remain
+opaque. URI references can contain authorized credentials. Additional backend
+properties stay under provider validation.
 
 ## Execution
 

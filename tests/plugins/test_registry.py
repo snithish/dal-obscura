@@ -393,30 +393,40 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(entry
 
 
 @pytest.mark.parametrize("source", ["global", "captured"])
-def test_format_options_keep_scoped_references_out_of_signed_work(entry_factory, source):
+@pytest.mark.parametrize(
+    "credential,message",
+    [
+        ({"secret": "ENDPOINT", "scope": "catalog:analytics"}, "cannot contain secrets"),
+        ("https://user:sentinel-credential@private.example/v1", "no credentials"),
+        ("https://private.example/v1?ToKeN=sentinel-credential", "no credentials"),
+    ],
+)
+def test_format_options_keep_credentials_out_of_signed_work(
+    entry_factory, source, credential, message
+):
     entry = entry_factory("fixture.format", "dal_obscura.table_formats.v3")
     descriptor = replace(
         load_static_plugin_descriptor(entry),
         config_schema={"fields": [{"name": "endpoint", "type": "uri"}]},
     )
-    reference = {"secret": "ENDPOINT", "scope": "catalog:analytics"}
     registry = PluginRegistry(
         allowlist={
             ("table_format", "fixture.format"): build_plugin_lock("table_format", entry, descriptor)
         },
         entry_points_fn=lambda: _EntryPoints([entry]),
         descriptor_loader=lambda _: descriptor,
-        options={"dal.plugins.fixture.format.endpoint": reference} if source == "global" else {},
+        options={"dal.plugins.fixture.format.endpoint": credential} if source == "global" else {},
     )
     registry.reload()
     assert dict(
         registry.format_options("fixture.format", captured={"endpoint": "https://public.example"})
     ) == {"endpoint": "https://public.example"}
-    with pytest.raises(ValueError, match="cannot contain secrets"):
+    with pytest.raises(ValueError, match=message) as error:
         if source == "global":
             registry.format_options("fixture.format")
         else:
-            registry.format_options("fixture.format", captured={"endpoint": reference})
+            registry.format_options("fixture.format", captured={"endpoint": credential})
+    assert "sentinel-credential" not in str(error.value)
 
 
 def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -> None:

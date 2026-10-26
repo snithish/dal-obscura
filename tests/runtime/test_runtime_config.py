@@ -165,9 +165,14 @@ def test_runtime_config_accepts_secure_production_data_plane(monkeypatch: pytest
         "DAL_OBSCURA_SECRET_PROVIDER_CONFIG", '{"scope_grants":{"identity":["JWT_SECRET"]}}'
     )
 
+    with pytest.raises(ValueError, match="catalog egress allowlist"):
+        load_data_plane_runtime_config()
+    monkeypatch.setenv("DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST", " catalog.example, db ")
+
     config = load_data_plane_runtime_config()
 
     assert config.profile == "production"
+    assert config.catalog_egress_allowlist == ("catalog.example", "db")
 
 
 def test_tls_material_reads_file_contents(tmp_path):

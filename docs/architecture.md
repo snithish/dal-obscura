@@ -108,6 +108,10 @@ and upstream fix are recorded in its Cargo configuration.
 Bundled plugins use the same SDK and artifact admission as other installed plugins.
 Plugin metadata and global options are captured at startup. Request handling does
 not change shared configuration or rebuild the admission registry.
+Planning applies per-asset format options over startup values and captures the
+effective immutable options in each scan ticket. Fetch uses those captured values.
+Catalog endpoints are checked before provider lookup, including cache hits, after
+scoped secret resolution. URI metadata distinguishes endpoints from credentials.
 The SDK owns descriptor decoding. Static artifact inspection owns bounded metadata
 IO and lock fingerprints. The registry owns admitted snapshots and factory resolution. Each
 admission pass shares a distribution fingerprint across its entry points; another

@@ -12,6 +12,11 @@ HTTP control plane; process startup neither migrates nor substitutes unpublished
 records. Bootstrap access belongs to disposable development profiles. Disable it
 for normal production administration.
 
+Both processes must receive the same `DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST`.
+It replaces the control-plane-specific setting and is required in production.
+Update both environments together so a secret endpoint admitted by one process
+is governed by the same policy in the other.
+
 ```sh
 uv run --no-sync dal-obscura-migrate upgrade
 uv run --no-sync dal-obscura-control-plane

@@ -155,7 +155,7 @@ def validate_profile(  # noqa: C901
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
         "browser post-logout redirect URI",
     )
-    if not csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")):
+    if not csv(values.get("DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST", "")):
         raise ValueError("Production requires an explicit catalog egress allowlist")
     bootstrap_enabled = (
         values.get(

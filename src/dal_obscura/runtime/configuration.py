@@ -42,6 +42,7 @@ class DataPlaneRuntimeConfig:
     profile: str = "local"
     ticket_cleanup_interval_seconds: int = 60
     plugin_lock_file: str | None = None
+    catalog_egress_allowlist: tuple[str, ...] = ()
 
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
@@ -94,6 +95,11 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         ),
         secret_provider=secret_provider_config_from_environment(),
         plugin_lock_file=_optional_env("DAL_OBSCURA_PLUGIN_LOCK_FILE"),
+        catalog_egress_allowlist=tuple(
+            item.strip()
+            for item in os.getenv("DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST", "").split(",")
+            if item.strip()
+        ),
     )
     _validate_profile(config)
     return config
@@ -130,6 +136,8 @@ def _validate_profile(config: DataPlaneRuntimeConfig) -> None:
         raise ValueError(
             "Production requires non-empty DAL_OBSCURA_SECRET_PROVIDER_CONFIG scope_grants"
         )
+    if not config.catalog_egress_allowlist:
+        raise ValueError("Production requires an explicit catalog egress allowlist")
 
 
 def _required_env(name: str) -> str:

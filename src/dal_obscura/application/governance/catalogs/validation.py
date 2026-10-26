@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import ipaddress
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from math import isfinite
 from typing import Any, cast
-from urllib.parse import parse_qsl, urlsplit
 
 from dal_obscura_plugin_api import PluginDescriptor
+from dal_obscura_plugin_api.configuration import parse_uri
 
 from dal_obscura.application.governance.errors import ValidationFailure
 from dal_obscura.application.governance.ports import GovernancePluginRegistry
@@ -63,7 +63,7 @@ def validate_admitted_catalog_options(
 
 
 def validate_catalog_options(
-    options: dict[str, Any],
+    options: Mapping[str, object],
     *,
     egress_allowlist: tuple[str, ...] = (),
 ) -> None:
@@ -81,41 +81,52 @@ def validate_catalog_options(
     _reject_dynamic_loader_options(options)
     _reject_inline_secrets(options)
     for key, value in _walk_strings(options):
-        if "://" not in value:
+        if "://" in value or value.startswith("//"):
+            _validate_endpoint_uri(value, key=key, allowlist=normalized_allowlist)
+
+
+def validate_resolved_catalog_endpoints(
+    descriptor: PluginDescriptor,
+    options: Mapping[str, object],
+    *,
+    egress_allowlist: tuple[str, ...] = (),
+) -> None:
+    """Check declared endpoints after resolution without interpreting credentials."""
+    allowlist = {item.strip().lower().rstrip(".") for item in egress_allowlist}
+    for field in descriptor.config_fields or ():
+        if field.type != "uri" or field.name not in options:
             continue
+        value = options[field.name]
+        if not isinstance(value, str):
+            raise ValidationFailure(f"Resolved catalog option {field.name!r} must be a string")
         try:
-            parsed = urlsplit(value)
-            # Accessing hostname/credentials can itself validate bracketed
-            # hosts and ports, so keep those parser failures inside the
-            # user-facing validation boundary as well.
-            username = parsed.username
-            password = parsed.password
-            hostname = parsed.hostname
-        except ValueError as exc:
-            raise ValidationFailure(f"Catalog option {key!r} contains an invalid URI") from exc
-        if parsed.scheme.lower() == "file" and parsed.netloc:
-            raise ValidationFailure(
-                f"Catalog option {key!r} must use a local file URI without an authority"
+            _validate_endpoint_uri(
+                value, key=field.name, allowlist=allowlist, allow_credentials=True
             )
-        if password or (username and parsed.scheme.lower() not in {"abfs", "abfss"}):
+        except ValidationFailure:
             raise ValidationFailure(
-                f"Catalog option {key!r} must use a secret reference, not URI credentials"
-            )
-        if any(
-            name.lower() in {"access_token", "api_key", "password", "secret", "token"}
-            for name, _item in parse_qsl(parsed.query, keep_blank_values=True)
-        ):
-            raise ValidationFailure(f"Catalog option {key!r} must not put secrets in a URI query")
-        if hostname:
-            _validate_ip_literal(hostname, key=key, allowlist=normalized_allowlist)
-        if (
-            hostname
-            and normalized_allowlist
-            and hostname.lower().rstrip(".") not in normalized_allowlist
-        ):
-            raise ValidationFailure(
-                f"Catalog endpoint host {hostname!r} is outside the configured egress allowlist"
-            )
+                f"Resolved catalog option {field.name!r} violates endpoint policy"
+            ) from None
+
+
+def _validate_endpoint_uri(
+    value: str, *, key: str, allowlist: set[str], allow_credentials: bool = False
+) -> None:
+    try:
+        parsed = parse_uri(value, allow_credentials=allow_credentials)
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise ValidationFailure(f"Catalog option {key!r} {exc}") from None
+    if parsed.scheme.lower() == "file" and parsed.netloc:
+        raise ValidationFailure(
+            f"Catalog option {key!r} must use a local file URI without an authority"
+        )
+    if hostname:
+        _validate_ip_literal(hostname, key=key, allowlist=allowlist)
+    if hostname and allowlist and hostname.lower().rstrip(".") not in allowlist:
+        raise ValidationFailure(
+            f"Catalog option {key!r} is outside the configured egress allowlist"
+        )
 
 
 def _validate_ip_literal(hostname: str, *, key: str, allowlist: set[str]) -> None:
@@ -137,7 +148,7 @@ def _validate_ip_literal(hostname: str, *, key: str, allowlist: set[str]) -> Non
     if (
         address.is_private or address.is_loopback or address.is_reserved
     ) and normalized not in allowlist:
-        raise ValidationFailure(f"Catalog endpoint host {hostname!r} is a private address")
+        raise ValidationFailure(f"Catalog option {key!r} targets a private address")
 
 
 def validate_descriptor_options(
@@ -174,14 +185,28 @@ def validate_descriptor_options(
 
 
 def _walk_strings(value: object, prefix: str = "options") -> Iterator[tuple[str, str]]:
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
+        if _is_scoped_secret_reference(cast(Mapping[str, object], value)):
+            return
         for key, item in value.items():
             yield from _walk_strings(item, f"{prefix}.{key}")
-    elif isinstance(value, list):
+    elif isinstance(value, list | tuple):
         for index, item in enumerate(value):
             yield from _walk_strings(item, f"{prefix}[{index}]")
     elif isinstance(value, str):
         yield prefix, value
+
+
+def _is_scoped_secret_reference(value: Mapping[str, object]) -> bool:
+    """Identify opaque references; SDK and runtime own validation and authorization."""
+    secret, scope = value.get("secret"), value.get("scope")
+    return (
+        set(value) == {"secret", "scope"}
+        and isinstance(secret, str)
+        and bool(secret.strip())
+        and isinstance(scope, str)
+        and bool(scope.strip())
+    )
 
 
 def _validate_option_shape(  # noqa: C901
@@ -198,7 +223,7 @@ def _validate_option_shape(  # noqa: C901
         raise ValidationFailure("Catalog options contain too many values")
     if depth > _MAX_OPTION_DEPTH:
         raise ValidationFailure("Catalog options are too deeply nested")
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         if len(value) > _MAX_OPTION_KEYS:
             raise ValidationFailure("Catalog option object is too large")
         for key, nested in value.items():
@@ -206,7 +231,7 @@ def _validate_option_shape(  # noqa: C901
                 raise ValidationFailure("Catalog option key is invalid or too long")
             _validate_option_shape(nested, depth=depth + 1, nodes=counter)
         return
-    if isinstance(value, list):
+    if isinstance(value, list | tuple):
         if len(value) > _MAX_OPTION_ITEMS:
             raise ValidationFailure("Catalog option list is too large")
         for nested in value:
@@ -228,26 +253,21 @@ def _validate_option_shape(  # noqa: C901
 def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
     """Requires sensitive catalog options to use an explicit secret reference."""
 
-    if isinstance(value, dict):
-        mapping = cast(dict[str, object], value)
-        if (
-            set(mapping) == {"secret", "scope"}
-            and isinstance(mapping.get("secret"), str)
-            and isinstance(mapping.get("scope"), str)
-            and bool(str(mapping.get("scope")).strip())
-        ):
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[str, object], value)
+        if _is_scoped_secret_reference(mapping):
             return
         for key, nested in mapping.items():
             name = str(key).strip().lower()
             path = f"{prefix}.{key}"
             if name in _SECRET_OPTION_KEYS and (
-                not isinstance(nested, dict)
+                not isinstance(nested, Mapping)
                 or set(nested) != {"secret", "scope"}
-                or not isinstance(cast(dict[str, object], nested).get("secret"), str)
+                or not isinstance(cast(Mapping[str, object], nested).get("secret"), str)
             ):
                 raise ValidationFailure(f"Catalog option {path!r} must use a secret reference")
             _reject_inline_secrets(nested, path)
-    elif isinstance(value, list):
+    elif isinstance(value, list | tuple):
         for index, nested in enumerate(value):
             _reject_inline_secrets(nested, f"{prefix}[{index}]")
 
@@ -255,14 +275,14 @@ def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
 def _reject_dynamic_loader_options(value: object, prefix: str = "options") -> None:
     """Rejects provider settings that select arbitrary installed Python classes."""
 
-    if isinstance(value, dict):
-        for key, nested in cast(dict[str, object], value).items():
+    if isinstance(value, Mapping):
+        for key, nested in cast(Mapping[str, object], value).items():
             path = f"{prefix}.{key}"
             if str(key).strip().lower() in _DYNAMIC_LOADER_OPTION_KEYS:
                 raise ValidationFailure(
                     f"Catalog option {path!r} cannot select an implementation class"
                 )
             _reject_dynamic_loader_options(nested, path)
-    elif isinstance(value, list):
+    elif isinstance(value, list | tuple):
         for index, nested in enumerate(value):
             _reject_dynamic_loader_options(nested, f"{prefix}[{index}]")

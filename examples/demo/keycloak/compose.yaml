@@ -3,6 +3,7 @@
 x-service: &service
   image: ${PROJECT_NAME:?run ./demo init}-service:local
   environment: &database
+    DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST: postgres
     DAL_OBSCURA_DATABASE_URL: postgresql+psycopg://obscura:${APP_DB_PASSWORD}@postgres:5432/obscura
     LOCAL_ICEBERG_URI: postgresql+psycopg://iceberg:${ICEBERG_DB_PASSWORD}@postgres:5432/iceberg
     DAL_OBSCURA_SECRET_PROVIDER_CONFIG: '{"scope_grants":{"catalog:retail_demo":["LOCAL_ICEBERG_URI"]}}'

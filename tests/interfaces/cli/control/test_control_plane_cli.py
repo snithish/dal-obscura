@@ -272,7 +272,7 @@ def test_control_plane_cli_requires_a_shared_catalog_cursor_secret(secret, capsy
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
             "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
-            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+            "DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
             "DAL_OBSCURA_CONTROL_PLANE_CATALOG_CURSOR_SECRET": secret,
         }
     )
@@ -331,7 +331,7 @@ def test_control_plane_cli_rejects_enabled_static_bootstrap_in_production(capsys
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
-            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+            "DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
             "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED": "true",
         }
     )
@@ -354,7 +354,7 @@ def test_control_plane_cli_requires_production_admin_group(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
             "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
-            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+            "DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
         }
     )
 
@@ -377,7 +377,7 @@ def test_control_plane_cli_requires_oidc_redirect_origins_in_cors(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://other.example/auth/callback",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
             "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
-            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+            "DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
         }
     )
 
@@ -429,7 +429,7 @@ def test_control_plane_cli_rejects_insecure_explicit_oidc_endpoints(name, value,
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
         "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
-        "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+        "DAL_OBSCURA_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
         name: value,
     }
 

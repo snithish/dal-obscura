@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 from typing import cast
+from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 
 class ConfigFieldType(StrEnum):
@@ -19,6 +20,29 @@ class ConfigFieldType(StrEnum):
 
 
 _FIELD_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{0,127}\Z")
+
+
+def parse_uri(value: str, *, allow_credentials: bool = False) -> SplitResult:
+    """Parse a URI, rejecting credential literals unless explicitly allowed."""
+    try:
+        parsed = urlsplit(value)
+        username, password = parsed.username, parsed.password
+        # Authority accessors can reject malformed hosts and ports after splitting.
+        _ = parsed.hostname, parsed.port
+    except ValueError:
+        raise ValueError("contains an invalid URI") from None
+    if not allow_credentials:
+        if password is not None or (
+            username is not None
+            and (not username or parsed.scheme.lower() not in {"abfs", "abfss"})
+        ):
+            raise ValueError("must use a secret reference, not URI credentials")
+        if any(
+            name.lower() in {"access_token", "api_key", "password", "secret", "token"}
+            for name, _value in parse_qsl(parsed.query, keep_blank_values=True)
+        ):
+            raise ValueError("must not put secrets in a URI query")
+    return parsed
 
 
 @dataclass(frozen=True, slots=True)

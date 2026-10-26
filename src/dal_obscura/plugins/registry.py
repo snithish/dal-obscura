@@ -18,6 +18,7 @@ from dal_obscura_plugin_api import (
     PluginKind,
     TableFormatFactory,
 )
+from dal_obscura_plugin_api.configuration import parse_uri
 from dal_obscura_plugin_api.options import PluginOptions
 from dal_obscura_plugin_api.secrets import SecretBackendFactory
 
@@ -166,6 +167,13 @@ class PluginRegistry:
             raise ValueError("Format options cannot contain secrets")
         for key, value in options.items():
             fields[key].validate(value)
+            if fields[key].type == "uri" and isinstance(value, str):
+                try:
+                    parse_uri(value)
+                except ValueError:
+                    raise ValueError(
+                        f"Format URI option {key!r} must be valid and contain no credentials"
+                    ) from None
         return PluginOptions({plugin_id: options}).for_plugin(plugin_id)
 
     def identity(self, kind: PluginKind, plugin_id: str) -> PluginLock:

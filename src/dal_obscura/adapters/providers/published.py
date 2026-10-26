@@ -5,7 +5,7 @@ import re
 from collections import OrderedDict
 from collections.abc import Generator, Iterable, Mapping
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from threading import Condition
@@ -36,6 +36,10 @@ from dal_obscura.adapters.providers.catalogs import (
     CatalogConfig,
     CatalogRegistry,
     ServiceConfig,
+)
+from dal_obscura.application.governance.catalogs.validation import (
+    validate_catalog_options,
+    validate_resolved_catalog_endpoints,
 )
 from dal_obscura.application.reads.sources import (
     AccessContext,
@@ -115,6 +119,7 @@ class LiveConfigCatalogRegistry:
         path_enforcer: PathRuleEnforcer | None = None,
         max_cached_providers: int = 32,
         provider_wait_seconds: float = 5.0,
+        egress_allowlist: tuple[str, ...] = (),
     ) -> None:
         if max_cached_providers < 1:
             raise ValueError("Provider cache capacity must be positive")
@@ -122,6 +127,7 @@ class LiveConfigCatalogRegistry:
             raise ValueError("Provider wait timeout must be positive")
         self._provider_wait_seconds = provider_wait_seconds
         self._store = store
+        self._egress_allowlist = egress_allowlist
         self._secret_provider = secret_provider
         self._plugin_registry = plugin_registry
         self._path_enforcer = path_enforcer
@@ -163,21 +169,25 @@ class LiveConfigCatalogRegistry:
             plugin_id=config.plugin_id,
             revision=config.revision,
         )
-        if self._secret_provider is not None:
-            config = CatalogConfig(
-                name=config.name,
-                options=cast(
-                    dict[str, Any],
-                    resolve_secret_refs(
-                        config.options,
-                        provider=self._secret_provider,
-                        expected_scope=f"catalog:{config.name}",
-                    ),
+        validate_catalog_options(config.options, egress_allowlist=self._egress_allowlist)
+        config = CatalogConfig(
+            name=config.name,
+            options=cast(
+                dict[str, Any],
+                resolve_secret_refs(
+                    config.options,
+                    provider=self._secret_provider,
+                    expected_scope=f"catalog:{config.name}",
                 ),
-                path_enforcer=config.path_enforcer,
-                plugin_id=config.plugin_id,
-                revision=config.revision,
-            )
+            ),
+            path_enforcer=config.path_enforcer,
+            plugin_id=config.plugin_id,
+            revision=config.revision,
+        )
+        descriptor = self._plugin_registry.admitted()[("catalog", config.plugin_id)]
+        validate_resolved_catalog_endpoints(
+            descriptor, config.options, egress_allowlist=self._egress_allowlist
+        )
         # Resource revision is part of the public plugin handle identity. It is
         # not a deployment counter; unrelated asset/policy edits never affect it.
         key = sha256(
@@ -200,6 +210,16 @@ class LiveConfigCatalogRegistry:
             table_format = entry.registry.resolve(
                 catalog, _asset_table_identifier(asset), context=context
             )
+            if isinstance(table_format, PublicPluginTableFormat):
+                if table_format.format != asset.source.backend:
+                    raise ValueError("Catalog and table-format plugins do not match")
+                table_format = replace(
+                    table_format,
+                    options=self._plugin_registry.format_options(
+                        table_format.format,
+                        captured={**table_format.options, **asset.source.options},
+                    ),
+                )
             scope = (
                 table_format.open(context=context)
                 if isinstance(table_format, PublicPluginTableFormat)

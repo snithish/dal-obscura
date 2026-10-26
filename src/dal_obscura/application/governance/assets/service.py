@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
+from dal_obscura_plugin_api.configuration import parse_uri
+
 from dal_obscura.application.governance.assets import schema as schema_service
 from dal_obscura.application.governance.assets.access import ensure_asset_capability
 from dal_obscura.application.governance.catalogs.validation import (
@@ -167,12 +169,26 @@ class AssetsCommands:
                 raise ValidationFailure("Catalog and table-format handle versions do not overlap")
             if not catalog_descriptor.capabilities.intersection(format_descriptor.capabilities):
                 raise ValidationFailure("Catalog and table-format capabilities do not overlap")
+            fields = format_descriptor.config_fields or ()
+            if unknown := sorted(set(options) - {field.name for field in fields}):
+                raise ValidationFailure(
+                    "Table-format options contain unsupported fields: " + ", ".join(unknown)
+                )
             if any(
                 field.name in options and (field.secret or isinstance(options[field.name], Mapping))
-                for field in format_descriptor.config_fields or ()
+                for field in fields
             ):
                 raise ValidationFailure("Table-format options cannot contain secrets")
             validate_descriptor_options(format_descriptor, options, kind="Table-format")
+            for field in fields:
+                if field.type == "uri" and field.name in options:
+                    try:
+                        parse_uri(options[field.name])
+                    except ValueError:
+                        raise ValidationFailure(
+                            f"Table-format URI option {field.name!r} "
+                            "must be valid and contain no credentials"
+                        ) from None
             asset_id = work.assets.upsert_asset(
                 catalog=catalog,
                 target=target,

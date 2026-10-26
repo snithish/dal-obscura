@@ -129,3 +129,48 @@ def test_non_text_fields_do_not_accept_secret_references(field):
     assert descriptor.config_fields is not None
     with pytest.raises(ValueError):
         descriptor.config_fields[0].validate({"secret": "MODE", "scope": "catalog:analytics"})
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://catalog.example/data?revision=7",
+        "abfs://warehouse@account.dfs.core.windows.net/data",
+        "abfss://warehouse@account.dfs.core.windows.net/data",
+    ],
+)
+def test_uri_preserves_non_secret_locations(value):
+    from dal_obscura_plugin_api.configuration import parse_uri
+
+    assert parse_uri(value).geturl() == value
+
+
+@pytest.mark.parametrize(
+    "value,reason",
+    [
+        ("https://[2001:db8::1/sensitive", "contains an invalid URI"),
+        ("https://catalog.example:sensitive/data", "contains an invalid URI"),
+        ("https://sensitive@catalog.example/data", "secret reference"),
+        ("https://sensitive:@catalog.example/data", "secret reference"),
+        ("abfss://warehouse:sensitive@account.dfs.core.windows.net/data", "secret reference"),
+        ("https://catalog.example/data?ToKeN=sensitive", "URI query"),
+        ("https://catalog.example/data?%61pi_key=sensitive", "URI query"),
+    ],
+)
+def test_uri_errors_hide_credentials_and_parser_details(value, reason):
+    from dal_obscura_plugin_api.configuration import parse_uri
+
+    with pytest.raises(ValueError, match=reason) as caught:
+        parse_uri(value)
+    assert "sensitive" not in str(caught.value)
+    assert caught.value.__suppress_context__ or caught.value.__context__ is None
+
+
+def test_uri_allows_explicit_credentials_without_relaxing_structure():
+    from dal_obscura_plugin_api.configuration import parse_uri
+
+    value = "https://reader:sensitive@catalog.example/data?token=sensitive"
+    assert parse_uri(value, allow_credentials=True).geturl() == value
+    with pytest.raises(ValueError, match="contains an invalid URI") as caught:
+        parse_uri("https://catalog.example:sensitive/data", allow_credentials=True)
+    assert "sensitive" not in str(caught.value)

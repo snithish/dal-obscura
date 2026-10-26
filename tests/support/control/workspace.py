@@ -23,7 +23,7 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
     )
     asset = client.put(
         "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 1}},
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers=ADMIN_HEADERS,
     ).json()
     saved = client.put(

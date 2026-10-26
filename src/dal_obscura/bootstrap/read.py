@@ -83,6 +83,7 @@ def run_read_service(runtime_config: DataPlaneRuntimeConfig) -> None:
             path_enforcer=PathRuleEnforcer(live_runtime.path_rules),
             max_cached_providers=runtime_config.max_cached_catalog_providers,
             provider_wait_seconds=runtime_config.catalog_provider_wait_seconds,
+            egress_allowlist=runtime_config.catalog_egress_allowlist,
         )
 
         resources.callback(catalog_registry.close)

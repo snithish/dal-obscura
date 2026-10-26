@@ -24,7 +24,7 @@
           },
           {
             "name": "root",
-            "type": "string",
+            "type": "uri",
             "required": true
           }
         ]

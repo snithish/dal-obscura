@@ -49,7 +49,7 @@
           },
           {
             "name": "warehouse",
-            "type": "string",
+            "type": "uri",
             "required": false,
             "secret": false
           },
@@ -64,6 +64,21 @@
             "type": "secret_reference",
             "required": false,
             "secret": true
+          },
+          {
+            "name": "s3.endpoint",
+            "type": "uri",
+            "required": false
+          },
+          {
+            "name": "glue.endpoint",
+            "type": "uri",
+            "required": false
+          },
+          {
+            "name": "oauth2-server-uri",
+            "type": "uri",
+            "required": false
           }
         ]
       },
