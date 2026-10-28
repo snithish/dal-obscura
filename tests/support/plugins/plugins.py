@@ -2,6 +2,7 @@
 
 from typing import Any, cast
 
+from dal_obscura.kernel.plugins import PluginLock
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.plugins.inspection import inspect_distributions
 
@@ -9,7 +10,7 @@ from dal_obscura.plugins.inspection import inspect_distributions
 def manifest_registry() -> PluginRegistry:
     document = inspect_distributions(["dal-obscura-manifest-parquet"])
     locks = {
-        (row["kind"], row["plugin_id"]): tuple(row["lock"])
+        (row["kind"], row["plugin_id"]): PluginLock.from_json(row["lock"])
         for row in cast(Any, document["lock"])["plugins"]
     }
     registry = PluginRegistry(allowlist=locks)

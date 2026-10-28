@@ -22,6 +22,7 @@ from dal_obscura.application.governance.catalogs.validation import (
 from dal_obscura.interfaces.cli import (
     operator_io,
 )
+from dal_obscura.kernel.plugins import PluginLock
 
 IMAGE_DIGEST_PATTERN = re.compile(r"[a-z0-9][a-z0-9./:_-]*@sha256:[0-9a-f]{64}\Z")
 IMAGE_ID_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -132,23 +133,27 @@ def add_plugin(workspace: Path, specification: str) -> None:
         "base_image": target["base_image"],
         "requirements": requirements,
     }
-    operator_io.write_json(candidate_path, candidate)
     show_admission(candidate, previous)
+    operator_io.write_json(candidate_path, candidate)
 
 
 def show_admission(candidate: dict[str, Any], previous: dict[str, Any]) -> None:
     old = {
-        (item["kind"], item["plugin_id"]): item["lock"]
+        (item["kind"], item["plugin_id"]): PluginLock.from_json(item["lock"])
         for item in previous.get("lock", {}).get("plugins", [])
     }
-    current = candidate["lock"]["plugins"]
-    for item in current:
-        lock = item["lock"]
-        key = (item["kind"], item["plugin_id"])
+    current = [
+        ((item["kind"], item["plugin_id"]), PluginLock.from_json(item["lock"]))
+        for item in candidate["lock"]["plugins"]
+    ]
+    for key, lock in current:
         state = "unchanged" if old.get(key) == lock else "changed" if key in old else "added"
-        print(f"{state}: {key[0]}:{key[1]} — {lock[0]}=={lock[1]} (API {lock[2]})")
-        print(f"  descriptor {lock[3]}\n  artifact   {lock[4]}")
-    removed = set(old) - {(item["kind"], item["plugin_id"]) for item in current}
+        print(
+            f"{state}: {key[0]}:{key[1]} — "
+            f"{lock.distribution}=={lock.version} (API {lock.api_version})"
+        )
+        print(f"  descriptor {lock.descriptor_digest}\n  artifact   {lock.artifact_digest}")
+    removed = old.keys() - {key for key, _ in current}
     for kind, plugin_id in sorted(removed):
         print(f"removed: {kind}:{plugin_id}")
     for descriptor in candidate["descriptors"]:

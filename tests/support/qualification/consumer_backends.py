@@ -37,6 +37,7 @@ from dal_obscura.adapters.providers.catalogs import (
     ServiceConfig,
 )
 from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
+from dal_obscura.kernel.plugins import PluginLock
 from dal_obscura.plugins import PluginRegistry
 from dal_obscura.plugins.bootstrap import create_plugin_registry
 from tests.support.arrow import metadata_schema
@@ -73,7 +74,7 @@ def plugin_registry(*registrations) -> PluginRegistry:
         list({descriptor.distribution for _, (descriptor, _) in registrations})
     )
     rows = cast(Any, document["lock"])["plugins"]
-    locks = {(row["kind"], row["plugin_id"]): tuple(row["lock"]) for row in rows}
+    locks = {(row["kind"], row["plugin_id"]): PluginLock.from_json(row["lock"]) for row in rows}
     registry = PluginRegistry(allowlist=locks)
     registry.reload()
     return registry

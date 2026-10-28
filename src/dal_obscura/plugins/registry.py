@@ -22,10 +22,9 @@ from dal_obscura_plugin_api.configuration import parse_uri
 from dal_obscura_plugin_api.options import PluginOptions
 from dal_obscura_plugin_api.secrets import SecretBackendFactory
 
+from dal_obscura.kernel.plugins import PluginAdmissionError, PluginLock
 from dal_obscura.plugins.artifacts import (
     ENTRY_POINT_GROUPS,
-    PluginAdmissionError,
-    PluginLock,
     artifact_digest,
     descriptor_digest,
     load_static_plugin_descriptor,
@@ -177,8 +176,13 @@ class PluginRegistry:
         expected = set(self._allowlist)
         for kind, plugin_id in sorted(expected):
             key = (kind, plugin_id)
-            if key in admitted:
-                status: PluginStatus = "enabled"
+            lock = self._allowlist[key]
+            status: PluginStatus
+            if not _valid_lock(lock):
+                status = "incompatible"
+                reason = "plugin lock is invalid"
+            elif key in admitted:
+                status = "enabled"
                 reason = None
             else:
                 entry = entry_by_key.get(key)
@@ -187,7 +191,7 @@ class PluginRegistry:
                     reason = "allowlisted distribution is not installed"
                 else:
                     status = "incompatible"
-                    reason = _status_incompatibility(entry, self._allowlist.get(key))
+                    reason = _status_incompatibility(entry, lock)
             row: dict[str, object] = {
                 "kind": kind,
                 "plugin_id": plugin_id,
@@ -209,6 +213,9 @@ class PluginRegistry:
     ]:
         descriptors: dict[tuple[PluginKind, str], PluginDescriptor] = {}
         entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
+        for (kind, plugin_id), lock in self._allowlist.items():
+            if not _valid_lock(lock):
+                raise PluginAdmissionError(f"Invalid plugin lock for {kind}:{plugin_id}")
         points = self._entry_points_fn()
         artifact_digests: dict[int, str] = {}
         for kind, group in ENTRY_POINT_GROUPS.items():
@@ -223,25 +230,19 @@ class PluginRegistry:
                 key = (kind, plugin_id)
                 if key in descriptors:
                     raise PluginAdmissionError(f"Duplicate plugin ID: {kind}:{plugin_id}")
-                admitted = self._allowlist.get(key)
-                if admitted is None:
+                if key not in self._allowlist:
                     continue
-                if len(admitted) != 5:
-                    raise PluginAdmissionError(f"Invalid plugin lock for {kind}:{plugin_id}")
-                (
-                    distribution,
-                    version,
-                    api_version,
-                    expected_descriptor_digest,
-                    expected_artifact_digest,
-                ) = admitted
+                admitted = self._allowlist[key]
                 if entry.dist is None:
                     raise PluginAdmissionError(
                         f"Plugin provenance is unavailable for {kind}:{plugin_id}"
                     )
                 actual_distribution = entry.dist.name
                 actual_version = entry.dist.version
-                if (actual_distribution, actual_version) != (distribution, version):
+                if (actual_distribution, actual_version) != (
+                    admitted.distribution,
+                    admitted.version,
+                ):
                     raise PluginAdmissionError(f"Plugin lock mismatch for {kind}:{plugin_id}")
                 if self._descriptor_loader is not None:
                     descriptor = self._descriptor_loader(entry)
@@ -251,9 +252,9 @@ class PluginRegistry:
                 if (
                     descriptor.kind != kind
                     or descriptor.plugin_id != plugin_id
-                    or descriptor.api_version != api_version
-                    or descriptor.distribution != distribution
-                    or descriptor.version != version
+                    or descriptor.api_version != admitted.api_version
+                    or descriptor.distribution != admitted.distribution
+                    or descriptor.version != admitted.version
                 ):
                     raise PluginAdmissionError(f"Plugin descriptor mismatch for {kind}:{plugin_id}")
                 if descriptor.api_version != PLUGIN_API_VERSION:
@@ -264,7 +265,7 @@ class PluginRegistry:
                     raise PluginAdmissionError(
                         f"Plugin descriptor uses unsupported config version for {kind}:{plugin_id}"
                     )
-                if descriptor_digest(descriptor) != expected_descriptor_digest:
+                if descriptor_digest(descriptor) != admitted.descriptor_digest:
                     raise PluginAdmissionError(
                         f"Plugin descriptor digest mismatch for {kind}:{plugin_id}"
                     )
@@ -273,7 +274,7 @@ class PluginRegistry:
                 distribution_key = id(entry.dist)
                 if distribution_key not in artifact_digests:
                     artifact_digests[distribution_key] = artifact_digest(entry)
-                if artifact_digests[distribution_key] != expected_artifact_digest:
+                if artifact_digests[distribution_key] != admitted.artifact_digest:
                     raise PluginAdmissionError(
                         f"Plugin artifact digest mismatch for {kind}:{plugin_id}"
                     )
@@ -289,17 +290,22 @@ class PluginRegistry:
 
 def _status_incompatibility(
     entry: metadata.EntryPoint,
-    lock: PluginLock | None,
+    lock: PluginLock,
 ) -> str:
-    if lock is None:
-        return "plugin is installed but not allowlisted"
-    if len(lock) != 5:
-        return "plugin lock is invalid"
     if entry.dist is None:
         return "plugin provenance is unavailable"
-    distribution, version, _api_version, _descriptor_digest_value, _artifact_digest_value = lock
-    if (entry.dist.name, entry.dist.version) != (distribution, version):
+    if (entry.dist.name, entry.dist.version) != (lock.distribution, lock.version):
         return "installed distribution does not match the plugin lock"
-    if _api_version != PLUGIN_API_VERSION:
+    if lock.api_version != PLUGIN_API_VERSION:
         return "plugin API version is unsupported"
     return "plugin admission metadata is incompatible"
+
+
+def _valid_lock(lock: object) -> bool:
+    if not isinstance(lock, PluginLock):
+        return False
+    try:
+        PluginLock.from_json(list(lock))
+    except PluginAdmissionError:
+        return False
+    return True

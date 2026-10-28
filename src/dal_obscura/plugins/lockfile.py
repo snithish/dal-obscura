@@ -9,12 +9,12 @@ from typing import cast
 
 from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.plugins.artifacts import PluginAdmissionError, PluginLock, read_metadata_file
+from dal_obscura.kernel.plugins import PluginAdmissionError, PluginLock
+from dal_obscura.plugins.artifacts import read_metadata_file
 
 MAX_PLUGIN_LOCK_BYTES = 1_048_576
 MAX_PLUGIN_LOCK_ENTRIES = 256
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
-_HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], PluginLock]:
@@ -50,26 +50,11 @@ def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], Plug
             or not _PLUGIN_ID.fullmatch(plugin_id)
         ):
             raise PluginAdmissionError("Plugin lock entry identity is invalid")
-        if (
-            not isinstance(lock, list)
-            or len(lock) != 5
-            or any(not isinstance(value, str) or not value for value in lock)
-        ):
-            raise PluginAdmissionError("Plugin lock entry must contain a five-part lock")
-        distribution, version, api_version, descriptor_digest, artifact_digest = lock
-        if any(
-            any(ord(char) < 0x20 or ord(char) == 0x7F for char in value) or len(value) > 256
-            for value in (distribution, version, api_version)
-        ):
-            raise PluginAdmissionError("Plugin lock identity values must be printable and bounded")
-        if not _HEX_DIGEST.fullmatch(descriptor_digest) or not _HEX_DIGEST.fullmatch(
-            artifact_digest
-        ):
-            raise PluginAdmissionError("Plugin lock digests must be lowercase SHA-256 values")
+        parsed_lock = PluginLock.from_json(lock)
         key = (cast(PluginKind, kind), plugin_id)
         if key in result:
             raise PluginAdmissionError("Plugin lock contains duplicate identities")
-        result[key] = cast(PluginLock, tuple(lock))
+        result[key] = parsed_lock
     return result
 
 

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from dal_obscura.plugins import PluginAdmissionError, load_plugin_lock_file
+from dal_obscura.plugins import PluginAdmissionError, PluginLock, load_plugin_lock_file
 
 
 def _write_lock(path, entries) -> None:
@@ -24,9 +24,23 @@ def test_load_plugin_lock_file_returns_five_part_allowlist(tmp_path) -> None:
         ],
     )
 
-    assert load_plugin_lock_file(path) == {
-        ("catalog", "fixture.catalog"): ("fixture", "1.0.0", "1", "a" * 64, "b" * 64)
+    locks = load_plugin_lock_file(path)
+    assert locks == {
+        ("catalog", "fixture.catalog"): PluginLock("fixture", "1.0.0", "1", "a" * 64, "b" * 64)
     }
+    lock = locks[("catalog", "fixture.catalog")]
+    assert lock.distribution == "fixture"
+    assert lock.version == "1.0.0"
+    assert lock.api_version == "1"
+    assert lock.descriptor_digest == "a" * 64
+    assert lock.artifact_digest == "b" * 64
+    assert list(lock) == ["fixture", "1.0.0", "1", "a" * 64, "b" * 64]
+
+
+@pytest.mark.parametrize("raw", [None, 42, ("fixture", "1.0.0", "1", "a" * 64, "b" * 64)])
+def test_plugin_lock_json_parser_rejects_non_lists(raw):
+    with pytest.raises(PluginAdmissionError, match="five-part"):
+        PluginLock.from_json(raw)
 
 
 @pytest.mark.parametrize(
@@ -85,6 +99,10 @@ def test_load_plugin_lock_file_rejects_duplicate_document_keys(tmp_path) -> None
         ("Fixture.catalog", ["fixture", "1.0.0", "1", "a" * 64, "b" * 64], "identity"),
         ("fixture.catalog", ["fixture", "1.0.0", "1", "A" * 64, "b" * 64], "digests"),
         ("fixture.catalog", ["fixture", "1.0.0", "1", "a" * 63, "b" * 64], "digests"),
+        ("fixture.catalog", ["fixture\n", "1.0.0", "1", "a" * 64, "b" * 64], "printable"),
+        ("fixture.catalog", ["fixture", "v" * 257, "1", "a" * 64, "b" * 64], "bounded"),
+        ("fixture.catalog", ["fixture", "1.0.0", "", "a" * 64, "b" * 64], "five-part"),
+        ("fixture.catalog", ["fixture", "1.0.0", 1, "a" * 64, "b" * 64], "five-part"),
     ],
 )
 def test_load_plugin_lock_file_rejects_malformed_identity_or_digest(

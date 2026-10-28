@@ -7,10 +7,9 @@ from importlib import metadata
 
 from dal_obscura_plugin_api import PluginKind
 
+from dal_obscura.kernel.plugins import PluginAdmissionError, PluginLock
 from dal_obscura.plugins.artifacts import (
     ENTRY_POINT_GROUPS,
-    PluginAdmissionError,
-    PluginLock,
     build_plugin_lock,
     load_static_plugin_descriptor,
 )

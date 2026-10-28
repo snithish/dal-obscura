@@ -323,13 +323,51 @@ def test_registry_rejects_self_consistent_unsupported_config_version(
         registry.reload()
 
 
-def test_malformed_plugin_lock_is_rejected(entry_factory) -> None:
+@pytest.mark.parametrize("malformation", ["null", "integer", "short", "tuple", "named"])
+def test_malformed_plugin_lock_is_rejected(entry_factory, lock_for, malformation) -> None:
     entry = entry_factory("iceberg.catalog", "dal_obscura.catalogs.v3")
+    valid = lock_for("iceberg.catalog")
+    invalid = {
+        "null": None,
+        "integer": 42,
+        "short": valid[:3],
+        "tuple": tuple(valid),
+        "named": valid._replace(distribution=""),
+    }
     registry = PluginRegistry(
-        allowlist=cast(Any, {("catalog", "iceberg.catalog"): ("plugin-wheel", "1.2.3", "1")}),
+        allowlist=cast(Any, {("catalog", "iceberg.catalog"): invalid[malformation]}),
         entry_points_fn=lambda: _EntryPoints([entry]),
+        factory_loader=lambda _: pytest.fail("invalid lock must not import factories"),
     )
 
+    with pytest.raises(PluginAdmissionError, match="Invalid plugin lock"):
+        registry.reload()
+
+
+@pytest.mark.parametrize("malformation", ["null", "integer", "short", "tuple", "named"])
+def test_diagnostics_report_invalid_lock_before_missing_installation(lock_for, malformation):
+    valid = lock_for("iceberg.catalog")
+    invalid = {
+        "null": None,
+        "integer": 42,
+        "short": valid[:3],
+        "tuple": tuple(valid),
+        "named": valid._replace(distribution=""),
+    }
+    registry = PluginRegistry(
+        allowlist=cast(Any, {("catalog", "iceberg.catalog"): invalid[malformation]}),
+        entry_points_fn=lambda: _EntryPoints([]),
+        factory_loader=lambda _: pytest.fail("diagnostics must not import factories"),
+    )
+
+    assert registry.status_report() == (
+        {
+            "kind": "catalog",
+            "plugin_id": "iceberg.catalog",
+            "status": "incompatible",
+            "reason": "plugin lock is invalid",
+        },
+    )
     with pytest.raises(PluginAdmissionError, match="Invalid plugin lock"):
         registry.reload()
 

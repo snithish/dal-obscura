@@ -1,8 +1,7 @@
 """Installed plugin admission and artifact locks."""
 
+from dal_obscura.kernel.plugins import PluginAdmissionError, PluginLock
 from dal_obscura.plugins.artifacts import (
-    PluginAdmissionError,
-    PluginLock,
     build_plugin_lock,
     load_static_plugin_descriptor,
 )

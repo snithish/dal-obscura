@@ -4,7 +4,7 @@ from importlib import metadata
 
 import pytest
 
-from dal_obscura.plugins.artifacts import PluginAdmissionError
+from dal_obscura.kernel.plugins import PluginAdmissionError
 from scripts.build_plugin_lock import build_document, parse_selection, write_lock
 
 

@@ -20,19 +20,14 @@ from dal_obscura_plugin_api.descriptors import (
     parse_descriptor,
 )
 
+from dal_obscura.kernel.plugins import PluginAdmissionError, PluginLock
+
 ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
     "catalog": "dal_obscura.catalogs.v3",
     "table_format": "dal_obscura.table_formats.v3",
     "secret_backend": "dal_obscura.secret_backends.v3",
 }
 _MODULE_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
-
-
-class PluginAdmissionError(ValueError):
-    """Raised when installed plugin metadata is not explicitly admitted."""
-
-
-PluginLock = tuple[str, str, str, str, str]
 
 
 def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescriptor:
@@ -83,7 +78,7 @@ def build_plugin_lock(
     version = entry.dist.version
     if descriptor.distribution != distribution or descriptor.version != version:
         raise PluginAdmissionError("Plugin descriptor provenance does not match entry point")
-    return (
+    return PluginLock(
         distribution,
         version,
         descriptor.api_version,

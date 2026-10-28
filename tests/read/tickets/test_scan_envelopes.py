@@ -11,6 +11,7 @@ from dal_obscura_plugin_api import ScanTask as PluginScanTask
 from dal_obscura.adapters.providers.adapters import PublicPluginPartition, PublicPluginTableFormat
 from dal_obscura.adapters.providers.task_codec import SourceTaskCodec
 from dal_obscura.application.reads.sources import ScanTask
+from dal_obscura.kernel.plugins import PluginLock
 from dal_obscura.plugins.bootstrap import (
     create_plugin_registry,
 )
@@ -54,7 +55,7 @@ def test_scan_envelope_matches_architecture_baseline(monkeypatch):
     codec, task = envelope()
     baseline = (Path(__file__).parent / "fixtures" / "scan_envelope_v1.json").read_text().strip()
     # The wire fixture owns serialization; installed-artifact admission has its own tests.
-    lock = tuple(json.loads(baseline)["plugin"])
+    lock = PluginLock.from_json(json.loads(baseline)["plugin"])
     monkeypatch.setattr(codec.registry, "identity", lambda kind, plugin_id: lock)
     assert codec.encode(task) == baseline
     restored = codec.decode(baseline)

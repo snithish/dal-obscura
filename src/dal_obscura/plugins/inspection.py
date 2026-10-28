@@ -6,9 +6,9 @@ from importlib import metadata
 
 from packaging.utils import canonicalize_name
 
+from dal_obscura.kernel.plugins import PluginAdmissionError
 from dal_obscura.plugins.artifacts import (
     ENTRY_POINT_GROUPS,
-    PluginAdmissionError,
     build_plugin_lock,
     load_static_plugin_descriptor,
 )
