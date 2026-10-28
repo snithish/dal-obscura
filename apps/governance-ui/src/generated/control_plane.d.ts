@@ -433,23 +433,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/plugins/{kind}/{plugin_id}/lifecycle": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Set Plugin Lifecycle */
-        patch: operations["set_plugin_lifecycle_v1_plugins__kind___plugin_id__lifecycle_patch"];
-        trace?: never;
-    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -1314,35 +1297,6 @@ export interface components {
             version: string;
         };
         /**
-         * PluginLifecycleRequest
-         * @description Requested process-local admission lifecycle transition.
-         */
-        PluginLifecycleRequest: {
-            /**
-             * Target
-             * @enum {string}
-             */
-            target: "enabled" | "draining" | "disabled" | "revoked" | "removed";
-        };
-        /**
-         * PluginLifecycleResponse
-         * @description Result of one explicit plugin lifecycle transition.
-         */
-        PluginLifecycleResponse: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "catalog" | "table_format" | "secret_backend";
-            /**
-             * Lifecycle
-             * @enum {string}
-             */
-            lifecycle: "enabled" | "draining" | "disabled" | "revoked" | "removed";
-            /** Plugin Id */
-            plugin_id: string;
-        };
-        /**
          * PluginListResponse
          * @description Bounded admitted plugin registry response.
          */
@@ -1375,7 +1329,7 @@ export interface components {
         };
         /**
          * PluginStateResponse
-         * @description Allowlisted plugin lifecycle status without factory imports.
+         * @description Allowlisted plugin admission status without factory imports.
          */
         PluginStateResponse: {
             /**
@@ -1383,8 +1337,6 @@ export interface components {
              * @enum {string}
              */
             kind: "catalog" | "table_format" | "secret_backend";
-            /** Lifecycle */
-            lifecycle?: ("enabled" | "draining" | "disabled" | "revoked" | "removed") | null;
             /** Plugin Id */
             plugin_id: string;
             /** Reason */
@@ -4900,135 +4852,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginListResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Method Not Allowed */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Content Too Large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Precondition Required */
-            428: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-        };
-    };
-    set_plugin_lifecycle_v1_plugins__kind___plugin_id__lifecycle_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                kind: "catalog" | "table_format" | "secret_backend";
-                plugin_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PluginLifecycleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginLifecycleResponse"];
                 };
             };
             /** @description Bad Request */

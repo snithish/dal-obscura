@@ -9,7 +9,6 @@ test("administrator management screens stay within the page at supported sizes",
     admin: true,
     configuredSettings: true,
     configuredConnections: true,
-    configuredLifecycle: true,
     configuredAudit: true,
   });
   const screens = [
@@ -268,47 +267,34 @@ test("management refresh failure preserves the loaded connections view", async (
   await expect(page.getByRole("button", { name: "Retry refresh" })).toBeVisible();
 });
 
-test("administrator plugin lifecycle applies disable and retire transitions", async ({ page }) => {
+test("plugin diagnostics are read-only and connection drafts survive a cancelled refresh", async ({
+  page,
+}) => {
   await authenticatedApi(page, {
     admin: true,
     configuredConnections: true,
-    configuredLifecycle: true,
   });
   await page.goto("/#connections");
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
 
-  const catalogPlugin = page
-    .locator("article.plugin-card")
-    .filter({ hasText: "Synthetic Iceberg Catalog" });
-  await catalogPlugin
-    .getByLabel("Lifecycle for Synthetic Iceberg Catalog")
-    .selectOption("disabled");
-  await catalogPlugin.getByRole("button", { name: "Apply" }).click();
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/v1/plugins") && request.method() !== "GET")
+      writes.push(request.url());
+  });
+  await expect(page.locator("article.plugin-card").getByRole("combobox")).toHaveCount(0);
+  await expect(page.locator("article.plugin-card").getByRole("button")).toHaveCount(0);
   await expect(
-    page.getByText("Synthetic Iceberg Catalog lifecycle is now disabled."),
+    page.getByText("Build a new image and artifact lock to change adapters."),
   ).toBeVisible();
-  await expect(catalogPlugin.getByLabel("Lifecycle for Synthetic Iceberg Catalog")).toHaveValue(
-    "disabled",
-  );
-
-  const formatPlugin = page
-    .locator("article.plugin-card")
-    .filter({ hasText: "Synthetic Iceberg" })
-    .filter({ hasNotText: "Catalog" });
-  await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("revoked");
-  await formatPlugin.getByRole("button", { name: "Apply" }).click();
-  await expect(page.getByText("Synthetic Iceberg lifecycle is now revoked.")).toBeVisible();
-  await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("removed");
-  await expect(formatPlugin.getByRole("button", { name: "Apply" })).toBeEnabled();
-  const removalResponse = page.waitForResponse(
-    (response) =>
-      response.url().includes("/v1/plugins/table_format/synthetic.table.iceberg/lifecycle") &&
-      response.request().method() === "PATCH",
-  );
-  await formatPlugin.getByRole("button", { name: "Apply" }).click();
-  await page.getByRole("button", { name: "Remove plugin", exact: true }).click();
-  await expect((await removalResponse).status()).toBe(200);
-  await expect(page.getByText("Synthetic Iceberg lifecycle is now removed.")).toBeVisible();
+  await expect(page.getByText("Restart the HTTP and Flight services together.")).toBeVisible();
+  await page.getByLabel("Name").fill("draft-catalog");
+  await page.getByLabel("Catalog URI").fill("https://draft.example");
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect(page.getByLabel("Name")).toHaveValue("draft-catalog");
+  await expect(page.getByLabel("Catalog URI")).toHaveValue("https://draft.example");
+  expect(writes).toEqual([]);
 });
 
 test("administrator activity filters and paginates the permitted audit records", async ({

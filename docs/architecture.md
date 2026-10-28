@@ -108,6 +108,9 @@ and upstream fix are recorded in its Cargo configuration.
 Bundled plugins use the same SDK and artifact admission as other installed plugins.
 Plugin metadata and global options are captured at startup. Request handling does
 not change shared configuration or rebuild the admission registry.
+Admission changes require coordinated HTTP and Flight restarts with matching
+artifacts and locks. Administrative plugin diagnostics describe startup admission
+for the responding process.
 Planning applies per-asset format options over startup values and captures the
 effective immutable options in each scan ticket. Fetch uses those captured values.
 Catalog endpoints are checked before provider lookup, including cache hits, after

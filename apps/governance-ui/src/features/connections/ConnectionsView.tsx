@@ -24,16 +24,7 @@ type PluginConfigField = {
   secret: boolean;
   options?: string[];
 };
-type PluginLifecycle = NonNullable<PluginState["lifecycle"]>;
 type DiscoveryNavigation = { cursor: string | null; index: number; history: Array<string | null> };
-
-const lifecycleTransitions: Record<PluginLifecycle, PluginLifecycle[]> = {
-  enabled: ["enabled", "draining", "disabled", "revoked"],
-  draining: ["draining", "disabled", "revoked"],
-  disabled: ["disabled", "enabled"],
-  revoked: ["revoked", "removed"],
-  removed: ["removed"],
-};
 
 function configFields(plugin?: PluginDescriptor): PluginConfigField[] {
   const raw = plugin?.config_schema?.fields;
@@ -117,7 +108,6 @@ export type ConnectionsViewProps = {
   plugins: PluginDescriptor[];
   pluginStates: PluginState[];
   pluginPairs: PluginPair[];
-  canManagePlugins: boolean;
   onReload: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   queryClient: QueryClient;
@@ -129,7 +119,6 @@ export function ConnectionsView({
   plugins,
   pluginStates,
   pluginPairs,
-  canManagePlugins,
   onReload,
   onDirtyChange,
   queryClient,
@@ -161,12 +150,8 @@ export function ConnectionsView({
   const [config, setConfig] = useState<Record<string, string>>({});
   const { confirm } = useConfirmation();
   const [message, setMessage] = useState<
-    (MessageState & { scope: "connection" | "discovery" | "plugins" }) | null
+    (MessageState & { scope: "connection" | "discovery" }) | null
   >(null);
-  const [lifecycleTargets, setLifecycleTargets] = useState<
-    Record<string, PluginState["lifecycle"]>
-  >({});
-  const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null);
   const [tables, setTables] = useState<CatalogTable[]>([]);
   const [discoveredCatalog, setDiscoveredCatalog] = useState("");
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
@@ -185,10 +170,8 @@ export function ConnectionsView({
   const [diagnosing, setDiagnosing] = useState("");
   const [governBusy, setGovernBusy] = useState<string | null>(null);
   const [connectionDirty, setConnectionDirty] = useState(false);
-  const [lifecycleDirty, setLifecycleDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const connectionEditEpoch = useRef(0);
-  const lifecycleEditEpoch = useRef(0);
   const catalogStateEpoch = useRef(0);
   const discoveryEpoch = useRef(0);
   const diagnosticEpoch = useRef(0);
@@ -197,7 +180,6 @@ export function ConnectionsView({
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const savingRef = useRef(false);
   const governBusyRef = useRef<Set<string>>(new Set());
-  const lifecycleBusyRef = useRef<Set<string>>(new Set());
   const clearDiscovery = useCallback(() => {
     discoveryEpoch.current += 1;
     void queryClient.cancelQueries({
@@ -239,17 +221,13 @@ export function ConnectionsView({
     }
   }, [catalogs, pluginPairs, clearDiscovery]);
   useEffect(() => {
-    setLifecycleBusy(null);
     setConnectionDirty(false);
-    setLifecycleDirty(false);
     connectionEditEpoch.current += 1;
-    lifecycleEditEpoch.current += 1;
     clearDiscovery();
   }, [sessionScope, clearDiscovery]);
-  const dirty = connectionDirty || lifecycleDirty;
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange?.(connectionDirty);
+  }, [connectionDirty, onDirtyChange]);
   const beginMutation = (): AbortController => {
     const controller = new AbortController();
     mutationControllers.current.add(controller);
@@ -258,14 +236,9 @@ export function ConnectionsView({
   const finishMutation = (controller: AbortController): void => {
     mutationControllers.current.delete(controller);
   };
-  const markDirty = (scope: "connection" | "lifecycle"): void => {
-    if (scope === "connection") {
-      connectionEditEpoch.current += 1;
-      setConnectionDirty(true);
-    } else {
-      lifecycleEditEpoch.current += 1;
-      setLifecycleDirty(true);
-    }
+  const markDirty = (): void => {
+    connectionEditEpoch.current += 1;
+    setConnectionDirty(true);
   };
   useEffect(() => {
     setPluginId((current) =>
@@ -274,16 +247,6 @@ export function ConnectionsView({
         : (catalogPlugins[0]?.plugin_id ?? ""),
     );
   }, [plugins]);
-  useEffect(() => {
-    if (lifecycleDirty) return;
-    setLifecycleTargets(
-      Object.fromEntries(
-        pluginStates.flatMap((state) =>
-          state.lifecycle ? [[`${state.kind}:${state.plugin_id}`, state.lifecycle] as const] : [],
-        ),
-      ),
-    );
-  }, [pluginStates]);
   useEffect(() => {
     setConfig((current) => ({
       ...pluginDefaults(selectedPlugin),
@@ -419,34 +382,34 @@ export function ConnectionsView({
       scope: "connection",
     });
     connectionEditEpoch.current += 1;
-    lifecycleEditEpoch.current += 1;
     setConnectionDirty(false);
-    setLifecycleDirty(false);
   }
 
   async function beginEdit(catalog: Catalog) {
-    if (dirty && !(await confirm(discardChanges("connection", "edit another connection")))) return;
+    if (
+      connectionDirty &&
+      !(await confirm(discardChanges("connection", "edit another connection")))
+    )
+      return;
     editCatalog(catalog);
   }
 
   async function cancelEdit() {
-    if (dirty && !(await confirm(discardChanges("connection", "close this editor")))) return;
+    if (connectionDirty && !(await confirm(discardChanges("connection", "close this editor"))))
+      return;
     setEditingCatalog(null);
     setName("");
     setConfig({});
     setMessage(null);
     connectionEditEpoch.current += 1;
-    lifecycleEditEpoch.current += 1;
     setConnectionDirty(false);
-    setLifecycleDirty(false);
   }
 
   async function reload() {
-    if (dirty && !(await confirm(discardChanges("connection", "reload connections")))) return;
+    if (connectionDirty && !(await confirm(discardChanges("connection", "reload connections"))))
+      return;
     connectionEditEpoch.current += 1;
-    lifecycleEditEpoch.current += 1;
     setConnectionDirty(false);
-    setLifecycleDirty(false);
     onReload();
   }
   async function discover(
@@ -609,71 +572,17 @@ export function ConnectionsView({
       setGovernBusy((current) => (current === operationKey ? null : current));
     }
   }
-  async function updatePluginLifecycle(plugin: PluginDescriptor) {
-    const key = `${plugin.kind}:${plugin.plugin_id}`;
-    const target = lifecycleTargets[key];
-    if (!target) return;
-    if (lifecycleBusyRef.current.has(key)) return;
-    if (
-      target === "removed" &&
-      !(await confirm({
-        title: "Remove plugin?",
-        message: `Remove ${plugin.display_name} from this process? Connections depending on this plugin may become unavailable.`,
-        confirmLabel: "Remove plugin",
-        destructive: true,
-      }))
-    )
-      return;
-    lifecycleBusyRef.current.add(key);
-    setLifecycleBusy(key);
-    const controller = beginMutation();
-    const operationEpoch = lifecycleEditEpoch.current;
-    try {
-      await controlPlane.setPluginLifecycle(
-        plugin.kind,
-        plugin.plugin_id,
-        target,
-        controller.signal,
-      );
-      if (controller.signal.aborted || operationEpoch !== lifecycleEditEpoch.current) return;
-      setLifecycleDirty(false);
-      setMessage({
-        tone: "success",
-        text: `${plugin.display_name} lifecycle is now ${target}.`,
-        scope: "plugins",
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["management", sessionScope, "connections"],
-      });
-      onReload();
-    } catch (error) {
-      if (!isAbortError(error))
-        setMessage({
-          tone: "error",
-          text: recoveryMessage(
-            error,
-            "Plugin lifecycle change was rejected; the previous state remains active.",
-          ),
-          scope: "plugins",
-        });
-    } finally {
-      finishMutation(controller);
-      lifecycleBusyRef.current.delete(key);
-      if (!controller.signal.aborted) setLifecycleBusy(null);
-    }
-  }
   const pluginCards = plugins.length > 0 && (
     <div className="form-card">
       <h3>Admitted adapters</h3>
-      {message?.scope === "plugins" && <Message tone={message.tone}>{message.text}</Message>}
+      <p className="help">Build a new image and artifact lock to change adapters.</p>
+      <p className="help">Restart the HTTP and Flight services together.</p>
       <div className="plugin-list">
         {plugins.map((plugin) => {
           const key = `${plugin.kind}:${plugin.plugin_id}`;
           const state = pluginStates.find(
             (item) => item.kind === plugin.kind && item.plugin_id === plugin.plugin_id,
           );
-          const lifecycle = state?.lifecycle ?? "enabled";
-          const target = lifecycleTargets[key] ?? lifecycle;
           return (
             <article className="plugin-card" key={key}>
               <div>
@@ -684,7 +593,7 @@ export function ConnectionsView({
                     : plugin.kind === "secret_backend"
                       ? "Secret backend"
                       : "Table format"}{" "}
-                  · {plugin.plugin_id} · v{plugin.version} · {lifecycle}
+                  · {plugin.plugin_id} · v{plugin.version} · {state?.status ?? plugin.status}
                 </small>
               </div>
               <div className="capability-list">
@@ -694,34 +603,7 @@ export function ConnectionsView({
                   </span>
                 ))}
               </div>
-              <div className="card-actions">
-                <NativeSelect
-                  id={`lifecycle-${key}`}
-                  label={`Lifecycle for ${plugin.display_name}`}
-                  value={target}
-                  disabled={!canManagePlugins}
-                  onChange={(event) => {
-                    const value = event.currentTarget.value as PluginState["lifecycle"];
-                    markDirty("lifecycle");
-                    setLifecycleTargets((current) => ({ ...current, [key]: value }));
-                  }}
-                  data={lifecycleTransitions[lifecycle].map((option) => ({
-                    value: option,
-                    label: option[0].toUpperCase() + option.slice(1),
-                  }))}
-                />
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  className="secondary compact"
-                  disabled={!canManagePlugins || lifecycleBusy === key || target === lifecycle}
-                  onClick={() => void updatePluginLifecycle(plugin)}
-                  leftSection={<Icon name="check" size={15} />}
-                >
-                  {lifecycleBusy === key ? "Applying…" : "Apply"}
-                </Button>
-              </div>
+              {state?.reason && <p className="help">{state.reason}</p>}
             </article>
           );
         })}
@@ -737,7 +619,7 @@ export function ConnectionsView({
   const renderField = (field: PluginConfigField) => {
     const value = config[field.name] ?? "";
     const update = (next: string) => {
-      markDirty("connection");
+      markDirty();
       clearFieldError(field.name);
       setConfig((current) => ({ ...current, [field.name]: next }));
     };
@@ -938,12 +820,14 @@ export function ConnectionsView({
         </Button>
       </div>
       {pluginStates.length > 0 && (
-        <p className="help">
-          Adapter status:{" "}
-          {pluginStates
-            .map((state) => state.plugin_id + " " + (state.lifecycle ?? state.status))
-            .join(", ")}
-        </p>
+        <div className="help" aria-label="Startup adapter admission">
+          {pluginStates.map((state) => (
+            <p key={state.kind + ":" + state.plugin_id}>
+              {state.plugin_id}: {state.status}
+              {state.reason ? " · " + state.reason : ""}
+            </p>
+          ))}
+        </div>
       )}
       {pluginCards}
       <div className="form-card" ref={connectionForm}>
@@ -977,7 +861,7 @@ export function ConnectionsView({
             value={name}
             disabled={Boolean(editingCatalog)}
             onChange={(event) => {
-              markDirty("connection");
+              markDirty();
               clearFieldError("name");
               setName(event.currentTarget.value);
             }}
@@ -988,7 +872,7 @@ export function ConnectionsView({
               label="Catalog adapter"
               value={pluginId}
               onChange={(event) => {
-                markDirty("connection");
+                markDirty();
                 setFieldErrors({});
                 setConfig(
                   pluginDefaults(
@@ -1031,7 +915,7 @@ export function ConnectionsView({
             aria-label="Selected table format"
             value={selectedFormatId}
             onChange={(event) => {
-              markDirty("connection");
+              markDirty();
               setSelectedFormatId(event.currentTarget.value);
             }}
             data={[

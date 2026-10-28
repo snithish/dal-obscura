@@ -19,22 +19,18 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
     discovered_table_count: 1,
     governed_asset_count: 0,
   };
-  let pluginStates = options.configuredLifecycle
-    ? [
-        {
-          kind: "catalog",
-          plugin_id: "synthetic.catalog.iceberg",
-          status: "ready",
-          lifecycle: "enabled",
-        },
-        {
-          kind: "table_format",
-          plugin_id: "synthetic.table.iceberg",
-          status: "ready",
-          lifecycle: "enabled",
-        },
-      ]
-    : [];
+  const pluginStates = [
+    {
+      kind: "catalog",
+      plugin_id: "synthetic.catalog.iceberg",
+      status: "enabled",
+    },
+    {
+      kind: "table_format",
+      plugin_id: "synthetic.table.iceberg",
+      status: "enabled",
+    },
+  ];
   const configuredPlugins = {
     plugins: [
       {
@@ -200,38 +196,6 @@ export async function installManagementApi(page: Page, options: AuthenticatedApi
           ? { ...configuredPlugins, states: pluginStates }
           : { plugins: [], states: [], pairs: [] },
       });
-    const lifecycleMatch = path.match(/^\/v1\/plugins\/([^/]+)\/([^/]+)\/lifecycle$/);
-    if (
-      options.admin &&
-      options.configuredConnections &&
-      lifecycleMatch &&
-      request.method() === "PATCH"
-    ) {
-      const kind = decodeURIComponent(lifecycleMatch[1]);
-      const pluginId = decodeURIComponent(lifecycleMatch[2]);
-      const target = (request.postDataJSON() as { target?: string }).target;
-      if (
-        !target ||
-        !pluginStates.some((state) => state.kind === kind && state.plugin_id === pluginId)
-      ) {
-        return route.fulfill({
-          status: 404,
-          json: {
-            error: {
-              code: "request_rejected",
-              message: "Plugin lifecycle target not found",
-              request_id: "test-request",
-            },
-          },
-        });
-      }
-      pluginStates = pluginStates.map((state) =>
-        state.kind === kind && state.plugin_id === pluginId
-          ? { ...state, lifecycle: target }
-          : state,
-      );
-      return route.fulfill({ json: { kind, plugin_id: pluginId, lifecycle: target } });
-    }
     if (options.admin && path === "/v1/catalogs") {
       if (options.configuredConnections) return route.fulfill({ json: [configuredCatalog] });
       const catalogCall = ++catalogCalls;

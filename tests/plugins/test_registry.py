@@ -15,7 +15,6 @@ from dal_obscura.plugins import (
     build_plugin_lock,
     load_static_plugin_descriptor,
 )
-from dal_obscura.plugins.lifecycle import PluginLifecycleError, PluginLifecycleState
 
 
 class _Entry(Protocol):
@@ -260,53 +259,6 @@ def test_status_report_distinguishes_enabled_missing_and_incompatible_without_im
         "missing": "not_installed",
         "wrong": "incompatible",
     }
-
-
-def test_plugin_lifecycle_draining_blocks_new_admissions_and_is_reported(
-    entry_factory, lock_for
-) -> None:
-    entry = entry_factory("drainable", "dal_obscura.catalogs.v3")
-    registry = PluginRegistry(
-        allowlist={("catalog", "drainable"): lock_for("drainable")},
-        entry_points_fn=lambda: _EntryPoints([entry]),
-        factory_loader=lambda _: {"loaded": True},
-    )
-    registry.reload()
-
-    assert (
-        registry.set_lifecycle("catalog", "drainable", PluginLifecycleState.DRAINING)
-        is PluginLifecycleState.DRAINING
-    )
-    with pytest.raises(PluginAdmissionError, match="draining"):
-        registry.load("catalog", "drainable")
-    assert registry.status_report() == (
-        {
-            "kind": "catalog",
-            "plugin_id": "drainable",
-            "status": "enabled",
-            "lifecycle": "draining",
-        },
-    )
-    assert (
-        registry.set_lifecycle("catalog", "drainable", PluginLifecycleState.REVOKED)
-        is PluginLifecycleState.REVOKED
-    )
-    with pytest.raises(PluginLifecycleError):
-        registry.set_lifecycle("catalog", "drainable", PluginLifecycleState.ENABLED)
-
-
-def test_revoked_plugin_can_only_be_removed(lock_for) -> None:
-    registry = PluginRegistry(
-        allowlist={("catalog", "revoked"): lock_for("revoked")},
-        entry_points_fn=lambda: _EntryPoints([]),
-    )
-    registry.set_lifecycle("catalog", "revoked", PluginLifecycleState.REVOKED)
-    assert (
-        registry.set_lifecycle("catalog", "revoked", PluginLifecycleState.REMOVED)
-        is PluginLifecycleState.REMOVED
-    )
-    with pytest.raises(PluginAdmissionError, match="removed"):
-        registry.load("catalog", "revoked")
 
 
 def test_descriptor_loader_mismatch_fails_before_factory_import(entry_factory, lock_for) -> None:

@@ -205,7 +205,6 @@ test("authenticated management screens keep rendered text and controls readable 
     admin: true,
     configuredSettings: true,
     configuredConnections: true,
-    configuredLifecycle: true,
     configuredAudit: true,
   });
   const screens = [
@@ -260,7 +259,6 @@ test("forced-colors mode keeps authenticated workflows discoverable", async ({ p
     admin: true,
     configuredSettings: true,
     configuredConnections: true,
-    configuredLifecycle: true,
     configuredAudit: true,
   });
   await page.emulateMedia({ forcedColors: "active" });

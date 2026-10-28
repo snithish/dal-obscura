@@ -10,7 +10,6 @@ export type AuthenticatedApiOptions = {
   conflictSave?: boolean;
   configuredSettings?: boolean;
   configuredConnections?: boolean;
-  configuredLifecycle?: boolean;
   configuredAudit?: boolean;
   multipleFormats?: boolean;
   initialPolicyRules?: FixtureRule[];

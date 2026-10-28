@@ -76,7 +76,6 @@ const pluginStates: PluginState[] = [
     kind: "catalog",
     plugin_id: "iceberg-rest",
     status: "enabled",
-    lifecycle: "enabled",
   },
 ];
 
@@ -99,7 +98,6 @@ const meta = {
     plugins: [catalogPlugin],
     pluginStates,
     pluginPairs,
-    canManagePlugins: true,
     onReload: () => undefined,
     queryClient,
     sessionScope: "storybook|admin",
@@ -108,7 +106,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Production connections management with admitted plugin descriptors and lifecycle state. Fixtures contain no credentials and actions that would mutate the control plane are not invoked by the story.",
+          "Production connections management with admitted plugin descriptors and startup admission diagnostics. Fixtures contain no credentials and actions that would mutate the control plane are not invoked by the story.",
       },
     },
   },
@@ -133,7 +131,7 @@ export const DiagnosticFailure: Story = {
 };
 
 export const EmptyState: Story = {
-  args: { catalogs: [], plugins: [], pluginStates: [], pluginPairs: [], canManagePlugins: false },
+  args: { catalogs: [], plugins: [], pluginStates: [], pluginPairs: [] },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("No catalogs configured")).toBeVisible();
     await expect(
@@ -204,11 +202,28 @@ export const InvalidTypedValue: Story = {
   },
 };
 
-export const ReadOnlyPluginLifecycle: Story = {
-  args: { canManagePlugins: false },
+export const ReadOnlyPluginDiagnostics: Story = {
+  args: {
+    pluginStates: [
+      ...pluginStates,
+      {
+        kind: "table_format",
+        plugin_id: "unavailable-format",
+        status: "not_installed",
+        reason: "Distribution is not installed",
+      },
+    ],
+  },
   play: async ({ canvas }) => {
-    const lifecycle = canvas.getByLabelText("Lifecycle for Iceberg REST catalog");
-    await expect(lifecycle).toBeDisabled();
-    await expect(canvas.getByRole("button", { name: "Apply" })).toBeDisabled();
+    await expect(canvas.getByText("iceberg-rest: enabled")).toBeVisible();
+    await expect(
+      canvas.getByText("unavailable-format: not_installed · Distribution is not installed"),
+    ).toBeVisible();
+    await expect(canvas.queryByLabelText(/Lifecycle/)).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
+    await expect(
+      canvas.getByText("Build a new image and artifact lock to change adapters."),
+    ).toBeVisible();
+    await expect(canvas.getByText("Restart the HTTP and Flight services together.")).toBeVisible();
   },
 };

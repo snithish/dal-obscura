@@ -203,9 +203,8 @@ class CatalogBrowser(Protocol):
     ) -> DiscoveryPage: ...
 
 
-class GovernancePluginControl(GovernancePluginRegistry, Protocol):
+class GovernancePluginDiagnostics(GovernancePluginRegistry, Protocol):
     def status_report(self) -> tuple[dict[str, object], ...]: ...
-    def set_lifecycle(self, kind: PluginKind, plugin_id: str, target: str) -> str: ...
 
 
 class BrowserSessionsRepository(Protocol):

@@ -304,16 +304,6 @@ export const controlPlane = {
     }),
   listPlugins: (signal?: AbortSignal) =>
     request<ApiSchemas["PluginListResponse"]>("/v1/plugins", { signal }),
-  setPluginLifecycle: (
-    kind: PluginDescriptor["kind"],
-    pluginId: string,
-    target: ApiSchemas["PluginLifecycleRequest"]["target"],
-    signal?: AbortSignal,
-  ) =>
-    request<ApiSchemas["PluginLifecycleResponse"]>(
-      `/v1/plugins/${encodeURIComponent(kind)}/${encodeURIComponent(pluginId)}/lifecycle`,
-      { method: "PATCH", body: JSON.stringify({ target }), signal },
-    ),
   getSummary: (signal?: AbortSignal) =>
     request<ApiSchemas["WorkspaceSummaryResponse"]>("/v1/workspace/summary", {
       signal,

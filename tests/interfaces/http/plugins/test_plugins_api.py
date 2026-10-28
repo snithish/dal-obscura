@@ -46,29 +46,18 @@ def test_plugin_descriptors_expose_only_admitted_bounded_capabilities(client_fac
     assert "password" in {field["name"] for field in catalog["config_schema"]["fields"]}
 
 
-def test_platform_admin_can_transition_plugin_lifecycle_and_audit_change(client_factory) -> None:
+def test_plugin_lifecycle_mutation_is_retired_without_state_or_audit_changes(
+    client_factory,
+) -> None:
     client = client_factory()
+    before = client.get("/v1/plugins", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()
 
-    disabled = client.patch(
+    response = client.patch(
         "/v1/plugins/catalog/iceberg.catalog/lifecycle",
         headers=ADMIN_HEADERS,
         json={"target": "disabled"},
     )
-    assert disabled.status_code == 200
-    assert disabled.json() == {
-        "kind": "catalog",
-        "plugin_id": "iceberg.catalog",
-        "lifecycle": "disabled",
-    }
-    states = client.get("/v1/plugins", headers=ADMIN_HEADERS).json()["states"]
-    lifecycle_by_plugin = {item["plugin_id"]: item.get("lifecycle") for item in states}
-    assert lifecycle_by_plugin["iceberg.catalog"] == "disabled"
-
-    enabled = client.patch(
-        "/v1/plugins/catalog/iceberg.catalog/lifecycle",
-        headers=ADMIN_HEADERS,
-        json={"target": "enabled"},
-    )
-    assert enabled.status_code == 200
-    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
-    assert any(event["action"] == "plugin.lifecycle.update" for event in events)
+    assert response.status_code == 404
+    assert client.get("/v1/plugins", headers=ADMIN_HEADERS).json() == before
+    assert client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json() == events

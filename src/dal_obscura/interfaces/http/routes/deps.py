@@ -18,7 +18,7 @@ from dal_obscura.application.governance.errors import (
     ConfigurationConflictError,
     RevisionPreconditionRequired,
 )
-from dal_obscura.application.governance.plugins import PluginCommands
+from dal_obscura.application.governance.plugins import PluginQueries
 from dal_obscura.application.governance.policies.service import PoliciesCommands
 from dal_obscura.application.governance.sessions import SessionCommands
 from dal_obscura.application.governance.workspace.service import WorkspaceCommands
@@ -65,7 +65,7 @@ class ControlPlaneDeps:
     catalogs_commands: CatalogsCommands
     workspace_commands: WorkspaceCommands
     audit_queries: AuditQueries
-    plugin_commands: PluginCommands
+    plugin_queries: PluginQueries
     assets_commands: AssetsCommands
     policies_commands: PoliciesCommands
     allowed_origins: tuple[str, ...] = ()

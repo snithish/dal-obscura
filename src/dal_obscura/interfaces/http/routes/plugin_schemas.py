@@ -1,4 +1,4 @@
-"""HTTP plugin request and response contracts."""
+"""HTTP plugin diagnostic response contracts."""
 
 from __future__ import annotations
 
@@ -6,10 +6,6 @@ from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
-)
-
-from dal_obscura.interfaces.http.routes.schemas import (
-    StrictModel,
 )
 
 
@@ -41,27 +37,12 @@ class PluginPairResponse(BaseModel):
 
 
 class PluginStateResponse(BaseModel):
-    """Allowlisted plugin lifecycle status without factory imports."""
+    """Allowlisted plugin admission status without factory imports."""
 
     kind: Literal["catalog", "table_format", "secret_backend"]
     plugin_id: str
     status: Literal["enabled", "not_installed", "incompatible"]
     reason: str | None = None
-    lifecycle: Literal["enabled", "draining", "disabled", "revoked", "removed"] | None = None
-
-
-class PluginLifecycleRequest(StrictModel):
-    """Requested process-local admission lifecycle transition."""
-
-    target: Literal["enabled", "draining", "disabled", "revoked", "removed"]
-
-
-class PluginLifecycleResponse(BaseModel):
-    """Result of one explicit plugin lifecycle transition."""
-
-    kind: Literal["catalog", "table_format", "secret_backend"]
-    plugin_id: str
-    lifecycle: Literal["enabled", "draining", "disabled", "revoked", "removed"]
 
 
 class PluginListResponse(BaseModel):

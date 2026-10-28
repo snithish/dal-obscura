@@ -21,7 +21,6 @@ export function ConnectionsRoute({ onDirtyChange }: { onDirtyChange: (dirty: boo
         plugins={query.data?.plugins ?? []}
         pluginStates={query.data?.pluginStates ?? []}
         pluginPairs={query.data?.pluginPairs ?? []}
-        canManagePlugins={Boolean(session?.platform_admin)}
         onReload={() => void query.refresh()}
         onDirtyChange={onDirtyChange}
         queryClient={queryClient}

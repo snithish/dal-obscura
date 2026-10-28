@@ -30,10 +30,6 @@ from dal_obscura.plugins.artifacts import (
     descriptor_digest,
     load_static_plugin_descriptor,
 )
-from dal_obscura.plugins.lifecycle import (
-    PluginLifecycleState,
-    transition_plugin_lifecycle,
-)
 
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 
@@ -66,7 +62,6 @@ class PluginRegistry:
             if kind == "secret_backend" and "scope_grants" in self.options.for_plugin(plugin_id):
                 raise ValueError("Secret scope grants belong to host startup configuration")
         self._snapshot_lock = RLock()
-        self._lifecycle: dict[tuple[PluginKind, str], PluginLifecycleState] = {}
 
     def discover(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Reads entry-point metadata without importing factories."""
@@ -90,11 +85,6 @@ class PluginRegistry:
         self._validate_id(plugin_id)
         key = (kind, plugin_id)
         with self._snapshot_lock:
-            lifecycle = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
-            if lifecycle is not PluginLifecycleState.ENABLED:
-                raise PluginAdmissionError(
-                    f"Plugin is {lifecycle.value}; new admissions are disabled: {kind}:{plugin_id}"
-                )
             entry = self._snapshot_entries.get(key)
             admitted = key in self._snapshot
         if entry is not None and admitted:
@@ -118,24 +108,6 @@ class PluginRegistry:
             return cast(Callable, factory)(value, context)
 
         return cast(CatalogFactory | TableFormatFactory | SecretBackendFactory, configured)
-
-    def set_lifecycle(
-        self,
-        kind: PluginKind,
-        plugin_id: str,
-        target: PluginLifecycleState,
-    ) -> PluginLifecycleState:
-        """Apply an explicit admission transition for an admitted plugin."""
-
-        self._validate_id(plugin_id)
-        key = (kind, plugin_id)
-        with self._snapshot_lock:
-            if key not in self._snapshot and key not in self._allowlist:
-                raise PluginAdmissionError(f"Plugin is not configured: {kind}:{plugin_id}")
-            current = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
-            state = transition_plugin_lifecycle(current, target)
-            self._lifecycle[key] = state
-            return state
 
     def reload(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Builds a complete admission snapshot before atomically swapping it."""
@@ -185,7 +157,7 @@ class PluginRegistry:
             return self._allowlist[(kind, plugin_id)]
 
     def status_report(self) -> tuple[dict[str, object], ...]:
-        """Reports allowlisted plugin lifecycle state without importing factories.
+        """Reports allowlisted startup admission without importing factories.
 
         Only operator-expected IDs are returned.  An unallowlisted installed
         distribution therefore cannot become an enumeration or an implicit
@@ -208,7 +180,6 @@ class PluginRegistry:
             if key in admitted:
                 status: PluginStatus = "enabled"
                 reason = None
-                lifecycle = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
             else:
                 entry = entry_by_key.get(key)
                 if entry is None:
@@ -222,8 +193,6 @@ class PluginRegistry:
                 "plugin_id": plugin_id,
                 "status": status,
             }
-            if (key in admitted) and lifecycle is not PluginLifecycleState.ENABLED:
-                row["lifecycle"] = lifecycle.value
             if reason is not None:
                 row["reason"] = reason
             rows.append(row)

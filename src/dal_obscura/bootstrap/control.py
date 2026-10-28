@@ -22,7 +22,6 @@ from dal_obscura.adapters.providers.governance import (
     ProviderCatalogBrowser,
     SyntheticPreviewIdentityMapper,
 )
-from dal_obscura.adapters.providers.plugin_control import AdmittedPluginControl
 from dal_obscura.adapters.sql.database.db import (
     ConfigStoreSchemaError,
     check_config_store_schema,
@@ -34,7 +33,7 @@ from dal_obscura.application.governance.assets.service import AssetsCommands
 from dal_obscura.application.governance.audit_service import AuditQueries
 from dal_obscura.application.governance.catalogs.discovery import DiscoveryCursors
 from dal_obscura.application.governance.catalogs.service import CatalogsCommands
-from dal_obscura.application.governance.plugins import PluginCommands
+from dal_obscura.application.governance.plugins import PluginQueries
 from dal_obscura.application.governance.policies.service import PoliciesCommands
 from dal_obscura.application.governance.sessions import SessionCommands
 from dal_obscura.application.governance.workspace.service import WorkspaceCommands
@@ -143,12 +142,12 @@ def build_control_app(
         work_factory, identity_mapper=SyntheticPreviewIdentityMapper()
     )
     audit_queries = AuditQueries(work_factory)
-    plugin_commands = PluginCommands(work_factory, registry=AdmittedPluginControl(plugin_registry))
+    plugin_queries = PluginQueries(registry=plugin_registry)
     deps = ControlPlaneDeps(
         catalogs_commands=catalogs_commands,
         workspace_commands=workspace_commands,
         audit_queries=audit_queries,
-        plugin_commands=plugin_commands,
+        plugin_queries=plugin_queries,
         assets_commands=assets_commands,
         policies_commands=policies_commands,
         sessions=SessionCommands(

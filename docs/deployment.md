@@ -39,6 +39,13 @@ identity no longer matches. Preserve published policies and revisions through
 supported database migrations. Document any deployment-specific rollback procedure
 with the deployed artifact set.
 
+Plugin admission changes use this same coordinated restart. Prepare and qualify
+the image and lock together, stop admission to the old HTTP and Flight processes,
+then restart both with the same artifact set and lock. Verify both processes'
+readiness and authenticated HTTP plugin diagnostics before restoring traffic.
+HTTP diagnostics describe only that process; verify Flight uses the same image
+and lock. There is no live plugin mutation endpoint.
+
 Local HTTPS/mTLS and Keycloak examples live under `deployment/local-secure/` and
 `examples/demo/keycloak/`. Their runners expose `--help`. Use fresh project names
 and disposable databases for qualification; leave user demo services untouched.

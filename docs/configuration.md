@@ -14,6 +14,11 @@ wheel artifacts. The lock identifies distribution, version, SDK API, descriptor
 and installed artifact. Local composition can construct locks for bundled wheels;
 external plugins always need explicit admission. See [qualification](testing.md).
 
+Admission is fixed at startup. The plugin diagnostics API reports the current
+process's admitted artifacts; it does not enable, drain or revoke plugins.
+Change the installed artifacts and lock through the coordinated restart workflow
+in [deployment](deployment.md).
+
 Catalog writes, persisted configuration capture and asset bindings require an
 admitted startup registry for bundled and external plugins alike. The Iceberg
 catalog exposes common typed fields and allows additional PyIceberg properties.
