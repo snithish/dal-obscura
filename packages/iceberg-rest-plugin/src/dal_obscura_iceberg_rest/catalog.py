@@ -18,7 +18,7 @@ from dal_obscura_plugin_api import (
     TableIdentifier,
 )
 from dal_obscura_plugin_api.descriptors import load_packaged_descriptor
-from dal_obscura_plugin_api.execution import active
+from dal_obscura_plugin_api.execution import active, close_preserving_error
 from pyiceberg.catalog.rest import RestCatalog as PyIcebergRestCatalog
 from requests import Session
 
@@ -341,9 +341,7 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
             try:
                 context.check_active()
             except TimeoutError, InterruptedError:
-                close = getattr(response, "close", None)
-                if callable(close):
-                    close()
+                close_preserving_error(response)
                 raise
         return response
 

@@ -66,7 +66,8 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout(monkeypatch, con
         assert redirects is False
 
 
-def test_rest_catalog_closes_response_when_cancelled_after_request(monkeypatch):
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_rest_catalog_closes_response_when_cancelled_after_request(monkeypatch, close_fails):
     cancelled = Event()
     closed = []
 
@@ -74,6 +75,8 @@ def test_rest_catalog_closes_response_when_cancelled_after_request(monkeypatch):
         def close(self):
             closed.append(True)
             super().close()
+            if close_fails:
+                raise RuntimeError("response close failed")
 
     def request(self, method, url, **kwargs):
         if url.endswith("/config"):
